@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="27"
+        android:translateY="27">
+        <!-- Wallet outline -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M96,24H12c-6.6,0 -12,5.4 -12,12v48c0,6.6 5.4,12 12,12h84c6.6,0 12,-5.4 12,-12V36C108,29.4 102.6,24 96,24zM96,84H12V36h84V84z"/>
+        <!-- M-PESA style checkmark -->
+        <path
+            android:fillColor="#00C853"
+            android:pathData="M76,52L52,76L36,60l8,-8l8,8l16,-16L76,52z"/>
+    </group>
+</vector>

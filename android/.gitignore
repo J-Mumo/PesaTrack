@@ -1,0 +1,38 @@
+# Built files
+/build/
+/app/build/
+
+# Gradle files
+.gradle/
+local.properties
+gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+
+# Keystore
+*.jks
+*.keystore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Lint
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+
+# Debug
+*.hprof
+
+# Kotlin
+.kotlin/
+
+# Test results
+/captures/
