@@ -22,7 +22,8 @@ android {
         }
 
         // Build config field for API URL
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
+        // buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://2c3e-196-96-86-74.ngrok-free.app\"")
     }
 
     buildTypes {
@@ -38,8 +39,8 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            // Use 10.0.2.2 for Android emulator to access localhost
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
+            // Use ngrok URL for testing with M-Pesa callbacks
+            buildConfigField("String", "API_BASE_URL", "\"https://2c3e-196-96-86-74.ngrok-free.app\"")
         }
     }
 

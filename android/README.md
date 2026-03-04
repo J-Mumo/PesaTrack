@@ -63,6 +63,23 @@ app/src/main/java/com/pesatrack/
 
 4. Run on device or emulator
 
+### Manual Debug Build
+
+To manually generate a debug build for testing on a physical device:
+
+1.  **Open the Terminal:** In Android Studio, go to `View` > `Tool Windows` > `Terminal`.
+2.  **Run Gradle Task:** In the terminal, execute the appropriate command for your operating system:
+    - **Windows:**
+      ```cmd
+      gradlew.bat app:assembleDebug
+      ```
+    - **macOS / Linux:**
+      ```bash
+      ./gradlew app:assembleDebug
+      ```
+3.  **Locate APK:** After the build finishes, you'll find the debug APK at: `app/build/outputs/apk/debug/app-debug.apk`
+
+
 ### Permissions
 
 The app requests these permissions:

@@ -6,7 +6,14 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "test": "jest",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:prod": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset",
+    "db:push": "prisma db push",
+    "postinstall": "prisma generate"
   },
   "keywords": [
     "mpesa",
@@ -16,12 +23,16 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@prisma/adapter-libsql": "^7.4.2",
+    "@prisma/client": "^7.4.2",
     "axios": "^1.6.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
     "joi": "^17.12.1",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "prisma": "^7.4.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

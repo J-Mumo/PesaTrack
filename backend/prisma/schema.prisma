@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// M-PESA Transaction model
+/// Stores both pending and completed transactions from STK Push
+model Transaction {
+  id                  String    @id @default(uuid())
+  checkoutRequestId   String    @unique @map("checkout_request_id")
+  merchantRequestId   String?   @map("merchant_request_id")
+  phoneNumber         String    @map("phone_number")
+  amount              Float     
+  paymentType         String    @map("payment_type")
+  recipient           String?
+  accountReference    String?   @map("account_reference")
+  transactionDesc     String?   @map("transaction_desc")
+  categoryId          Int?      @map("category_id")
+  notes               String?
+  status              String    @default("PENDING")
+  mpesaReceiptNumber  String?   @map("mpesa_receipt_number")
+  transactionDate     DateTime? @map("transaction_date")
+  failureReason       String?   @map("failure_reason")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  completedAt         DateTime? @map("completed_at")
+
+  metadata TransactionMetadata[]
+
+  @@index([status])
+  @@index([phoneNumber])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+/// Transaction metadata for extensible key-value data
+model TransactionMetadata {
+  id            Int         @id @default(autoincrement())
+  transactionId String      @map("transaction_id")
+  key           String
+  value         String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@map("transaction_metadata")
+}

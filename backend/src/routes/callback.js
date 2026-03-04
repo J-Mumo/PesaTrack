@@ -17,7 +17,7 @@ const listeners = new Map();
  * 
  * This endpoint is called by Safaricom after payment completion
  */
-router.post('/mpesa', (req, res) => {
+router.post('/mpesa', async (req, res) => {
   console.log('📩 M-PESA Callback received');
   console.log(JSON.stringify(req.body, null, 2));
 
@@ -28,8 +28,8 @@ router.post('/mpesa', (req, res) => {
     console.log(`📋 Parsed callback:`, callbackData);
 
     if (callbackData.success) {
-      // Mark transaction as completed
-      const completed = paymentService.completeTransaction(
+      // Mark transaction as completed (now async with DB)
+      const completed = await paymentService.completeTransaction(
         callbackData.checkoutRequestId,
         callbackData
       );
@@ -42,8 +42,8 @@ router.post('/mpesa', (req, res) => {
         transaction: completed
       });
     } else {
-      // Mark transaction as failed
-      const failed = paymentService.failTransaction(
+      // Mark transaction as failed (now async with DB)
+      const failed = await paymentService.failTransaction(
         callbackData.checkoutRequestId,
         callbackData.resultDesc
       );
@@ -73,7 +73,7 @@ router.post('/mpesa', (req, res) => {
  * 
  * Android app can connect to this to receive instant payment notifications
  */
-router.get('/listen/:checkoutRequestId', (req, res) => {
+router.get('/listen/:checkoutRequestId', async (req, res) => {
   const { checkoutRequestId } = req.params;
   
   // Set up SSE
@@ -84,12 +84,16 @@ router.get('/listen/:checkoutRequestId', (req, res) => {
   // Send initial connection message
   res.write(`data: ${JSON.stringify({ status: 'CONNECTED' })}\n\n`);
 
-  // Check if already completed
-  const existingStatus = paymentService.getTransactionStatus(checkoutRequestId);
-  if (existingStatus?.status === 'COMPLETED' || existingStatus?.status === 'FAILED') {
-    res.write(`data: ${JSON.stringify(existingStatus)}\n\n`);
-    res.end();
-    return;
+  // Check if already completed (now async with DB)
+  try {
+    const existingStatus = await paymentService.getTransactionStatus(checkoutRequestId);
+    if (existingStatus?.status === 'COMPLETED' || existingStatus?.status === 'FAILED') {
+      res.write(`data: ${JSON.stringify(existingStatus)}\n\n`);
+      res.end();
+      return;
+    }
+  } catch (error) {
+    console.error('Error checking transaction status:', error);
   }
 
   // Store listener

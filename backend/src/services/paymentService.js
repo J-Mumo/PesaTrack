@@ -2,86 +2,136 @@
  * Payment Service
  * 
  * Business logic for payment processing
- * Handles payment initiation and tracking
+ * Handles payment initiation, tracking, and persistence using Prisma
  */
 
-// In-memory store for pending transactions
-// In production, use a proper database
-const pendingTransactions = new Map();
-const completedTransactions = new Map();
+const { prisma } = require('./databaseService');
 
 class PaymentService {
   /**
-   * Store pending transaction
+   * Store pending transaction in database
    */
-  storePendingTransaction(checkoutRequestId, transactionData) {
-    pendingTransactions.set(checkoutRequestId, {
-      ...transactionData,
-      status: 'PENDING',
-      createdAt: new Date().toISOString()
-    });
+  async storePendingTransaction(checkoutRequestId, transactionData) {
+    try {
+      const transaction = await prisma.transaction.create({
+        data: {
+          checkoutRequestId,
+          merchantRequestId: transactionData.merchantRequestId,
+          phoneNumber: transactionData.phoneNumber,
+          amount: transactionData.amount,
+          paymentType: transactionData.paymentType || 'UNKNOWN',
+          recipient: transactionData.recipient,
+          accountReference: transactionData.accountReference,
+          transactionDesc: transactionData.transactionDesc,
+          categoryId: transactionData.categoryId,
+          notes: transactionData.notes,
+          status: 'PENDING',
+        },
+      });
+      
+      console.log(`💾 Transaction stored: ${checkoutRequestId}`);
+      return transaction;
+    } catch (error) {
+      console.error('Error storing transaction:', error.message);
+      throw error;
+    }
   }
 
   /**
-   * Get pending transaction
+   * Get pending transaction from database
    */
-  getPendingTransaction(checkoutRequestId) {
-    return pendingTransactions.get(checkoutRequestId);
+  async getPendingTransaction(checkoutRequestId) {
+    try {
+      return await prisma.transaction.findUnique({
+        where: { checkoutRequestId },
+      });
+    } catch (error) {
+      console.error('Error getting transaction:', error.message);
+      return null;
+    }
   }
 
   /**
    * Mark transaction as completed
    */
-  completeTransaction(checkoutRequestId, callbackData) {
-    const pending = pendingTransactions.get(checkoutRequestId);
-    
-    const completed = {
-      ...(pending || {}),
-      ...callbackData,
-      status: 'COMPLETED',
-      completedAt: new Date().toISOString()
-    };
+  async completeTransaction(checkoutRequestId, callbackData) {
+    try {
+      const completed = await prisma.transaction.update({
+        where: { checkoutRequestId },
+        data: {
+          status: 'COMPLETED',
+          mpesaReceiptNumber: callbackData.transactionId,
+          transactionDate: callbackData.transactionDate 
+            ? new Date(callbackData.transactionDate) 
+            : new Date(),
+          completedAt: new Date(),
+        },
+      });
 
-    completedTransactions.set(checkoutRequestId, completed);
-    pendingTransactions.delete(checkoutRequestId);
-
-    return completed;
+      console.log(`✅ Transaction completed in DB: ${callbackData.transactionId}`);
+      return completed;
+    } catch (error) {
+      console.error('Error completing transaction:', error.message);
+      throw error;
+    }
   }
 
   /**
    * Mark transaction as failed
    */
-  failTransaction(checkoutRequestId, reason) {
-    const pending = pendingTransactions.get(checkoutRequestId);
-    
-    const failed = {
-      ...(pending || {}),
-      status: 'FAILED',
-      failureReason: reason,
-      failedAt: new Date().toISOString()
-    };
+  async failTransaction(checkoutRequestId, reason) {
+    try {
+      const failed = await prisma.transaction.update({
+        where: { checkoutRequestId },
+        data: {
+          status: 'FAILED',
+          failureReason: reason,
+          completedAt: new Date(),
+        },
+      });
 
-    completedTransactions.set(checkoutRequestId, failed);
-    pendingTransactions.delete(checkoutRequestId);
-
-    return failed;
+      console.log(`❌ Transaction failed in DB: ${checkoutRequestId}`);
+      return failed;
+    } catch (error) {
+      console.error('Error failing transaction:', error.message);
+      throw error;
+    }
   }
 
   /**
-   * Get transaction status
+   * Get transaction status from database
    */
-  getTransactionStatus(checkoutRequestId) {
-    // Check completed first
-    if (completedTransactions.has(checkoutRequestId)) {
-      return completedTransactions.get(checkoutRequestId);
-    }
-    
-    // Check pending
-    if (pendingTransactions.has(checkoutRequestId)) {
-      return pendingTransactions.get(checkoutRequestId);
-    }
+  async getTransactionStatus(checkoutRequestId) {
+    try {
+      const transaction = await prisma.transaction.findUnique({
+        where: { checkoutRequestId },
+        select: {
+          id: true,
+          status: true,
+          mpesaReceiptNumber: true,
+          amount: true,
+          transactionDate: true,
+          failureReason: true,
+          completedAt: true,
+          phoneNumber: true,
+          paymentType: true,
+          recipient: true,
+          categoryId: true,
+        },
+      });
 
-    return null;
+      if (!transaction) {
+        return null;
+      }
+
+      return {
+        ...transaction,
+        transactionId: transaction.mpesaReceiptNumber,
+      };
+    } catch (error) {
+      console.error('Error getting transaction status:', error.message);
+      return null;
+    }
   }
 
   /**
@@ -146,13 +196,93 @@ class PaymentService {
   }
 
   /**
-   * Get all transactions (for debugging)
+   * Get all transactions with pagination
    */
-  getAllTransactions() {
-    return {
-      pending: Array.from(pendingTransactions.entries()),
-      completed: Array.from(completedTransactions.entries())
-    };
+  async getAllTransactions(options = {}) {
+    const { page = 1, limit = 50, status } = options;
+    
+    try {
+      const where = status ? { status } : {};
+      
+      const [transactions, total] = await Promise.all([
+        prisma.transaction.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.transaction.count({ where }),
+      ]);
+
+      return {
+        transactions,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error('Error getting all transactions:', error.message);
+      return {
+        transactions: [],
+        pagination: { page: 1, limit, total: 0, pages: 0 },
+      };
+    }
+  }
+
+  /**
+   * Get transactions by phone number
+   */
+  async getTransactionsByPhone(phoneNumber, options = {}) {
+    const { limit = 20 } = options;
+    
+    try {
+      return await prisma.transaction.findMany({
+        where: { phoneNumber },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+    } catch (error) {
+      console.error('Error getting transactions by phone:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get transaction statistics
+   */
+  async getStatistics() {
+    try {
+      const [total, completed, failed, pending, totalAmount] = await Promise.all([
+        prisma.transaction.count(),
+        prisma.transaction.count({ where: { status: 'COMPLETED' } }),
+        prisma.transaction.count({ where: { status: 'FAILED' } }),
+        prisma.transaction.count({ where: { status: 'PENDING' } }),
+        prisma.transaction.aggregate({
+          where: { status: 'COMPLETED' },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      return {
+        total,
+        completed,
+        failed,
+        pending,
+        totalAmount: totalAmount._sum.amount || 0,
+      };
+    } catch (error) {
+      console.error('Error getting statistics:', error.message);
+      return {
+        total: 0,
+        completed: 0,
+        failed: 0,
+        pending: 0,
+        totalAmount: 0,
+      };
+    }
   }
 }
 

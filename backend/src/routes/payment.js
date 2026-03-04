@@ -38,12 +38,14 @@ router.post('/initiate', validate('initiatePayment'), async (req, res, next) => 
     });
 
     if (result.success) {
-      // Store pending transaction with app-specific data
-      paymentService.storePendingTransaction(result.checkoutRequestId, {
+      // Store pending transaction with app-specific data (now async with DB)
+      await paymentService.storePendingTransaction(result.checkoutRequestId, {
         phoneNumber,
         amount,
         paymentType,
         recipient,
+        accountReference: accountReference || 'PesaTrack',
+        transactionDesc: transactionDesc || 'Payment',
         categoryId,
         notes,
         merchantRequestId: result.merchantRequestId
@@ -76,8 +78,8 @@ router.get('/status/:checkoutRequestId', async (req, res, next) => {
   try {
     const { checkoutRequestId } = req.params;
 
-    // First check local status (from callback) - no rate limit consumed
-    const localStatus = paymentService.getTransactionStatus(checkoutRequestId);
+    // First check local status (from database) - no rate limit consumed
+    const localStatus = await paymentService.getTransactionStatus(checkoutRequestId);
     
     if (localStatus?.status === 'COMPLETED') {
       return res.json({
@@ -130,11 +132,40 @@ router.get('/status/:checkoutRequestId', async (req, res, next) => {
 
 /**
  * GET /api/payment/transactions
- * Get all transactions (for debugging)
+ * Get all transactions with pagination
+ * 
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 50)
+ * - status: Filter by status (PENDING, COMPLETED, FAILED)
  */
-router.get('/transactions', (req, res) => {
-  const transactions = paymentService.getAllTransactions();
-  res.json(transactions);
+router.get('/transactions', async (req, res, next) => {
+  try {
+    const { page, limit, status } = req.query;
+    
+    const result = await paymentService.getAllTransactions({
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 50,
+      status
+    });
+    
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/payment/statistics
+ * Get transaction statistics
+ */
+router.get('/statistics', async (req, res, next) => {
+  try {
+    const stats = await paymentService.getStatistics();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;

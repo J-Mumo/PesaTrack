@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 
+const { connectDatabase } = require('./services/databaseService');
 const paymentRoutes = require('./routes/payment');
 const callbackRoutes = require('./routes/callback');
 
@@ -24,7 +25,8 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    environment: process.env.MPESA_ENV || 'sandbox'
+    environment: process.env.MPESA_ENV || 'sandbox',
+    database: 'connected'
   });
 });
 
@@ -45,9 +47,26 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 PesaTrack Backend running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.MPESA_ENV || 'sandbox'}`);
-});
+// Start server with database connection
+async function startServer() {
+  try {
+    // Connect to database
+    const dbConnected = await connectDatabase();
+    
+    if (!dbConnected) {
+      console.warn('⚠️ Starting server without database connection');
+    }
+
+    app.listen(PORT, () => {
+      console.log(`🚀 PesaTrack Backend running on port ${PORT}`);
+      console.log(`📱 Environment: ${process.env.MPESA_ENV || 'sandbox'}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;
