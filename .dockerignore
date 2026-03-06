@@ -1,0 +1,31 @@
+# Exclude Android project (not needed for backend)
+android/
+
+# Exclude docs and plans
+_docs/
+plans/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Node modules (will be installed in Docker)
+backend/node_modules/
+
+# Database files
+*.db
+*.db-journal
+
+# Environment files (will be set via Railway dashboard)
+backend/.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated Prisma client (will be generated in Docker)
+backend/src/generated/
