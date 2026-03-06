@@ -1,6 +1,7 @@
 package com.pesatrack.di
 
 import android.content.Context
+import android.telephony.TelephonyManager
 import androidx.room.Room
 import com.pesatrack.BuildConfig
 import com.pesatrack.data.local.database.PesaTrackDatabase
@@ -38,6 +39,7 @@ object AppModule {
             PesaTrackDatabase::class.java,
             "pesatrack_database"
         )
+            .addMigrations(PesaTrackDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -89,5 +91,15 @@ object AppModule {
     @Singleton
     fun providePesaTrackApi(retrofit: Retrofit): PesaTrackApi {
         return retrofit.create(PesaTrackApi::class.java)
+    }
+    
+    // ==================== System Services ====================
+    
+    @Provides
+    @Singleton
+    fun provideTelephonyManager(
+        @ApplicationContext context: Context
+    ): TelephonyManager {
+        return context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
     }
 }

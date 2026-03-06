@@ -66,7 +66,8 @@ class SmsReceiver : BroadcastReceiver() {
                     
                     // Show notification to categorize
                     if (expenseId > 0) {
-                        showCategorizeNotification(context, expenseId, expense.amount)
+                        val recipient = expense.recipientName ?: expense.recipient
+                        showCategorizeNotification(context, expenseId, expense.amount, recipient)
                     }
                 }
             } catch (e: Exception) {
@@ -78,11 +79,12 @@ class SmsReceiver : BroadcastReceiver() {
     /**
      * Show notification prompting user to categorize the expense
      */
-    private fun showCategorizeNotification(context: Context, expenseId: Long, amount: Double) {
-        // TODO: Implement notification using NotificationManager
-        // This will be implemented with the full notification system
-        
-        // For now, we just log it
-        android.util.Log.i("SmsReceiver", "New expense detected: KES $amount (ID: $expenseId)")
+    private fun showCategorizeNotification(context: Context, expenseId: Long, amount: Double, recipient: String) {
+        NotificationHelper.showExpenseNotification(
+            context = context,
+            expenseId = expenseId,
+            amount = amount,
+            recipient = recipient
+        )
     }
 }

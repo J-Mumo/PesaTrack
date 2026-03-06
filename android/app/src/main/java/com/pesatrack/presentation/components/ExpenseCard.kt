@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +24,9 @@ import java.util.*
 
 /**
  * Card component displaying a single expense item
+ * 
+ * Title priority: categoryName > recipientName > recipient
+ * Subtitle: paymentType • recipient info (when title is category)
  */
 @Composable
 fun ExpenseCard(
@@ -34,6 +36,11 @@ fun ExpenseCard(
     categoryName: String? = null,
     categoryColor: String? = null
 ) {
+    // Title: show category name (what the expense was for) as primary text
+    val title = categoryName
+        ?: expense.recipientName
+        ?: expense.recipient
+    
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -74,13 +81,15 @@ fun ExpenseCard(
             
             // Details
             Column(modifier = Modifier.weight(1f)) {
+                // Primary: category name or recipient name
                 Text(
-                    text = expense.recipientName ?: expense.recipient,
+                    text = title,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 
+                // Secondary: payment type + recipient (when title is category)
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -91,10 +100,14 @@ fun ExpenseCard(
                     )
                     
                     if (categoryName != null) {
+                        // When title is category, show recipient as secondary info
+                        val recipientInfo = expense.recipientName ?: expense.recipient
                         Text(
-                            text = " • $categoryName",
+                            text = " • $recipientInfo",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     } else if (!expense.isCategorized) {
                         Text(

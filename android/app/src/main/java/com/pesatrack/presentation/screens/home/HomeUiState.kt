@@ -1,6 +1,6 @@
 package com.pesatrack.presentation.screens.home
 
-import com.pesatrack.domain.models.Expense
+import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 
 /**
  * UI State for the Home screen
@@ -8,7 +8,7 @@ import com.pesatrack.domain.models.Expense
 data class HomeUiState(
     val isLoading: Boolean = true,
     val totalThisMonth: Double = 0.0,
-    val recentExpenses: List<Expense> = emptyList(),
+    val recentExpenses: List<ExpenseWithCategory> = emptyList(),
     val uncategorizedCount: Int = 0,
     val error: String? = null
 )

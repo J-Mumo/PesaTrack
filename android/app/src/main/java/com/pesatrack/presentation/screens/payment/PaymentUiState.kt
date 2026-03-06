@@ -11,6 +11,7 @@ data class PaymentUiState(
     val phoneNumber: String = "",
     val amount: String = "",
     val recipient: String = "",
+    val recipientName: String? = null,
     val accountNumber: String = "",
     val notes: String = "",
     val paymentType: PaymentType = PaymentType.SEND_MONEY,

@@ -1,5 +1,11 @@
 package com.pesatrack.presentation.screens.payment
 
+import android.Manifest
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -10,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,6 +33,7 @@ fun PaymentScreen(
     viewModel: PaymentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     LaunchedEffect(paymentType) {
         paymentType?.let {
@@ -88,12 +96,59 @@ fun PaymentScreen(
                     onNotesChange = viewModel::updateNotes,
                     onPaymentTypeChange = viewModel::updatePaymentType,
                     onCategorySelect = viewModel::updateSelectedCategory,
+                    onContactSelected = viewModel::updateRecipientFromContact,
                     onSubmit = viewModel::initiatePayment,
                     modifier = Modifier.padding(paddingValues)
                 )
             }
         }
     }
+}
+
+/**
+ * Extract phone number from a contact URI
+ */
+private fun getPhoneNumberFromContact(
+    contentResolver: ContentResolver,
+    contactUri: Uri
+): Pair<String?, String?> {
+    var phoneNumber: String? = null
+    var contactName: String? = null
+    
+    // Get contact ID and name
+    val contactCursor = contentResolver.query(
+        contactUri, 
+        arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME),
+        null, null, null
+    )
+    
+    contactCursor?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val contactId = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
+            contactName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME))
+            
+            // Get phone number
+            val phoneCursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                arrayOf(contactId),
+                null
+            )
+            
+            phoneCursor?.use { pCursor ->
+                if (pCursor.moveToFirst()) {
+                    phoneNumber = pCursor.getString(
+                        pCursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    )
+                    // Clean up phone number: remove spaces, dashes
+                    phoneNumber = phoneNumber?.replace(Regex("[\\s\\-()]"), "")
+                }
+            }
+        }
+    }
+    
+    return Pair(phoneNumber, contactName)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,9 +162,35 @@ fun PaymentForm(
     onNotesChange: (String) -> Unit,
     onPaymentTypeChange: (PaymentType) -> Unit,
     onCategorySelect: (com.pesatrack.domain.models.Category) -> Unit,
+    onContactSelected: (String, String?) -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    
+    // Contact picker launcher
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri ->
+        contactUri?.let { uri ->
+            val (phoneNumber, contactName) = getPhoneNumberFromContact(
+                context.contentResolver, uri
+            )
+            if (phoneNumber != null) {
+                onContactSelected(phoneNumber, contactName)
+            }
+        }
+    }
+    
+    // Contact permission launcher
+    val contactPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            contactPickerLauncher.launch(null)
+        }
+    }
+    
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -170,10 +251,33 @@ fun PaymentForm(
                     label = { Text("Recipient Phone Number") },
                     placeholder = { Text("0712345678") },
                     leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            // Check permission and launch contact picker
+                            if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS)
+                                == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                contactPickerLauncher.launch(null)
+                            } else {
+                                contactPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                            }
+                        }) {
+                            Icon(Icons.Filled.Contacts, contentDescription = "Pick from contacts")
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                
+                // Show contact name if selected from picker
+                if (uiState.recipientName != null) {
+                    Text(
+                        text = "Sending to: ${uiState.recipientName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             
             PaymentType.BUY_GOODS -> {

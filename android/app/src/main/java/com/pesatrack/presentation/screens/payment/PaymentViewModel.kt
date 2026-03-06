@@ -1,7 +1,9 @@
 package com.pesatrack.presentation.screens.payment
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.PaymentRepository
@@ -10,6 +12,7 @@ import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
 import com.pesatrack.domain.models.PaymentResult
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.utils.PhoneNumberHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,9 +20,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PaymentViewModel @Inject constructor(
+    private val application: Application,
     private val paymentRepository: PaymentRepository,
     private val expenseRepository: ExpenseRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val phoneNumberHelper: PhoneNumberHelper,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(PaymentUiState())
@@ -27,6 +33,7 @@ class PaymentViewModel @Inject constructor(
     
     init {
         loadCategoryGroups()
+        loadPhoneNumber()
     }
     
     private fun loadCategoryGroups() {
@@ -37,8 +44,37 @@ class PaymentViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Auto-fill phone number from DataStore or SIM card
+     */
+    private fun loadPhoneNumber() {
+        viewModelScope.launch {
+            // First try DataStore (previously saved number)
+            appPreferences.phoneNumber.first()?.let { savedNumber ->
+                if (savedNumber.isNotBlank()) {
+                    _uiState.update { it.copy(phoneNumber = savedNumber) }
+                    return@launch
+                }
+            }
+            
+            // Fallback: try reading from SIM
+            val simNumber = phoneNumberHelper.getPhoneNumber(application)
+            if (simNumber != null) {
+                _uiState.update { it.copy(phoneNumber = simNumber) }
+                // Persist for future use
+                appPreferences.savePhoneNumber(simNumber)
+            }
+        }
+    }
+    
     fun updatePhoneNumber(value: String) {
         _uiState.update { it.copy(phoneNumber = value, error = null) }
+        // Persist the phone number when manually entered
+        viewModelScope.launch {
+            if (value.length == 10) {
+                appPreferences.savePhoneNumber(value)
+            }
+        }
     }
     
     fun updateAmount(value: String) {
@@ -50,6 +86,19 @@ class PaymentViewModel @Inject constructor(
     
     fun updateRecipient(value: String) {
         _uiState.update { it.copy(recipient = value, error = null) }
+    }
+    
+    /**
+     * Update recipient from contact picker (name + phone number)
+     */
+    fun updateRecipientFromContact(phoneNumber: String, contactName: String?) {
+        _uiState.update { 
+            it.copy(
+                recipient = phoneNumber, 
+                recipientName = contactName,
+                error = null
+            ) 
+        }
     }
     
     fun updateAccountNumber(value: String) {
@@ -65,6 +114,7 @@ class PaymentViewModel @Inject constructor(
             it.copy(
                 paymentType = type, 
                 recipient = "",
+                recipientName = null,
                 accountNumber = "",
                 error = null
             ) 
@@ -205,7 +255,7 @@ class PaymentViewModel @Inject constructor(
             transactionId = transactionId,
             amount = amount,
             recipient = state.recipient,
-            recipientName = null, // Will be parsed from SMS if available
+            recipientName = state.recipientName,
             categoryId = state.selectedCategory?.id,
             paymentType = state.paymentType,
             source = ExpenseSource.STK_PUSH,
@@ -219,7 +269,10 @@ class PaymentViewModel @Inject constructor(
     
     fun resetPaymentState() {
         _uiState.update { 
-            PaymentUiState(categoryGroups = it.categoryGroups)
+            PaymentUiState(
+                categoryGroups = it.categoryGroups,
+                phoneNumber = it.phoneNumber // Preserve phone number across resets
+            )
         }
     }
 }

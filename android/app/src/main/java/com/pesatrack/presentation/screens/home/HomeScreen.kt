@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.presentation.components.ExpenseCard
 import com.pesatrack.utils.formatAsCurrency
@@ -70,8 +69,8 @@ fun HomeScreen(
                     onCategorize = {
                         // Navigate to first uncategorized expense
                         uiState.recentExpenses
-                            .firstOrNull { !it.isCategorized }
-                            ?.let { onNavigateToCategorize(it.id) }
+                            .firstOrNull { !it.expense.isCategorized }
+                            ?.let { onNavigateToCategorize(it.expense.id) }
                     }
                 )
             }
@@ -109,12 +108,14 @@ fun HomeScreen(
                 EmptyExpensesCard(onPayClick = { onNavigateToPayment("") })
             }
         } else {
-            items(uiState.recentExpenses) { expense ->
+            items(uiState.recentExpenses) { ewc ->
                 ExpenseCard(
-                    expense = expense,
+                    expense = ewc.expense,
+                    categoryName = ewc.categoryName,
+                    categoryColor = ewc.categoryColor,
                     onClick = {
-                        if (!expense.isCategorized) {
-                            onNavigateToCategorize(expense.id)
+                        if (!ewc.expense.isCategorized) {
+                            onNavigateToCategorize(ewc.expense.id)
                         }
                     }
                 )

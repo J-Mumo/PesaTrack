@@ -28,11 +28,15 @@ enum class PaymentType {
 
     companion object {
         fun fromString(value: String): PaymentType {
-            return when (value) {
-                "Send Money" -> SEND_MONEY
-                "Buy Goods" -> BUY_GOODS
-                "Pay Bill" -> PAY_BILL
-                else -> SEND_MONEY // Default
+            return try {
+                valueOf(value) // Try enum name first: SEND_MONEY, BUY_GOODS, PAY_BILL
+            } catch (e: Exception) {
+                when (value) {
+                    "Send Money" -> SEND_MONEY
+                    "Buy Goods" -> BUY_GOODS
+                    "Pay Bill" -> PAY_BILL
+                    else -> SEND_MONEY // Default
+                }
             }
         }
     }

@@ -139,8 +139,7 @@ object DefaultCategories {
         CategoryEntity(id = 503, name = "Phone / Accessories", icon = "smartphone", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 3),
         CategoryEntity(id = 504, name = "Books", icon = "menu_book", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 4),
         CategoryEntity(id = 505, name = "Art", icon = "palette", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 5),
-        CategoryEntity(id = 506, name = "Seed", icon = "grass", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 6),
-        CategoryEntity(id = 507, name = "Shipping", icon = "local_shipping", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 7),
+        CategoryEntity(id = 507, name = "Shipping", icon = "local_shipping", color = "#E91E63", parentId = 5, isDefault = true, sortOrder = 6),
     )
     
     // Personal Care (Group 6)
@@ -184,6 +183,7 @@ object DefaultCategories {
         CategoryEntity(id = 902, name = "Offering", icon = "favorite", color = "#673AB7", parentId = 9, isDefault = true, sortOrder = 2),
         CategoryEntity(id = 903, name = "Give", icon = "volunteer_activism", color = "#673AB7", parentId = 9, isDefault = true, sortOrder = 3),
         CategoryEntity(id = 904, name = "Heaven's Gate", icon = "auto_awesome", color = "#673AB7", parentId = 9, isDefault = true, sortOrder = 4),
+        CategoryEntity(id = 905, name = "Seed", icon = "grass", color = "#673AB7", parentId = 9, isDefault = true, sortOrder = 5),
     )
     
     // Digital & Tech (Group 10)
