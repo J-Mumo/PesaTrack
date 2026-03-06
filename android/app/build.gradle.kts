@@ -21,9 +21,8 @@ android {
             useSupportLibrary = true
         }
 
-        // Build config field for API URL
-        // buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://2c3e-196-96-86-74.ngrok-free.app\"")
+        // Build config field for API URL - Railway production deployment
+        buildConfigField("String", "API_BASE_URL", "\"https://pesatrack-production.up.railway.app\"")
     }
 
     buildTypes {
@@ -34,13 +33,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Production API URL
-            buildConfigField("String", "API_BASE_URL", "\"https://your-production-url.com\"")
+            // Production API URL (Railway)
+            buildConfigField("String", "API_BASE_URL", "\"https://pesatrack-production.up.railway.app\"")
         }
         debug {
             isMinifyEnabled = false
-            // Use ngrok URL for testing with M-Pesa callbacks
-            buildConfigField("String", "API_BASE_URL", "\"https://2c3e-196-96-86-74.ngrok-free.app\"")
+            // Debug uses same Railway URL (or switch to local for dev: http://10.0.2.2:3000)
+            buildConfigField("String", "API_BASE_URL", "\"https://pesatrack-production.up.railway.app\"")
         }
     }
 
