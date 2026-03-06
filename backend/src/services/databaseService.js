@@ -37,23 +37,27 @@ function getDatabaseUrl() {
     const relativePath = process.env.DATABASE_URL.replace('file:', '');
     const absolutePath = path.resolve(__dirname, '../..', relativePath);
     const normalizedPath = absolutePath.replace(/\\/g, '/');
-    const url = `file:///${normalizedPath}`;
+    // libSQL file protocol: file: on Linux, file:/// on Windows
+    const prefix = process.platform === 'win32' ? 'file:///' : 'file:';
+    const url = `${prefix}${normalizedPath}`;
     console.log(`📦 Using database: ${url}`);
     return url;
   }
 
   // Default: use data/ directory for persistence on Railway volumes
-  const dbDir = process.env.NODE_ENV === 'production' 
+  const dbDir = process.env.NODE_ENV === 'production'
     ? path.resolve(__dirname, '../../data')
     : path.resolve(__dirname, '../..');
   
-  const dbFile = process.env.NODE_ENV === 'production' 
-    ? 'pesatrack.db' 
+  const dbFile = process.env.NODE_ENV === 'production'
+    ? 'pesatrack.db'
     : 'dev.db';
   
   const dbPath = path.join(dbDir, dbFile);
   const normalizedPath = dbPath.replace(/\\/g, '/');
-  const url = `file:///${normalizedPath}`;
+  // libSQL file protocol: file: on Linux, file:/// on Windows
+  const prefix = process.platform === 'win32' ? 'file:///' : 'file:';
+  const url = `${prefix}${normalizedPath}`;
   console.log(`📦 Using database: ${url}`);
   return url;
 }
