@@ -38,20 +38,26 @@ router.post('/initiate', validate('initiatePayment'), async (req, res, next) => 
     });
 
     if (result.success) {
-      // Store pending transaction with app-specific data (now async with DB)
-      await paymentService.storePendingTransaction(result.checkoutRequestId, {
-        phoneNumber,
-        amount,
-        paymentType,
-        recipient,
-        accountReference: accountReference || 'PesaTrack',
-        transactionDesc: transactionDesc || 'Payment',
-        categoryId,
-        notes,
-        merchantRequestId: result.merchantRequestId
-      });
-
       console.log(`✅ STK Push sent: ${result.checkoutRequestId}`);
+
+      // Store pending transaction in DB (non-blocking for the response)
+      // If DB save fails, the STK Push already succeeded — don't fail the response
+      try {
+        await paymentService.storePendingTransaction(result.checkoutRequestId, {
+          phoneNumber,
+          amount,
+          paymentType,
+          recipient,
+          accountReference: accountReference || 'PesaTrack',
+          transactionDesc: transactionDesc || 'Payment',
+          categoryId,
+          notes,
+          merchantRequestId: result.merchantRequestId
+        });
+      } catch (dbError) {
+        console.error('⚠️ Failed to save transaction to DB (STK Push already sent):', dbError.message);
+        // Continue — the STK Push was successful, don't fail the response
+      }
     }
 
     res.json({

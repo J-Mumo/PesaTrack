@@ -82,7 +82,66 @@ const prisma = new PrismaClient({
     : ['error'],
 });
 
-// Test database connection on startup
+/**
+ * Run database migrations at startup.
+ * Since we use the libSQL adapter, we can't use `prisma migrate deploy`.
+ * Instead, we read the migration SQL files and execute them directly.
+ */
+async function runMigrations() {
+  const fs = require('fs');
+  const migrationsDir = path.resolve(__dirname, '../../prisma/migrations');
+  
+  if (!fs.existsSync(migrationsDir)) {
+    console.log('📦 No migrations directory found, skipping migrations');
+    return;
+  }
+
+  try {
+    // Check if tables already exist
+    const tables = await prisma.$queryRawUnsafe(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'`
+    );
+    
+    if (tables.length > 0) {
+      console.log('📦 Database tables already exist, skipping migrations');
+      return;
+    }
+
+    console.log('📦 Running database migrations...');
+    
+    // Read migration directories in order
+    const migrationDirs = fs.readdirSync(migrationsDir)
+      .filter(f => fs.statSync(path.join(migrationsDir, f)).isDirectory())
+      .sort();
+    
+    for (const dir of migrationDirs) {
+      const sqlFile = path.join(migrationsDir, dir, 'migration.sql');
+      if (fs.existsSync(sqlFile)) {
+        const sql = fs.readFileSync(sqlFile, 'utf-8');
+        
+        // Split SQL into individual statements and execute each one
+        const statements = sql
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0 && !s.startsWith('--'));
+        
+        for (const stmt of statements) {
+          await prisma.$executeRawUnsafe(stmt);
+        }
+        
+        console.log(`  ✅ Applied migration: ${dir}`);
+      }
+    }
+    
+    console.log('📦 All migrations applied successfully');
+  } catch (error) {
+    console.error('❌ Migration error:', error.message);
+    // Don't throw - let the server start even if migrations fail
+    // The DB might already be set up
+  }
+}
+
+// Test database connection on startup and run migrations
 async function connectDatabase() {
   try {
     // Ensure data directory exists in production
@@ -98,6 +157,10 @@ async function connectDatabase() {
     // Test connection by running a simple query
     await prisma.$queryRaw`SELECT 1`;
     console.log('📦 Database connected successfully');
+    
+    // Run migrations if needed
+    await runMigrations();
+    
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
