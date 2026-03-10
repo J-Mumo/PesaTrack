@@ -57,9 +57,24 @@ async function startServer() {
       console.warn('⚠️ Starting server without database connection');
     }
 
+    const darajaConfig = require('./config/daraja');
+
     app.listen(PORT, () => {
+      const env = darajaConfig.environment;
+      const isProduction = env === 'production';
+
       console.log(`🚀 PesaTrack Backend running on port ${PORT}`);
-      console.log(`📱 Environment: ${process.env.MPESA_ENV || 'sandbox'}`);
+      console.log(`📱 Daraja Environment: ${env.toUpperCase()}`);
+      console.log(`🏦 Shortcode: ${darajaConfig.shortcode}`);
+      console.log(`💳 Transaction Type: ${darajaConfig.transactionType}`);
+      console.log(`🔗 API Base: ${darajaConfig.baseUrl}`);
+      console.log(`📞 Callback: ${darajaConfig.callbackUrl || '⚠️  NOT SET'}`);
+      
+      if (isProduction) {
+        console.log('🟢 Running in PRODUCTION mode — real M-PESA transactions');
+      } else {
+        console.log('🟡 Running in SANDBOX mode — test transactions only');
+      }
     });
   } catch (error) {
     console.error('Failed to start server:', error);

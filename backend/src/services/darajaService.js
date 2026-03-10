@@ -167,7 +167,7 @@ class DarajaService {
       BusinessShortCode: config.shortcode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: 'CustomerPayBillOnline',
+      TransactionType: config.transactionType,
       Amount: Math.round(amount), // M-PESA requires integer
       PartyA: formattedPhone,
       PartyB: config.shortcode,
