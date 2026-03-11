@@ -13,9 +13,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.presentation.components.ExpenseCard
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
@@ -24,7 +24,6 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onNavigateToPayment: (String) -> Unit,
     onNavigateToExpenses: () -> Unit,
     onNavigateToCategorize: (Long) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
@@ -54,11 +53,9 @@ fun HomeScreen(
             )
         }
         
-        // Quick Actions
+        // How It Works Info Card
         item {
-            QuickActionsRow(
-                onPayClick = onNavigateToPayment
-            )
+            HowItWorksCard()
         }
         
         // Uncategorized Alert
@@ -105,7 +102,7 @@ fun HomeScreen(
             }
         } else if (uiState.recentExpenses.isEmpty()) {
             item {
-                EmptyExpensesCard(onPayClick = { onNavigateToPayment("") })
+                EmptyExpensesCard()
             }
         } else {
             items(uiState.recentExpenses) { ewc ->
@@ -163,64 +160,37 @@ fun MonthlySummaryCard(
 }
 
 @Composable
-fun QuickActionsRow(
-    onPayClick: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        QuickActionButton(
-            icon = Icons.Filled.Send,
-            label = "Send Money",
-            onClick = { onPayClick(PaymentType.SEND_MONEY.name) },
-            modifier = Modifier.weight(1f)
-        )
-        QuickActionButton(
-            icon = Icons.Filled.ShoppingCart,
-            label = "Buy Goods",
-            onClick = { onPayClick(PaymentType.BUY_GOODS.name) },
-            modifier = Modifier.weight(1f)
-        )
-        QuickActionButton(
-            icon = Icons.Filled.Receipt,
-            label = "Pay Bill",
-            onClick = { onPayClick(PaymentType.PAY_BILL.name) },
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-fun QuickActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun HowItWorksCard() {
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
     ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                imageVector = Icons.Filled.PhoneAndroid,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium
-            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "How PesaTrack Works",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Make payments via your M-PESA menu as usual. PesaTrack automatically tracks them by reading your M-PESA SMS confirmations.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }
@@ -268,9 +238,7 @@ fun UncategorizedAlert(
 }
 
 @Composable
-fun EmptyExpensesCard(
-    onPayClick: () -> Unit
-) {
+fun EmptyExpensesCard() {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -291,17 +259,13 @@ fun EmptyExpensesCard(
                 text = "No expenses yet",
                 style = MaterialTheme.typography.titleMedium
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Start tracking by making a payment",
+                text = "Your expenses will appear here when PesaTrack detects M-PESA SMS messages.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onPayClick) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Make a Payment")
-            }
         }
     }
 }

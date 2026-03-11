@@ -57,7 +57,7 @@ class SmsReceiver : BroadcastReceiver() {
                     // Check if transaction already exists
                     val transactionId = expense.transactionId
                     if (transactionId != null && expenseRepository.transactionExists(transactionId)) {
-                        // Transaction already recorded (probably via STK Push)
+                        // Transaction already recorded
                         return@launch
                     }
                     
