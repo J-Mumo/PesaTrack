@@ -170,7 +170,7 @@ class DarajaService {
       TransactionType: config.transactionType,
       Amount: Math.round(amount), // M-PESA requires integer
       PartyA: formattedPhone,
-      PartyB: config.shortcode,
+      PartyB: config.partyB, // Till Number for Buy Goods, shortcode for PayBill
       PhoneNumber: formattedPhone,
       CallBackURL: config.callbackUrl,
       AccountReference: accountReference.substring(0, 12),

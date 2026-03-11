@@ -65,7 +65,8 @@ async function startServer() {
 
       console.log(`🚀 PesaTrack Backend running on port ${PORT}`);
       console.log(`📱 Daraja Environment: ${env.toUpperCase()}`);
-      console.log(`🏦 Shortcode: ${darajaConfig.shortcode}`);
+      console.log(`🏦 BusinessShortCode: ${darajaConfig.shortcode}`);
+      console.log(`🏪 PartyB (Till/Store): ${darajaConfig.partyB}`);
       console.log(`💳 Transaction Type: ${darajaConfig.transactionType}`);
       console.log(`🔗 API Base: ${darajaConfig.baseUrl}`);
       console.log(`📞 Callback: ${darajaConfig.callbackUrl || '⚠️  NOT SET'}`);
