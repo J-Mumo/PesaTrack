@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.utils.SmsParser
 import dagger.hilt.android.AndroidEntryPoint
@@ -14,77 +15,106 @@ import javax.inject.Inject
 
 /**
  * BroadcastReceiver for incoming SMS messages
- * 
+ *
  * Listens for M-PESA confirmation SMS and automatically
- * parses them into expense records.
+ * parses them into expense records. Also extracts transaction
+ * costs and saves them as separate auto-categorized expenses.
  */
 @AndroidEntryPoint
 class SmsReceiver : BroadcastReceiver() {
-    
+
     @Inject
     lateinit var expenseRepository: ExpenseRepository
-    
+
     private val scope = CoroutineScope(Dispatchers.IO)
-    
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             return
         }
-        
+
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-        
+
+        // M-PESA SMS may be split across multiple parts — concatenate them
+        val smsByAddress = mutableMapOf<String, StringBuilder>()
         for (message in messages) {
-            val sender = message.displayOriginatingAddress
-            val body = message.messageBody
-            
+            val sender = message.displayOriginatingAddress ?: continue
+            val body = message.messageBody ?: continue
+            smsByAddress.getOrPut(sender) { StringBuilder() }.append(body)
+        }
+
+        for ((sender, bodyBuilder) in smsByAddress) {
+            val body = bodyBuilder.toString()
             // Check if it's an M-PESA message
             if (SmsParser.isMpesaSms(sender) && SmsParser.isTransactionSms(body)) {
                 processTransaction(context, body)
             }
         }
     }
-    
+
     /**
-     * Process the M-PESA transaction SMS
+     * Process the M-PESA transaction SMS.
+     * Saves the main expense and, if present, a separate transaction cost expense.
      */
     private fun processTransaction(context: Context, smsBody: String) {
         scope.launch {
             try {
-                // Parse the SMS
-                val expense = SmsParser.parseSms(smsBody)
-                
-                if (expense != null) {
-                    // Check if transaction already exists
-                    val transactionId = expense.transactionId
-                    if (transactionId != null && expenseRepository.transactionExists(transactionId)) {
-                        // Transaction already recorded
-                        return@launch
-                    }
-                    
-                    // Save the expense
-                    val expenseId = expenseRepository.saveExpense(expense)
-                    
-                    // Show notification to categorize
-                    if (expenseId > 0) {
-                        val recipient = expense.recipientName ?: expense.recipient
-                        showCategorizeNotification(context, expenseId, expense.amount, recipient)
+                // Parse the SMS into main expense + optional transaction cost
+                val parsed = SmsParser.parseSms(smsBody) ?: return@launch
+
+                val mainExpense = parsed.expense
+
+                // Check if transaction already exists
+                val transactionId = mainExpense.transactionId
+                if (transactionId != null && expenseRepository.transactionExists(transactionId)) {
+                    Log.d(TAG, "Transaction $transactionId already recorded, skipping")
+                    return@launch
+                }
+
+                // Save the main expense
+                val expenseId = expenseRepository.saveExpense(mainExpense)
+                Log.d(TAG, "Saved expense: ${mainExpense.paymentType.displayName()} " +
+                        "Ksh${mainExpense.amount} to ${mainExpense.recipientName ?: mainExpense.recipient}")
+
+                // Show notification to categorize the main expense
+                if (expenseId > 0) {
+                    val recipient = mainExpense.recipientName ?: mainExpense.recipient
+                    showCategorizeNotification(context, expenseId, mainExpense.amount, recipient)
+                }
+
+                // Save the transaction cost as a separate auto-categorized expense
+                val costExpense = parsed.transactionCost
+                if (costExpense != null) {
+                    val costTxId = costExpense.transactionId
+                    if (costTxId != null && !expenseRepository.transactionExists(costTxId)) {
+                        expenseRepository.saveExpense(costExpense)
+                        Log.d(TAG, "Saved transaction cost: Ksh${costExpense.amount}")
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Error processing M-PESA SMS", e)
             }
         }
     }
-    
+
     /**
      * Show notification prompting user to categorize the expense
      */
-    private fun showCategorizeNotification(context: Context, expenseId: Long, amount: Double, recipient: String) {
+    private fun showCategorizeNotification(
+        context: Context,
+        expenseId: Long,
+        amount: Double,
+        recipient: String
+    ) {
         NotificationHelper.showExpenseNotification(
             context = context,
             expenseId = expenseId,
             amount = amount,
             recipient = recipient
         )
+    }
+
+    companion object {
+        private const val TAG = "SmsReceiver"
     }
 }

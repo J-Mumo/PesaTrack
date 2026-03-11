@@ -22,7 +22,7 @@ data class Expense(
  * Payment types supported by M-PESA
  *
  * Only expense-producing transaction types are included.
- * Receive Money and Deposit are NOT expenses and are excluded.
+ * Receive Money, Deposit, and Reversal are NOT expenses and are excluded.
  *
  * Stored as String in Room DB, so new values can be added without migration.
  */
@@ -33,7 +33,7 @@ enum class PaymentType {
     WITHDRAW,        // Withdrawn from agent
     AIRTIME,         // Bought airtime (self or other)
     MPESA_CARD,      // Sent to M-PESA Card (global payments)
-    REVERSAL;        // Transaction reversal
+    TRANSACTION_COST; // M-PESA transaction cost (auto-categorized)
 
     companion object {
         fun fromString(value: String): PaymentType {
@@ -47,7 +47,11 @@ enum class PaymentType {
                     "Withdraw" -> WITHDRAW
                     "Airtime" -> AIRTIME
                     "M-PESA Card" -> MPESA_CARD
-                    "Reversal" -> REVERSAL
+                    "Transaction Cost" -> TRANSACTION_COST
+                    // Legacy values (for backward compat with old DB records)
+                    "REVERSAL" -> SEND_MONEY
+                    "RECEIVE_MONEY" -> SEND_MONEY
+                    "DEPOSIT" -> SEND_MONEY
                     else -> SEND_MONEY // Default
                 }
             }
@@ -62,7 +66,7 @@ enum class PaymentType {
             WITHDRAW -> "Withdraw"
             AIRTIME -> "Airtime"
             MPESA_CARD -> "M-PESA Card"
-            REVERSAL -> "Reversal"
+            TRANSACTION_COST -> "Transaction Cost"
         }
     }
 }

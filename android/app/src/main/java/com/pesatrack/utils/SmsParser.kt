@@ -12,7 +12,10 @@ import java.util.regex.Pattern
  * M-PESA SMS Parser
  *
  * Parses M-PESA confirmation SMS messages to extract transaction details.
- * Only parses EXPENSE transactions — Receive Money and Deposit are ignored.
+ * Only parses EXPENSE transactions — Receive Money, Deposit, and Reversal are ignored.
+ *
+ * Also extracts "Transaction cost, Ksh53.00" and creates a separate auto-categorized
+ * expense under "Mpesa Transaction Cost" (category ID 811).
  *
  * Actual SMS formats (from real M-PESA messages):
  *
@@ -45,16 +48,20 @@ import java.util.regex.Pattern
  * 8. Fuliza Send:
  *    "ABC123XYZ Confirmed. Ksh500.00 Fuliza M-PESA amount sent to John Doe 0712345678 on ..."
  *
- * 9. Reversal:
- *    "ABC123XYZ Confirmed. Transaction ABC987ZYX has been reversed. ..."
- *
  * NOT parsed (not expenses):
  *    - Receive Money: "You have received Ksh1,000.00 from ..."
  *    - Deposit: "You have deposited Ksh2,000.00 ..."
+ *    - Reversal: "Transaction ABC987ZYX has been reversed ..."
  */
 object SmsParser {
 
     private const val TAG = "SmsParser"
+
+    /**
+     * Category ID for "Mpesa Transaction Cost" in the default categories.
+     * This is defined in DefaultCategories (Financial > Mpesa Transaction Cost).
+     */
+    const val MPESA_TRANSACTION_COST_CATEGORY_ID = 811L
 
     // M-PESA sender IDs
     private val MPESA_SENDERS = listOf("MPESA", "M-PESA", "Safaricom")
@@ -66,6 +73,11 @@ object SmsParser {
 
     // Amount: Ksh followed by digits with optional commas and decimal
     private val AMOUNT_PATTERN = Pattern.compile("Ksh([\\d,]+(?:\\.\\d{2})?)")
+
+    // Transaction cost: "Transaction cost, Ksh53.00"
+    private val TRANSACTION_COST_PATTERN = Pattern.compile(
+        "Transaction cost,?\\s*Ksh([\\d,]+(?:\\.\\d{2})?)", Pattern.CASE_INSENSITIVE
+    )
 
     // Date/Time: "on 15/1/24 at 12:34 PM" or "on 11/3/26 at 10:31 AM"
     private val DATE_PATTERN = Pattern.compile("on (\\d{1,2}/\\d{1,2}/\\d{2,4}) at (\\d{1,2}:\\d{2} [AP]M)")
@@ -82,12 +94,12 @@ object SmsParser {
         "You have deposited", Pattern.CASE_INSENSITIVE
     )
 
-    // --- Expense transaction patterns (ordered most specific → least specific) ---
-
-    // Reversal: "Transaction ABC987ZYX has been reversed"
+    // Reversal: "has been reversed"
     private val REVERSAL_PATTERN = Pattern.compile(
-        "Transaction ([A-Z0-9]{10}) has been reversed", Pattern.CASE_INSENSITIVE
+        "has been reversed", Pattern.CASE_INSENSITIVE
     )
+
+    // --- Expense transaction patterns (ordered most specific → least specific) ---
 
     // Withdraw from Agent: "You have withdrawn Ksh1,000.00 from 123456 - AGENT NAME on"
     private val WITHDRAW_PATTERN = Pattern.compile(
@@ -137,6 +149,19 @@ object SmsParser {
     // ==================== Public API ====================
 
     /**
+     * Result of parsing an M-PESA SMS.
+     *
+     * @property expense The main transaction expense
+     * @property transactionCost Optional separate expense for the M-PESA transaction cost.
+     *   Auto-categorized under "Mpesa Transaction Cost" (category 811).
+     *   Only present when the SMS contains "Transaction cost, KshXX.XX" with amount > 0.
+     */
+    data class ParsedTransaction(
+        val expense: Expense,
+        val transactionCost: Expense?
+    )
+
+    /**
      * Check if SMS is from M-PESA
      */
     fun isMpesaSms(sender: String?): Boolean {
@@ -160,24 +185,25 @@ object SmsParser {
                 message.contains("paid to", ignoreCase = true) ||
                 message.contains("withdrawn", ignoreCase = true) ||
                 message.contains("of airtime", ignoreCase = true) ||
-                message.contains("reversed", ignoreCase = true) ||
                 message.contains("Fuliza", ignoreCase = true) ||
                 message.contains("bought", ignoreCase = true)
     }
 
     /**
-     * Parse M-PESA SMS into an Expense object.
+     * Parse M-PESA SMS into a ParsedTransaction containing the main expense
+     * and an optional transaction cost expense.
      *
      * Returns null for:
      * - Non-transaction SMS
      * - Receive Money (income, not expense)
      * - Deposit (not expense)
+     * - Reversal (not expense)
      * - Unrecognized formats
      *
      * @param message The SMS message body
-     * @return Expense object if parsing successful, null otherwise
+     * @return ParsedTransaction if parsing successful, null otherwise
      */
-    fun parseSms(message: String): Expense? {
+    fun parseSms(message: String): ParsedTransaction? {
         // Quick pre-check
         if (!message.contains("Confirmed", ignoreCase = true)) {
             return null
@@ -190,6 +216,10 @@ object SmsParser {
         }
         if (DEPOSIT_PATTERN.matcher(message).find()) {
             Log.d(TAG, "Skipping deposit SMS (not an expense)")
+            return null
+        }
+        if (REVERSAL_PATTERN.matcher(message).find()) {
+            Log.d(TAG, "Skipping reversal SMS (not an expense)")
             return null
         }
 
@@ -224,7 +254,8 @@ object SmsParser {
             // Extract timestamp
             val timestamp = extractTimestamp(message) ?: System.currentTimeMillis()
 
-            return Expense(
+            // Build main expense
+            val mainExpense = Expense(
                 transactionId = transactionId,
                 amount = amount,
                 recipient = txInfo.recipient,
@@ -233,6 +264,30 @@ object SmsParser {
                 source = ExpenseSource.SMS_PARSED,
                 timestamp = timestamp,
                 isCategorized = false
+            )
+
+            // Extract transaction cost (if present and > 0)
+            val transactionCostExpense = extractTransactionCost(message)?.let { cost ->
+                if (cost > 0.0) {
+                    Expense(
+                        // Use a derived transaction ID so it's unique but linked
+                        transactionId = "${transactionId}_COST",
+                        amount = cost,
+                        recipient = "Safaricom",
+                        recipientName = "M-PESA Transaction Cost",
+                        paymentType = PaymentType.TRANSACTION_COST,
+                        source = ExpenseSource.SMS_PARSED,
+                        timestamp = timestamp,
+                        // Auto-categorize under "Mpesa Transaction Cost" (category 811)
+                        categoryId = MPESA_TRANSACTION_COST_CATEGORY_ID,
+                        isCategorized = true
+                    )
+                } else null
+            }
+
+            return ParsedTransaction(
+                expense = mainExpense,
+                transactionCost = transactionCostExpense
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing SMS: ${e.message}", e)
@@ -262,37 +317,35 @@ object SmsParser {
     }
 
     /**
+     * Extract transaction cost from "Transaction cost, Ksh53.00"
+     */
+    private fun extractTransactionCost(message: String): Double? {
+        val matcher = TRANSACTION_COST_PATTERN.matcher(message)
+        return if (matcher.find()) {
+            val costStr = matcher.group(1)?.replace(",", "")
+            costStr?.toDoubleOrNull()
+        } else null
+    }
+
+    /**
      * Classify the transaction type and extract recipient details.
      *
      * Pattern matching order matters — more specific patterns must be
      * checked first to avoid false matches.
      *
      * Order:
-     * 1. Reversal (unique "has been reversed")
-     * 2. Withdraw (unique "withdrawn ... from")
-     * 3. Airtime other (unique "airtime for PHONE")
-     * 4. Airtime self (unique "airtime on")
-     * 5. M-PESA Card (specific "sent to M-PESA CARD for account")
-     * 6. Pay Bill ("sent to NAME for account") — before Send Money
-     * 7. Fuliza Send ("Fuliza...sent to NAME PHONE") — before Send Money
-     * 8. Send Money ("sent to NAME PHONE") — generic "sent to"
-     * 9. Buy Goods ("paid to NAME. on") — only "paid to"
+     * 1. Withdraw (unique "withdrawn ... from")
+     * 2. Airtime other (unique "airtime for PHONE")
+     * 3. Airtime self (unique "airtime on")
+     * 4. M-PESA Card (specific "sent to M-PESA CARD for account")
+     * 5. Pay Bill ("sent to NAME for account") — before Send Money
+     * 6. Fuliza Send ("Fuliza...sent to NAME PHONE") — before Send Money
+     * 7. Send Money ("sent to NAME PHONE") — generic "sent to"
+     * 8. Buy Goods ("paid to NAME. on") — only "paid to"
      */
     private fun classifyTransaction(message: String): TransactionInfo? {
 
-        // 1. Reversal
-        REVERSAL_PATTERN.matcher(message).let { m ->
-            if (m.find()) {
-                val reversedTxId = m.group(1) ?: "Unknown"
-                return TransactionInfo(
-                    paymentType = PaymentType.REVERSAL,
-                    recipient = reversedTxId,
-                    recipientName = "Reversal of $reversedTxId"
-                )
-            }
-        }
-
-        // 2. Withdraw from Agent
+        // 1. Withdraw from Agent
         WITHDRAW_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val agentNumber = m.group(1)?.trim()
@@ -305,7 +358,7 @@ object SmsParser {
             }
         }
 
-        // 3. Buy Airtime for other
+        // 2. Buy Airtime for other
         AIRTIME_OTHER_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val phone = m.group(1)?.trim()
@@ -317,7 +370,7 @@ object SmsParser {
             }
         }
 
-        // 4. Buy Airtime for self
+        // 3. Buy Airtime for self
         AIRTIME_SELF_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 return TransactionInfo(
@@ -328,7 +381,7 @@ object SmsParser {
             }
         }
 
-        // 5. M-PESA Card (must be before PayBill since both have "for account")
+        // 4. M-PESA Card (must be before PayBill since both have "for account")
         MPESA_CARD_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val accountDetails = m.group(1)?.trim()
@@ -340,7 +393,7 @@ object SmsParser {
             }
         }
 
-        // 6. Pay Bill (must be before Send Money since both use "sent to")
+        // 5. Pay Bill (must be before Send Money since both use "sent to")
         PAY_BILL_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val businessName = m.group(1)?.trim()
@@ -353,7 +406,7 @@ object SmsParser {
             }
         }
 
-        // 7. Fuliza Send Money
+        // 6. Fuliza Send Money
         FULIZA_SEND_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val recipientName = m.group(1)?.trim()
@@ -366,7 +419,7 @@ object SmsParser {
             }
         }
 
-        // 8. Send Money (generic "sent to NAME PHONE")
+        // 7. Send Money (generic "sent to NAME PHONE")
         SEND_MONEY_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val recipientName = m.group(1)?.trim()
@@ -379,7 +432,7 @@ object SmsParser {
             }
         }
 
-        // 9. Buy Goods (Till) — "paid to NAME. on"
+        // 8. Buy Goods (Till) — "paid to NAME. on"
         BUY_GOODS_PATTERN.matcher(message).let { m ->
             if (m.find()) {
                 val recipientName = m.group(1)?.trim()
