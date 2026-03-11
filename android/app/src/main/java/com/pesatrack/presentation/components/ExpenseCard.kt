@@ -141,9 +141,13 @@ fun ExpenseCard(
  */
 fun getPaymentTypeIcon(paymentType: PaymentType): ImageVector {
     return when (paymentType) {
-        PaymentType.SEND_MONEY -> Icons.Filled.Send
+        PaymentType.SEND_MONEY -> Icons.AutoMirrored.Filled.Send
         PaymentType.BUY_GOODS -> Icons.Filled.ShoppingCart
         PaymentType.PAY_BILL -> Icons.Filled.Receipt
+        PaymentType.WITHDRAW -> Icons.Filled.AccountBalance
+        PaymentType.AIRTIME -> Icons.Filled.PhoneAndroid
+        PaymentType.MPESA_CARD -> Icons.Filled.CreditCard
+        PaymentType.REVERSAL -> Icons.AutoMirrored.Filled.Undo
     }
 }
 

@@ -20,21 +20,34 @@ data class Expense(
 
 /**
  * Payment types supported by M-PESA
+ *
+ * Only expense-producing transaction types are included.
+ * Receive Money and Deposit are NOT expenses and are excluded.
+ *
+ * Stored as String in Room DB, so new values can be added without migration.
  */
 enum class PaymentType {
-    SEND_MONEY,
-    BUY_GOODS,
-    PAY_BILL;
+    SEND_MONEY,      // Sent to person (name + phone)
+    BUY_GOODS,       // Paid to till number (shop name)
+    PAY_BILL,        // Sent to paybill for account
+    WITHDRAW,        // Withdrawn from agent
+    AIRTIME,         // Bought airtime (self or other)
+    MPESA_CARD,      // Sent to M-PESA Card (global payments)
+    REVERSAL;        // Transaction reversal
 
     companion object {
         fun fromString(value: String): PaymentType {
             return try {
-                valueOf(value) // Try enum name first: SEND_MONEY, BUY_GOODS, PAY_BILL
+                valueOf(value) // Try enum name first
             } catch (e: Exception) {
                 when (value) {
                     "Send Money" -> SEND_MONEY
                     "Buy Goods" -> BUY_GOODS
                     "Pay Bill" -> PAY_BILL
+                    "Withdraw" -> WITHDRAW
+                    "Airtime" -> AIRTIME
+                    "M-PESA Card" -> MPESA_CARD
+                    "Reversal" -> REVERSAL
                     else -> SEND_MONEY // Default
                 }
             }
@@ -46,6 +59,10 @@ enum class PaymentType {
             SEND_MONEY -> "Send Money"
             BUY_GOODS -> "Buy Goods"
             PAY_BILL -> "Pay Bill"
+            WITHDRAW -> "Withdraw"
+            AIRTIME -> "Airtime"
+            MPESA_CARD -> "M-PESA Card"
+            REVERSAL -> "Reversal"
         }
     }
 }
@@ -54,7 +71,7 @@ enum class PaymentType {
  * Source of the expense record
  */
 enum class ExpenseSource {
-    STK_PUSH,    // Created via app-initiated payment
+    STK_PUSH,    // Created via app-initiated payment (legacy, kept for DB compat)
     SMS_PARSED,  // Detected from M-PESA SMS
     MANUAL;      // Manually entered
 
