@@ -9,6 +9,8 @@ sealed class Screen(val route: String) {
     object Categorize : Screen("categorize/{expenseId}") {
         fun createRoute(expenseId: Long) = "categorize/$expenseId"
     }
+    object ImportHistory : Screen("import_history")
+    object BatchCategorize : Screen("batch_categorize")
 }
 
 /**

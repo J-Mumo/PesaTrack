@@ -6,6 +6,7 @@ import androidx.room.Room
 import com.pesatrack.data.local.database.PesaTrackDatabase
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -19,9 +20,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    
+
     // ==================== Database ====================
-    
+
     @Provides
     @Singleton
     fun providePesaTrackDatabase(
@@ -32,25 +33,36 @@ object AppModule {
             PesaTrackDatabase::class.java,
             "pesatrack_database"
         )
-            .addMigrations(PesaTrackDatabase.MIGRATION_2_3)
+            .addMigrations(
+                PesaTrackDatabase.MIGRATION_2_3,
+                PesaTrackDatabase.MIGRATION_3_4,
+                PesaTrackDatabase.MIGRATION_4_5,
+                PesaTrackDatabase.MIGRATION_5_6
+            )
             .fallbackToDestructiveMigration()
             .build()
     }
-    
+
     @Provides
     @Singleton
     fun provideExpenseDao(database: PesaTrackDatabase): ExpenseDao {
         return database.expenseDao()
     }
-    
+
     @Provides
     @Singleton
     fun provideCategoryDao(database: PesaTrackDatabase): CategoryDao {
         return database.categoryDao()
     }
-    
+
+    @Provides
+    @Singleton
+    fun provideRecipientCategoryMappingDao(database: PesaTrackDatabase): RecipientCategoryMappingDao {
+        return database.recipientCategoryMappingDao()
+    }
+
     // ==================== System Services ====================
-    
+
     @Provides
     @Singleton
     fun provideTelephonyManager(

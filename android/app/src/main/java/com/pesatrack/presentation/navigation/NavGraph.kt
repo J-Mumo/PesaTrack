@@ -7,9 +7,11 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.pesatrack.presentation.screens.batch_categorize.BatchCategorizeScreen
 import com.pesatrack.presentation.screens.categorize.CategorizeScreen
 import com.pesatrack.presentation.screens.expenses.ExpenseListScreen
 import com.pesatrack.presentation.screens.home.HomeScreen
+import com.pesatrack.presentation.screens.import_history.ImportScreen
 
 /**
  * Main navigation graph for the app
@@ -33,6 +35,9 @@ fun NavGraph(
                 },
                 onNavigateToCategorize = { expenseId ->
                     navController.navigate(Screen.Categorize.createRoute(expenseId))
+                },
+                onNavigateToImport = {
+                    navController.navigate(Screen.ImportHistory.route)
                 }
             )
         }
@@ -61,6 +66,27 @@ fun NavGraph(
             val expenseId = backStackEntry.arguments?.getLong("expenseId") ?: 0L
             CategorizeScreen(
                 expenseId = expenseId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Import History Screen
+        composable(route = Screen.ImportHistory.route) {
+            ImportScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToBatchCategorize = {
+                    navController.navigate(Screen.BatchCategorize.route)
+                }
+            )
+        }
+        
+        // Batch Categorize Screen
+        composable(route = Screen.BatchCategorize.route) {
+            BatchCategorizeScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

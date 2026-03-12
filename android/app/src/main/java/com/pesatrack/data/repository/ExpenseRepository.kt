@@ -1,6 +1,7 @@
 package com.pesatrack.data.repository
 
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
@@ -18,7 +19,7 @@ import javax.inject.Singleton
 class ExpenseRepository @Inject constructor(
     private val expenseDao: ExpenseDao
 ) {
-    
+
     /**
      * Get all expenses as Flow
      */
@@ -27,7 +28,7 @@ class ExpenseRepository @Inject constructor(
             entities.map { it.toDomain() }
         }
     }
-    
+
     /**
      * Get expenses for current month
      */
@@ -37,7 +38,7 @@ class ExpenseRepository @Inject constructor(
             entities.map { it.toDomain() }
         }
     }
-    
+
     /**
      * Get uncategorized expenses
      */
@@ -46,7 +47,7 @@ class ExpenseRepository @Inject constructor(
             entities.map { it.toDomain() }
         }
     }
-    
+
     /**
      * Get total for current month
      */
@@ -54,48 +55,106 @@ class ExpenseRepository @Inject constructor(
         val (start, end) = getCurrentMonthRange()
         return expenseDao.getTotalForMonth(start, end)
     }
-    
+
     /**
      * Save a new expense
      */
     suspend fun saveExpense(expense: Expense): Long {
         return expenseDao.insert(expense.toEntity())
     }
-    
+
     /**
      * Update expense category
      */
     suspend fun updateCategory(expenseId: Long, categoryId: Long) {
         expenseDao.updateCategory(expenseId, categoryId)
     }
-    
+
     /**
      * Check if transaction already exists
      */
     suspend fun transactionExists(transactionId: String): Boolean {
         return expenseDao.transactionExists(transactionId)
     }
-    
+
     /**
      * Get expense by ID
      */
     suspend fun getExpenseById(id: Long): Expense? {
         return expenseDao.getById(id)?.toDomain()
     }
-    
+
     /**
      * Delete an expense
      */
     suspend fun deleteExpense(expense: Expense) {
         expenseDao.delete(expense.toEntity())
     }
-    
+
+    // ==================== Bulk Operations (Historical Import) ====================
+
+    /**
+     * Insert multiple expenses at once, ignoring duplicates.
+     * Returns list of inserted row IDs (-1 for ignored duplicates).
+     */
+    suspend fun saveExpenses(expenses: List<Expense>): List<Long> {
+        return expenseDao.insertAll(expenses.map { it.toEntity() })
+    }
+
+    /**
+     * Get existing transaction IDs from a list (for batch deduplication)
+     */
+    suspend fun getExistingTransactionIds(ids: List<String>): List<String> {
+        // Room IN queries have a limit of ~999 items; chunk if needed
+        return ids.chunked(500).flatMap { chunk ->
+            expenseDao.getExistingTransactionIds(chunk)
+        }
+    }
+
+    /**
+     * Bulk update category for all uncategorized expenses from a specific recipient.
+     * Returns count of updated expenses.
+     */
+    suspend fun updateCategoryByRecipient(recipient: String, categoryId: Long): Int {
+        return expenseDao.updateCategoryByRecipient(recipient, categoryId)
+    }
+
+    /**
+     * Bulk update category by recipientName.
+     * Returns count of updated expenses.
+     */
+    suspend fun updateCategoryByRecipientName(recipientName: String, categoryId: Long): Int {
+        return expenseDao.updateCategoryByRecipientName(recipientName, categoryId)
+    }
+
+    /**
+     * Get uncategorized expenses grouped by recipient for batch categorize screen.
+     */
+    suspend fun getUncategorizedGroupedByRecipient(): List<RecipientGroup> {
+        return expenseDao.getUncategorizedGroupedByRecipient()
+    }
+
+    /**
+     * Get individual uncategorized expenses for a specific recipient key.
+     * Used by the expandable review UI in batch categorize.
+     */
+    suspend fun getUncategorizedByRecipientKey(recipientKey: String): List<Expense> {
+        return expenseDao.getUncategorizedByRecipientKey(recipientKey).map { it.toDomain() }
+    }
+
+    /**
+     * Get total expense count
+     */
+    suspend fun getTotalExpenseCount(): Int {
+        return expenseDao.getTotalExpenseCount()
+    }
+
     /**
      * Get start and end timestamps for current month
      */
     private fun getCurrentMonthRange(): Pair<Long, Long> {
         val calendar = Calendar.getInstance()
-        
+
         // Start of current month
         calendar.set(Calendar.DAY_OF_MONTH, 1)
         calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -103,16 +162,16 @@ class ExpenseRepository @Inject constructor(
         calendar.set(Calendar.SECOND, 0)
         calendar.set(Calendar.MILLISECOND, 0)
         val start = calendar.timeInMillis
-        
+
         // Start of next month
         calendar.add(Calendar.MONTH, 1)
         val end = calendar.timeInMillis
-        
+
         return Pair(start, end)
     }
-    
+
     // Extension functions for mapping
-    
+
     private fun ExpenseEntity.toDomain(): Expense {
         return Expense(
             id = id,
@@ -124,12 +183,13 @@ class ExpenseRepository @Inject constructor(
             paymentType = PaymentType.fromString(paymentType),
             source = ExpenseSource.fromString(source),
             notes = notes,
+            rawSms = rawSms,
             timestamp = timestamp,
             createdAt = createdAt,
             isCategorized = isCategorized
         )
     }
-    
+
     private fun Expense.toEntity(): ExpenseEntity {
         return ExpenseEntity(
             id = id,
@@ -141,6 +201,7 @@ class ExpenseRepository @Inject constructor(
             paymentType = paymentType.name,
             source = source.name,
             notes = notes,
+            rawSms = rawSms,
             timestamp = timestamp,
             createdAt = createdAt,
             isCategorized = isCategorized

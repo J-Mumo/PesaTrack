@@ -13,6 +13,7 @@ data class Expense(
     val paymentType: PaymentType,
     val source: ExpenseSource,
     val notes: String? = null,
+    val rawSms: String? = null,
     val timestamp: Long,
     val createdAt: Long = System.currentTimeMillis(),
     val isCategorized: Boolean = false

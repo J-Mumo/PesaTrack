@@ -26,6 +26,7 @@ import java.util.*
 fun HomeScreen(
     onNavigateToExpenses: () -> Unit,
     onNavigateToCategorize: (Long) -> Unit,
+    onNavigateToImport: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -51,6 +52,11 @@ fun HomeScreen(
                 total = uiState.totalThisMonth,
                 onViewAll = onNavigateToExpenses
             )
+        }
+        
+        // Import History Card
+        item {
+            ImportHistoryCard(onImport = onNavigateToImport)
         }
         
         // How It Works Info Card
@@ -265,6 +271,49 @@ fun EmptyExpensesCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+fun ImportHistoryCard(onImport: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onImport() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Import SMS History",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Import past M-PESA transactions from your SMS inbox.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
             )
         }
     }

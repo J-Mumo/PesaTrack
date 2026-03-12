@@ -61,7 +61,7 @@ object SmsParser {
      * Category ID for "Mpesa Transaction Cost" in the default categories.
      * This is defined in DefaultCategories (Financial > Mpesa Transaction Cost).
      */
-    const val MPESA_TRANSACTION_COST_CATEGORY_ID = 811L
+    const val MPESA_TRANSACTION_COST_CATEGORY_ID = 606L
 
     // M-PESA sender IDs
     private val MPESA_SENDERS = listOf("MPESA", "M-PESA", "Safaricom")
@@ -278,7 +278,7 @@ object SmsParser {
                         paymentType = PaymentType.TRANSACTION_COST,
                         source = ExpenseSource.SMS_PARSED,
                         timestamp = timestamp,
-                        // Auto-categorize under "Mpesa Transaction Cost" (category 811)
+                        // Auto-categorize under "Mpesa Transaction Cost" (category 606)
                         categoryId = MPESA_TRANSACTION_COST_CATEGORY_ID,
                         isCategorized = true
                     )

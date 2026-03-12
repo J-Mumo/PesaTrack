@@ -52,6 +52,9 @@ data class ExpenseEntity(
     /** Optional notes */
     val notes: String? = null,
     
+    /** Raw SMS message body (for re-parsing when patterns improve) */
+    val rawSms: String? = null,
+    
     /** Transaction timestamp */
     val timestamp: Long,
     
