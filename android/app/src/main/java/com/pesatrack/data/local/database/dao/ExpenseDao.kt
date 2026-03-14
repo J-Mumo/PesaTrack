@@ -63,9 +63,9 @@ interface ExpenseDao {
     fun getExpensesByCategory(categoryId: Long): Flow<List<ExpenseEntity>>
     
     /**
-     * Get uncategorized expenses
+     * Get uncategorized expenses (excludes pass-through money)
      */
-    @Query("SELECT * FROM expenses WHERE isCategorized = 0 ORDER BY timestamp DESC")
+    @Query("SELECT * FROM expenses WHERE isCategorized = 0 AND isExcluded = 0 ORDER BY timestamp DESC")
     fun getUncategorizedExpenses(): Flow<List<ExpenseEntity>>
     
     /**

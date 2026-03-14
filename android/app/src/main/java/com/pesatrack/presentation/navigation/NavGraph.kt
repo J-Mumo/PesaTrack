@@ -42,6 +42,9 @@ fun NavGraph(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onNavigateToBatchCategorize = {
+                    navController.navigate(Screen.BatchCategorize.route)
                 }
             )
         }

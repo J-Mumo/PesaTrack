@@ -28,6 +28,7 @@ fun HomeScreen(
     onNavigateToCategorize: (Long) -> Unit,
     onNavigateToImport: () -> Unit,
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToBatchCategorize: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -83,10 +84,8 @@ fun HomeScreen(
                 UncategorizedAlert(
                     count = uiState.uncategorizedCount,
                     onCategorize = {
-                        // Navigate to first uncategorized expense
-                        uiState.recentExpenses
-                            .firstOrNull { !it.expense.isCategorized }
-                            ?.let { onNavigateToCategorize(it.expense.id) }
+                        // Navigate to batch categorize screen to review all uncategorized
+                        onNavigateToBatchCategorize()
                     }
                 )
             }
