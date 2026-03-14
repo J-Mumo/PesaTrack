@@ -62,5 +62,8 @@ data class ExpenseEntity(
     val createdAt: Long = System.currentTimeMillis(),
     
     /** Whether the expense has been categorized */
-    val isCategorized: Boolean = false
+    val isCategorized: Boolean = false,
+    
+    /** Whether the expense is excluded from totals (pass-through money) */
+    val isExcluded: Boolean = false
 )

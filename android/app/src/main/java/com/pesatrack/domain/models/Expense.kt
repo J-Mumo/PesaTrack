@@ -16,7 +16,9 @@ data class Expense(
     val rawSms: String? = null,
     val timestamp: Long,
     val createdAt: Long = System.currentTimeMillis(),
-    val isCategorized: Boolean = false
+    val isCategorized: Boolean = false,
+    /** When true, this expense is excluded from totals and analytics (pass-through money) */
+    val isExcluded: Boolean = false
 )
 
 /**

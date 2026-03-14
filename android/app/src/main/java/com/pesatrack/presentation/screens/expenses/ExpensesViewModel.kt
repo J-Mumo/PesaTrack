@@ -85,4 +85,13 @@ class ExpensesViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Toggle the isExcluded flag on an expense (pass-through money)
+     */
+    fun toggleExcluded(expenseId: Long, currentlyExcluded: Boolean) {
+        viewModelScope.launch {
+            expenseRepository.setExcluded(expenseId, !currentlyExcluded)
+        }
+    }
 }

@@ -1,7 +1,9 @@
 package com.pesatrack.presentation.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -10,9 +12,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pesatrack.domain.models.Expense
@@ -24,27 +28,44 @@ import java.util.*
 
 /**
  * Card component displaying a single expense item
- * 
+ *
  * Title priority: categoryName > recipientName > recipient
  * Subtitle: paymentType • recipient info (when title is category)
+ *
+ * Long-press to toggle excluded status (pass-through money).
+ * Excluded expenses are dimmed with strikethrough amount.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExpenseCard(
     expense: Expense,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     categoryName: String? = null,
-    categoryColor: String? = null
+    categoryColor: String? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     // Title: show category name (what the expense was for) as primary text
     val title = categoryName
         ?: expense.recipientName
         ?: expense.recipient
     
+    val cardAlpha = if (expense.isExcluded) 0.5f else 1f
+    
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier.clickable { onClick() }
+                }
+            )
+            .alpha(cardAlpha)
     ) {
         Row(
             modifier = Modifier
@@ -58,7 +79,9 @@ fun ExpenseCard(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(
-                        if (categoryColor != null) {
+                        if (expense.isExcluded) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else if (categoryColor != null) {
                             getCategoryColor(categoryColor).copy(alpha = 0.2f)
                         } else {
                             MaterialTheme.colorScheme.primaryContainer
@@ -67,9 +90,12 @@ fun ExpenseCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = getPaymentTypeIcon(expense.paymentType),
-                    contentDescription = null,
-                    tint = if (categoryColor != null) {
+                    imageVector = if (expense.isExcluded) Icons.Filled.VisibilityOff
+                                  else getPaymentTypeIcon(expense.paymentType),
+                    contentDescription = if (expense.isExcluded) "Excluded from totals" else null,
+                    tint = if (expense.isExcluded) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else if (categoryColor != null) {
                         getCategoryColor(categoryColor)
                     } else {
                         MaterialTheme.colorScheme.primary
@@ -99,7 +125,13 @@ fun ExpenseCard(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     
-                    if (categoryName != null) {
+                    if (expense.isExcluded) {
+                        Text(
+                            text = " • Excluded",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    } else if (categoryName != null) {
                         // When title is category, show recipient as secondary info
                         val recipientInfo = expense.recipientName ?: expense.recipient
                         Text(
@@ -125,12 +157,17 @@ fun ExpenseCard(
                 )
             }
             
-            // Amount
+            // Amount — strikethrough if excluded
             Text(
                 text = expense.amount.formatAsCurrency(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
+                color = if (expense.isExcluded) {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                textDecoration = if (expense.isExcluded) TextDecoration.LineThrough else TextDecoration.None
             )
         }
     }

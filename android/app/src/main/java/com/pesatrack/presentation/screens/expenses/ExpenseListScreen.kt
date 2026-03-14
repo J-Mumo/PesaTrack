@@ -87,6 +87,12 @@ fun ExpenseListScreen(
                                 if (!ewc.expense.isCategorized) {
                                     onNavigateToCategorize(ewc.expense.id)
                                 }
+                            },
+                            onLongClick = {
+                                viewModel.toggleExcluded(
+                                    ewc.expense.id,
+                                    ewc.expense.isExcluded
+                                )
                             }
                         )
                     }

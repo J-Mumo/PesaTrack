@@ -150,6 +150,13 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Toggle the isExcluded flag on an expense (for pass-through money)
+     */
+    suspend fun setExcluded(expenseId: Long, isExcluded: Boolean) {
+        expenseDao.setExcluded(expenseId, isExcluded)
+    }
+
+    /**
      * Get start and end timestamps for current month
      */
     private fun getCurrentMonthRange(): Pair<Long, Long> {
@@ -186,7 +193,8 @@ class ExpenseRepository @Inject constructor(
             rawSms = rawSms,
             timestamp = timestamp,
             createdAt = createdAt,
-            isCategorized = isCategorized
+            isCategorized = isCategorized,
+            isExcluded = isExcluded
         )
     }
 
@@ -204,7 +212,8 @@ class ExpenseRepository @Inject constructor(
             rawSms = rawSms,
             timestamp = timestamp,
             createdAt = createdAt,
-            isCategorized = isCategorized
+            isCategorized = isCategorized,
+            isExcluded = isExcluded
         )
     }
 }

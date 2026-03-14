@@ -21,6 +21,7 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
  *           to support multi-category mappings per recipient
  * - v5→v6: Category restructure — alphabetical groups, renames, merges, additions.
  *           All category IDs changed; expenses & mappings updated via ID migration.
+ * - v6→v7: Added isExcluded column to expenses for pass-through money filtering.
  */
 @Database(
     entities = [
@@ -28,7 +29,7 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
         CategoryEntity::class,
         RecipientCategoryMappingEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -460,6 +461,18 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                 // ── Step 7: Clean up and re-enable FK constraints ──
                 database.execSQL("DROP TABLE IF EXISTS _id_map")
                 database.execSQL("PRAGMA foreign_keys = ON")
+            }
+        }
+
+        /**
+         * Migration from version 6 to 7:
+         * Add isExcluded column to expenses table for pass-through money filtering.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE expenses ADD COLUMN isExcluded INTEGER NOT NULL DEFAULT 0"
+                )
             }
         }
     }

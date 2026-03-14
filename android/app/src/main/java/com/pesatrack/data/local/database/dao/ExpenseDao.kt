@@ -69,23 +69,31 @@ interface ExpenseDao {
     fun getUncategorizedExpenses(): Flow<List<ExpenseEntity>>
     
     /**
-     * Get total expenses for a month
+     * Get total expenses for a month (excludes pass-through money)
      */
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM expenses 
+        SELECT COALESCE(SUM(amount), 0.0) FROM expenses
         WHERE timestamp >= :startOfMonth AND timestamp < :endOfMonth
+        AND isExcluded = 0
     """)
     fun getTotalForMonth(startOfMonth: Long, endOfMonth: Long): Flow<Double>
     
     /**
-     * Get total expenses by category for a month
+     * Get total expenses by category for a month (excludes pass-through money)
      */
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM expenses 
-        WHERE categoryId = :categoryId 
+        SELECT COALESCE(SUM(amount), 0.0) FROM expenses
+        WHERE categoryId = :categoryId
         AND timestamp >= :startOfMonth AND timestamp < :endOfMonth
+        AND isExcluded = 0
     """)
     fun getTotalByCategoryForMonth(categoryId: Long, startOfMonth: Long, endOfMonth: Long): Flow<Double>
+    
+    /**
+     * Toggle the isExcluded flag on an expense (for pass-through money)
+     */
+    @Query("UPDATE expenses SET isExcluded = :isExcluded WHERE id = :expenseId")
+    suspend fun setExcluded(expenseId: Long, isExcluded: Boolean)
     
     /**
      * Update expense category
