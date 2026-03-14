@@ -20,32 +20,48 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Notifications** | ✅ Complete | 100% |
 | **Runtime Permissions** | ✅ Complete | 100% |
 | **Backend Server (unused)** | 🟡 Dormant | N/A |
-| **Historical SMS Import** | ⏳ Deferred | 0% |
-| **Manual Expense Entry** | ⏳ Pending | 0% |
-| **Phase 2 Features** | ⏳ Pending | 0% |
+| **Phase 2 M1: Historical SMS Import + Recipient Learning** | ✅ Complete | 100% |
+| **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
+| **Phase 2 M3: AI-Powered Categorization** | ⏳ Pending | 0% |
+| **Phase 2 M4: Manual Expense Entry** | ⏳ Pending | 0% |
+| **Phase 2 M5: Settings & Configuration** | ⏳ Pending | 0% |
 
 ---
 
 ## System Architecture (Current)
 
 ```
-M-PESA SMS ──► SmsReceiver ──► SmsParser ──► ParsedTransaction
-                                                 ├── expense (main)
-                                                 └── transactionCost (optional)
-                                                        │
-                                               ExpenseRepository.saveExpense()
-                                                        │
-                                                   Room Database
-                                                        │
-                                          ┌─────────────┼─────────────┐
-                                     HomeScreen    ExpenseList    CategorizeScreen
+SMS Sources ──────────────────────────────────────────────────────────────────
+│                                                                            │
+│  M-PESA SMS ──► SmsReceiver ──► SmsParserRegistry ──► MpesaSmsParser       │
+│  NCBA  SMS ──► SmsReceiver ──► SmsParserRegistry ──► NcbaBankParser        │
+│  Historical ──► SmsImportService ──► SmsParserRegistry                     │
+│                                        │                                   │
+│                                  ParsedTransaction                         │
+│                                   ├── expense (main)                       │
+│                                   └── transactionCost (optional)           │
+│                                        │                                   │
+│                         Auto-Categorization                                │
+│                          ├── Deterministic rules                           │
+│                          └── Recipient mapping                             │
+│                                        │                                   │
+│                               ExpenseRepository                            │
+│                                        │                                   │
+│                                   Room Database                            │
+│                                        │                                   │
+│                    ┌───────────┬────────┼──────────┬──────────┐             │
+│               HomeScreen  ExpenseList  Categorize  Batch   Settings        │
+──────────────────────────────────────────────────────────────────────────────
 ```
 
 **Key design decisions:**
 - No backend communication — all data is local (Room + DataStore)
-- SMS parsing is the sole source of expense data (plus future manual entry)
-- Transaction costs are auto-extracted and saved as separate expenses under category 811
+- SMS parsing is the sole source of expense data (M-PESA + bank SMS, plus future manual entry)
+- Strategy pattern for SMS parsers — new banks are added as `SmsParserStrategy` implementations
+- Transaction costs are auto-extracted and saved as separate expenses under category 606
 - Non-expense SMS (Receive Money, Deposit, Reversal) are silently skipped
+- Bank SMS deduplication via shared M-PESA transaction IDs (same uniqueness constraint)
+- Bank tracking enabled by default — all supported banks are active out of the box (toggleable in Settings)
 
 ---
 
@@ -57,24 +73,29 @@ M-PESA SMS ──► SmsReceiver ──► SmsParser ──► ParsedTransaction
 
 | Feature | File | Description |
 |---------|------|-------------|
-| M-PESA SMS Parser | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:56) | Complete parser for all M-PESA expense types |
-| Send Money | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"sent to NAME PHONE on"` |
-| Buy Goods (Till) | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"paid to SHOP. on"` |
-| Pay Bill | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"sent to COMPANY for account"` |
-| Withdraw from Agent | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:105) | Pattern: `"withdrawn ... from AGENT"` |
-| Airtime (self) | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"bought ... of airtime on"` |
-| Airtime (other) | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:111) | Pattern: `"bought ... of airtime for PHONE"` |
-| M-PESA Card (Global) | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"sent to M-PESA CARD for account"` |
-| Fuliza | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:346) | Pattern: `"Fuliza M-PESA amount sent to"` |
-| Transaction cost extraction | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:322) | Regex: `"Transaction cost,? Ksh([\\d,]+\\.\\d{2})"` |
-| Transaction ID extraction | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:303) | 10-char alphanumeric at start of SMS |
-| Amount extraction | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:311) | `Ksh` format with commas |
-| Timestamp extraction | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:453) | Multiple date/time formats |
-| Non-expense filtering | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:176) | Skips Receive Money, Deposit, Reversal |
-| ParsedTransaction model | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:159) | Returns `ParsedTransaction(expense, transactionCost?)` |
-| SMS Receiver | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:24) | BroadcastReceiver with multi-part SMS concatenation |
-| Dual expense saving | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:59) | Saves main expense + transaction cost separately |
-| Duplicate detection | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:69) | Checks transactionId before insert |
+| **Parser Strategy Interface** | [`SmsParserStrategy.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserStrategy.kt:15) | Base interface for all SMS parsers |
+| **Parser Registry** | [`SmsParserRegistry.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserRegistry.kt:17) | Dispatches SMS to correct parser by sender ID |
+| **M-PESA SMS Parser** | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:31) | 8 M-PESA expense types |
+| **NCBA Bank Parser** | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:38) | 3 NCBA transaction types (Send, Till, Paybill) |
+| SmsParser Facade | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:20) | Backward-compatible facade delegating to registry |
+| Send Money | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:81) | Pattern: `"sent to NAME PHONE on"` |
+| Buy Goods (Till) | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:84) | Pattern: `"paid to SHOP. on"` |
+| Pay Bill | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:75) | Pattern: `"sent to COMPANY for account"` |
+| Withdraw from Agent | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:61) | Pattern: `"withdrawn ... from AGENT"` |
+| Airtime (self) | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:69) | Pattern: `"bought ... of airtime on"` |
+| Airtime (other) | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:65) | Pattern: `"bought ... of airtime for PHONE"` |
+| M-PESA Card (Global) | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:72) | Pattern: `"sent to M-PESA CARD for account"` |
+| Fuliza | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:78) | Pattern: `"Fuliza M-PESA amount sent to"` |
+| NCBA Send Money | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:63) | Pattern: `"MPESA transfer of KES to NAME (PHONE)"` |
+| NCBA Till Payment | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:76) | Pattern: `"Mpesa Till transfer of KES to TILL"` |
+| NCBA Paybill | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:82) | Pattern: `"Mpesa Paybill transfer of KES to"` |
+| Transaction cost extraction | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:48) | Regex: `"Transaction cost,? Ksh..."` |
+| Non-expense filtering | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:56) | Skips Receive Money, Deposit, Reversal |
+| NCBA self-transfer skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:70) | Skips bank→own M-PESA transfers |
+| NCBA generic debit skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:51) | Skips "has been debited" (less info) |
+| SMS Receiver | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Multi-source BroadcastReceiver with bank preference check |
+| Multi-source Import | [`SmsImportService.kt`](../android/app/src/main/java/com/pesatrack/services/SmsImportService.kt:36) | Imports from M-PESA + enabled banks |
+| Duplicate detection | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Checks transactionId before insert |
 
 ---
 
@@ -110,8 +131,8 @@ M-PESA SMS ──► SmsReceiver ──► SmsParser ──► ParsedTransaction
 |---------|------|-------------|
 | Expense Model | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:6) | Domain model with `isCategorized` flag |
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
-| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:29) | 7 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST |
-| ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:77) | STK_PUSH (legacy), SMS_PARSED, MANUAL |
+| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:30) | 8 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT |
+| ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, MANUAL |
 
 **PaymentType details:**
 
@@ -136,7 +157,7 @@ M-PESA SMS ──► SmsReceiver ──► SmsParser ──► ParsedTransaction
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 3 routes: Home, Expenses, Categorize |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 6 routes: Home, Expenses, Categorize, Import, BatchCategorize, Settings |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:17) | 2 tabs: Home, Expenses |
 | **Main Activity** | | |
@@ -163,12 +184,16 @@ M-PESA SMS ──► SmsReceiver ──► SmsParser ──► ParsedTransaction
 | Colors | [`Color.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Color.kt:1) | Colour palette with `getCategoryColor()` |
 | Typography | [`Type.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Type.kt:1) | Typography definitions |
 
+| **Settings Screen** | | |
+| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Bank SMS tracking toggles |
+| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Preferences management |
+| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle data model |
+
 #### ⏳ Pending
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
 | Manual Expense Entry Screen | Medium | No UI to manually add expenses yet |
-| Settings Screen | Low | App preferences |
 
 ---
 
@@ -304,12 +329,12 @@ app/src/main/java/com/pesatrack/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       └── CategoryRepository.kt            ✅ Category management
 ├── domain/models/
-│   ├── Expense.kt                           ✅ PaymentType (7) + ExpenseSource (3)
+│   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (4)
 │   └── Category.kt                          ✅ Domain model
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Permissions + Scaffold + bottom nav
 │   ├── navigation/
-│   │   ├── NavGraph.kt                      ✅ 3 routes: Home, Expenses, Categorize
+│   │   ├── NavGraph.kt                      ✅ 6 routes: Home, Expenses, Categorize, Import, BatchCategorize, Settings
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum
 │   ├── screens/
 │   │   ├── home/
@@ -320,10 +345,14 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ExpenseListScreen.kt          ✅ Full expense list
 │   │   │   ├── ExpensesViewModel.kt          ✅ Category mapping
 │   │   │   └── ExpensesUiState.kt            ✅ ExpenseWithCategory model
-│   │   └── categorize/
-│   │       ├── CategorizeScreen.kt           ✅ Category assignment
-│   │       ├── CategorizeViewModel.kt        ✅ State management
-│   │       └── CategorizeUiState.kt          ✅ UI state
+│   │   ├── categorize/
+│   │   │   ├── CategorizeScreen.kt           ✅ Category assignment
+│   │   │   ├── CategorizeViewModel.kt        ✅ State management
+│   │   │   └── CategorizeUiState.kt          ✅ UI state
+│   │   └── settings/
+│   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles
+│   │       ├── SettingsViewModel.kt          ✅ Preferences management
+│   │       └── SettingsUiState.kt            ✅ BankToggle model
 │   ├── components/
 │   │   ├── ExpenseCard.kt                   ✅ Payment type icons, category title
 │   │   ├── CategoryChip.kt                  ✅ Selection chip
@@ -333,12 +362,18 @@ app/src/main/java/com/pesatrack/
 │       ├── Color.kt                         ✅ getCategoryColor()
 │       └── Type.kt                          ✅ Typography
 ├── services/
-│   ├── SmsReceiver.kt                       ✅ BroadcastReceiver + dual save
+│   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver
+│   ├── SmsImportService.kt                  ✅ Multi-source historical import
 │   └── NotificationHelper.kt               ✅ Channel + expense alerts
 └── utils/
-    ├── SmsParser.kt                         ✅ 7 expense types + transaction cost
+    ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
     ├── Constants.kt                         ✅ formatAsCurrency()
-    └── PhoneNumberHelper.kt                 ✅ SIM number reading
+    ├── PhoneNumberHelper.kt                 ✅ SIM number reading
+    └── parsers/
+        ├── SmsParserStrategy.kt             ✅ Strategy interface for SMS parsers
+        ├── SmsParserRegistry.kt             ✅ Central dispatcher (sender → parser)
+        ├── MpesaSmsParser.kt                ✅ M-PESA parser (8 expense types)
+        └── NcbaBankParser.kt                ✅ NCBA bank parser (3 types)
 ```
 
 ### Backend (Dormant — not used by app)
@@ -411,39 +446,51 @@ backend/
 | Category-aware expense cards | ✅ Complete | Category name as title |
 | Runtime permission flow | ✅ Complete | All permissions requested on launch |
 | Manual expense entry | ⏳ Pending | No manual add screen yet |
-| Historical SMS import | ⏳ Deferred | App only captures new SMS |
+| Historical SMS import | ✅ Complete | ContentResolver-based import with date range picker |
+| Recipient-based auto-categorization | ✅ Complete | Learned mappings applied to new transactions |
+| Batch categorization by recipient | ✅ Complete | Group uncategorized expenses by recipient |
+| Bank SMS tracking (NCBA) | ✅ Complete | Strategy pattern with parser registry |
+| Settings screen | ✅ Complete | Bank SMS tracking toggles |
+| Multi-source SMS import | ✅ Complete | M-PESA + enabled banks |
 
 ---
 
-## Phase 2: Future Features (Not Started)
+## Phase 2: Feature Progress
 
-| Feature | Complexity | Notes |
-|---------|------------|-------|
-| Manual expense entry screen | Low | Add expense without SMS |
-| Historical SMS import | Medium | Read existing M-PESA SMS from inbox |
-| Expense charts and analytics | Medium | Category breakdown, trends |
-| Monthly/weekly summaries | Low | Time-based grouping |
-| Category-based budgets | Medium | Set spending limits |
-| Export to CSV | Low | Shareable reports |
-| Cloud sync | High | Backup/restore across devices |
-| Recurring expense tracking | Medium | Detect repeating patterns |
-| Settings screen | Low | App preferences |
+| Milestone | Feature | Status | Notes |
+|-----------|---------|--------|-------|
+| **M1** | Historical SMS Import | ✅ Complete | ContentResolver import with date range |
+| **M1** | Recipient Category Mapping | ✅ Complete | Learned recipient→category auto-apply |
+| **M1** | Batch Categorize Screen | ✅ Complete | Group by recipient, apply-to-all |
+| **M1** | Import Screen with progress | ✅ Complete | Date picker + import summary |
+| **M1** | Deterministic auto-categorization | ✅ Complete | Airtime→1001, Costs→811 |
+| **M1** | SmsReceiver auto-categorize | ✅ Complete | Uses recipient mapping for live SMS |
+| **M2** | Bank SMS Tracking (NCBA) | ✅ Complete | Strategy pattern + parser registry + Settings UI |
+| **M3** | AI-Powered Categorization (Gemini) | ⏳ Pending | API-based suggestions |
+| **M4** | Manual expense entry screen | ⏳ Pending | Add expense without SMS |
+| **M5** | Settings & Configuration | ⏳ Pending | Bank selection, AI prefs |
+| — | Expense charts and analytics | ⏳ Pending | Category breakdown, trends |
+| — | Monthly/weekly summaries | ⏳ Pending | Time-based grouping |
+| — | Category-based budgets | ⏳ Pending | Set spending limits |
+| — | Export to CSV | ⏳ Pending | Shareable reports |
+| — | Cloud sync | ⏳ Pending | Backup/restore across devices |
+| — | Recurring expense tracking | ⏳ Pending | Detect repeating patterns |
 
 ---
 
 ## Next Steps (Recommended)
 
 ### High Priority
-- [ ] Test on a real Android device with actual M-PESA SMS messages
+- [ ] Test on a real Android device with actual M-PESA + NCBA SMS messages
 - [ ] Fix any parsing bugs discovered from real-world SMS formats
 - [ ] Generate signed APK for distribution
 
-### Medium Priority
-- [ ] Add manual expense entry screen
-- [ ] Implement historical SMS import (read existing inbox)
-- [ ] Handle notification tap deep-linking to categorize screen
+### Medium Priority — Phase 2 Milestone 3
+- [ ] Phase 2 M3: AI-Powered Categorization (Gemini API)
+- [ ] Phase 2 M4: Manual expense entry screen
 
-### Low Priority
-- [ ] Add app settings screen
-- [ ] Implement expense charts/analytics
+### Lower Priority
+- [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
+- [ ] Expense charts/analytics
+- [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway

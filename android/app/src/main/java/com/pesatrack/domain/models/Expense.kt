@@ -34,7 +34,8 @@ enum class PaymentType {
     WITHDRAW,        // Withdrawn from agent
     AIRTIME,         // Bought airtime (self or other)
     MPESA_CARD,      // Sent to M-PESA Card (global payments)
-    TRANSACTION_COST; // M-PESA transaction cost (auto-categorized)
+    TRANSACTION_COST, // M-PESA transaction cost (auto-categorized)
+    BANK_DEBIT;      // Generic bank debit (for non-MPESA bank transactions)
 
     companion object {
         fun fromString(value: String): PaymentType {
@@ -49,6 +50,7 @@ enum class PaymentType {
                     "Airtime" -> AIRTIME
                     "M-PESA Card" -> MPESA_CARD
                     "Transaction Cost" -> TRANSACTION_COST
+                    "Bank Debit" -> BANK_DEBIT
                     // Legacy values (for backward compat with old DB records)
                     "REVERSAL" -> SEND_MONEY
                     "RECEIVE_MONEY" -> SEND_MONEY
@@ -68,6 +70,7 @@ enum class PaymentType {
             AIRTIME -> "Airtime"
             MPESA_CARD -> "M-PESA Card"
             TRANSACTION_COST -> "Transaction Cost"
+            BANK_DEBIT -> "Bank Debit"
         }
     }
 }
@@ -78,6 +81,7 @@ enum class PaymentType {
 enum class ExpenseSource {
     STK_PUSH,    // Created via app-initiated payment (legacy, kept for DB compat)
     SMS_PARSED,  // Detected from M-PESA SMS
+    SMS_BANK,    // Detected from bank SMS (NCBA, etc.)
     MANUAL;      // Manually entered
 
     companion object {

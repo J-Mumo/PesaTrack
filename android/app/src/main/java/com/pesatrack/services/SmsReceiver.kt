@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
+import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,11 +18,15 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * BroadcastReceiver for incoming SMS messages
+ * BroadcastReceiver for incoming SMS messages.
  *
- * Listens for M-PESA confirmation SMS and automatically
+ * Listens for M-PESA and bank confirmation SMS and automatically
  * parses them into expense records. Also extracts transaction
  * costs and saves them as separate auto-categorized expenses.
+ *
+ * Multi-source support:
+ * - M-PESA SMS are always processed
+ * - Bank SMS (NCBA, etc.) are processed only if enabled in AppPreferences
  *
  * Enhanced with recipient-based auto-categorization:
  * if the recipient has been categorized before, the new expense
@@ -35,6 +41,9 @@ class SmsReceiver : BroadcastReceiver() {
     @Inject
     lateinit var recipientMappingRepository: RecipientMappingRepository
 
+    @Inject
+    lateinit var appPreferences: AppPreferences
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -44,7 +53,7 @@ class SmsReceiver : BroadcastReceiver() {
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
-        // M-PESA SMS may be split across multiple parts — concatenate them
+        // SMS may be split across multiple parts — concatenate them by sender
         val smsByAddress = mutableMapOf<String, StringBuilder>()
         for (message in messages) {
             val sender = message.displayOriginatingAddress ?: continue
@@ -54,25 +63,47 @@ class SmsReceiver : BroadcastReceiver() {
 
         for ((sender, bodyBuilder) in smsByAddress) {
             val body = bodyBuilder.toString()
-            // Check if it's an M-PESA message
+
+            // M-PESA SMS — always processed (no preference check needed)
             if (SmsParser.isMpesaSms(sender) && SmsParser.isTransactionSms(body)) {
-                processTransaction(context, body)
+                processTransaction(context, sender, body)
+                continue
+            }
+
+            // Bank SMS — check if the sender's bank parser is enabled
+            scope.launch {
+                try {
+                    val parser = SmsParserRegistry.findParser(sender, body)
+                    if (parser != null && parser.displayName != "M-PESA") {
+                        // Check if this bank is enabled in preferences
+                        val bankEnabled = appPreferences.isBankEnabled(parser.displayName)
+                        if (bankEnabled) {
+                            processTransaction(context, sender, body)
+                        } else {
+                            Log.d(TAG, "Ignoring ${parser.displayName} SMS — bank tracking not enabled")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error checking bank SMS", e)
+                }
             }
         }
     }
 
     /**
-     * Process the M-PESA transaction SMS.
+     * Process a transaction SMS from any supported source.
+     *
+     * Uses [SmsParserRegistry] to dispatch to the correct parser.
      * Saves the main expense and, if present, a separate transaction cost expense.
      * Applies auto-categorization using:
-     * 1. Deterministic rules (Airtime → 1001, Transaction Cost → 811)
+     * 1. Deterministic rules (Airtime → 202, Transaction Cost → 606)
      * 2. Recipient mapping (learned from previous categorizations)
      */
-    private fun processTransaction(context: Context, smsBody: String) {
+    private fun processTransaction(context: Context, sender: String, smsBody: String) {
         scope.launch {
             try {
-                // Parse the SMS into main expense + optional transaction cost
-                val parsed = SmsParser.parseSms(smsBody) ?: return@launch
+                // Parse the SMS using the registry (dispatches to correct parser)
+                val parsed = SmsParserRegistry.parseTransaction(sender, smsBody) ?: return@launch
 
                 var mainExpense = parsed.expense.copy(rawSms = smsBody)
 
@@ -90,6 +121,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val expenseId = expenseRepository.saveExpense(mainExpense)
                 Log.d(TAG, "Saved expense: ${mainExpense.paymentType.displayName()} " +
                         "Ksh${mainExpense.amount} to ${mainExpense.recipientName ?: mainExpense.recipient}" +
+                        " [${mainExpense.source}]" +
                         if (mainExpense.isCategorized) " (auto-categorized)" else "")
 
                 // Show notification to categorize (only if not auto-categorized)
@@ -108,7 +140,7 @@ class SmsReceiver : BroadcastReceiver() {
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing M-PESA SMS", e)
+                Log.e(TAG, "Error processing SMS from $sender", e)
             }
         }
     }

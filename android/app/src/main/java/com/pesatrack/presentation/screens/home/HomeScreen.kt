@@ -27,6 +27,7 @@ fun HomeScreen(
     onNavigateToExpenses: () -> Unit,
     onNavigateToCategorize: (Long) -> Unit,
     onNavigateToImport: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -37,20 +38,32 @@ fun HomeScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Header with Settings button
         item {
-            Text(
-                text = "PesaTrack",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "PesaTrack",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
         }
         
         // Monthly Summary Card
         item {
             MonthlySummaryCard(
-                total = uiState.totalThisMonth,
-                onViewAll = onNavigateToExpenses
+                total = uiState.totalThisMonth
             )
         }
         
@@ -129,8 +142,7 @@ fun HomeScreen(
 
 @Composable
 fun MonthlySummaryCard(
-    total: Double,
-    onViewAll: () -> Unit
+    total: Double
 ) {
     val currentMonth = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
     

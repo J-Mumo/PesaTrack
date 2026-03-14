@@ -96,9 +96,11 @@ flowchart TB
 
 ## Implementation Milestones
 
-### Milestone 1: Historical SMS Import + Recipient Learning
+### Milestone 1: Historical SMS Import + Recipient Learning ✅ COMPLETE
 
 > **Goal:** Import existing M-PESA SMS from the inbox and auto-categorize using recipient-based learning.
+>
+> **Status:** All sub-tasks implemented. See files: `RecipientCategoryMappingEntity.kt`, `RecipientCategoryMappingDao.kt`, `RecipientMappingRepository.kt`, `SmsImportService.kt`, `ImportScreen.kt`, `ImportViewModel.kt`, `BatchCategorizeScreen.kt`, `BatchCategorizeViewModel.kt`.
 
 #### 1.1 Data Layer — RecipientCategoryMapping
 
@@ -207,122 +209,69 @@ Airtime is always airtime — no user categorization needed.
 
 ---
 
-### Milestone 2: Bank SMS Tracking
+### Milestone 2: Bank SMS Tracking ✅ COMPLETE
 
-> **Goal:** Expand SMS parsing to handle bank transaction SMS, starting with Equity and KCB.
+> **Goal:** Expand SMS parsing to handle bank transaction SMS, starting with NCBA Bank.
+>
+> **Status:** All sub-tasks implemented. Parser strategy pattern created with MpesaSmsParser and NcbaBankParser. SmsReceiver and SmsImportService updated for multi-source support. Settings screen added with bank tracking toggles.
 
-#### 2.1 Refactor — Parser Strategy Pattern
+#### 2.1 Refactor — Parser Strategy Pattern ✅
 
-Extract current M-PESA logic from [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:56) into a strategy pattern:
+Extracted M-PESA logic from `SmsParser.kt` into a strategy pattern:
 
-```kotlin
-// New file: SmsParserStrategy.kt
-interface SmsParserStrategy {
-    fun canHandle(sender: String, body: String): Boolean
-    fun parse(body: String): SmsParser.ParsedTransaction?
-    val source: ExpenseSource
-    val senderIds: List<String>
-}
+**Created files:**
+- [`SmsParserStrategy.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserStrategy.kt:15) — Strategy interface (`canHandle()`, `parse()`, `senderIds`, `expenseSource`)
+- [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:31) — Extracted all 8 M-PESA patterns
+- [`SmsParserRegistry.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserRegistry.kt:17) — Central dispatcher with `findParser()`, `parseTransaction()`, `getAllSenderIds()`
+- [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:20) — Refactored into thin backward-compatible facade
 
-// New file: MpesaSmsParser.kt — extract from current SmsParser.kt
-class MpesaSmsParser : SmsParserStrategy { ... }
+Backward compatibility maintained: `SmsParser.parseSms()`, `SmsParser.isMpesaSms()`, `SmsParser.isTransactionSms()` all continue to work.
 
-// Refactored SmsParser.kt becomes SmsParserRegistry
-object SmsParserRegistry {
-    private val parsers: List<SmsParserStrategy> = listOf(
-        MpesaSmsParser(),
-        // Future: EquityBankParser(), KcbBankParser(), etc.
-    )
-    
-    fun findParser(sender: String, body: String): SmsParserStrategy?
-    fun parseTransaction(sender: String, body: String): ParsedTransaction?
-}
-```
+#### 2.2 Extend Domain Models ✅
 
-**Key requirement:** This refactor must NOT break existing functionality. The `SmsParser.parseSms()` and `SmsParser.isMpesaSms()` APIs should continue to work (delegate to registry internally).
+Updated [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:30):
+- Added `BANK_DEBIT` to `PaymentType` (for non-MPESA bank transactions)
+- Added `SMS_BANK` to `ExpenseSource` (for bank SMS-parsed expenses)
+- Kept `SMS_PARSED` unchanged (no rename needed — used for M-PESA SMS only)
+- No DB migration needed (stored as String in Room)
 
-#### 2.2 Extend Domain Models
+#### 2.3 Implement NCBA Bank Parser ✅
 
-Update [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:77):
+Created [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:38) with sender ID `NCBA_BANK`:
 
-```kotlin
-enum class ExpenseSource {
-    STK_PUSH,     // legacy
-    SMS_MPESA,    // renamed from SMS_PARSED
-    SMS_BANK,     // new: bank SMS
-    MANUAL;       // manual entry
-}
+| SMS Type | Pattern | PaymentType | Action |
+|----------|---------|-------------|--------|
+| Send Money with recipient | `"MPESA transfer of KES to NAME (PHONE)"` | SEND_MONEY | Parse |
+| Self-transfer (no recipient) | `"MPESA transfer of KES...processed"` | — | Skip (bank→own M-PESA) |
+| Till payment | `"Mpesa Till transfer of KES to TILL NAME"` | BUY_GOODS | Parse |
+| Paybill | `"Mpesa Paybill transfer of KES to NAME account"` | PAY_BILL | Parse |
+| Generic debit | `"Your account...has been debited"` | — | Skip (duplicate, less info) |
 
-enum class PaymentType {
-    // Existing M-PESA types
-    SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST,
-    // New bank types
-    BANK_TRANSFER, BANK_WITHDRAWAL, CARD_PURCHASE, BANK_CHARGE;
-}
-```
+Deduplication: NCBA M-PESA transactions share the same M-PESA ref as direct M-PESA SMS. The existing `transactionId` uniqueness constraint handles cross-source dedup.
 
-Note: `SMS_PARSED` → `SMS_MPESA` rename needs `fromString()` backward compat.
+#### 2.4 Update SmsReceiver for Multi-Source ✅
 
-#### 2.3 Implement Bank Parsers (Start with Equity + KCB)
+Updated [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) to use `SmsParserRegistry`:
+- M-PESA SMS always processed (no preference check needed)
+- Bank SMS checked against `AppPreferences.isBankEnabled()` before processing
+- Uses `SmsParserRegistry.parseTransaction(sender, body)` for parsing
 
-**Equity Bank SMS formats to handle:**
+#### 2.5 Settings — Bank Selection ✅
 
-```
-// Payment
-"You have made a payment of KES 5,000.00 to NAIVAS at NAIVAS WESTLANDS on 11/03/26 14:30. Ref: TXN123456. Bal: KES 25,000.00"
+Created Settings screen with bank tracking toggles:
+- [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) — M-PESA (always on) + bank master toggle + individual bank toggles
+- [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) — Reads from/writes to AppPreferences
+- [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) — BankToggle data model
+- [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:1) — Added `bankTrackingEnabled`, `enabledBanks`, `setBankEnabled()`
+- Settings gear icon added to HomeScreen header
+- Route added to NavGraph and Screen sealed class
 
-// Transfer
-"KES 10,000.00 has been transferred from your a/c *1234 to a/c *5678 on 11/03/26. Ref: FT123456. Bal: KES 15,000.00"
+#### 2.6 Historical Import — Extend to Banks ✅
 
-// Withdrawal
-"Cash Withdrawal of KES 5,000.00 from ATM EQUITY TOWER on 11/03/26. Ref: ATM123456. Bal: KES 20,000.00"
-
-// Bank charges
-"Your a/c *1234 has been debited KES 30.00 for LEDGER FEE on 11/03/26. Bal: KES 19,970.00"
-```
-
-**KCB Bank SMS formats:**
-
-```
-// Payment
-"Payment of KES 3,000.00 to JAVA HOUSE has been made from a/c ****1234. TXN ID: KCB123456"
-
-// Withdrawal
-"Withdrawal of KES 10,000.00 at KCB MOMBASA RD ATM from a/c ****1234. TXN ID: KCB789012"
-```
-
-**Files to create:**
-- `EquityBankParser.kt` in `utils/parsers/`
-- `KcbBankParser.kt` in `utils/parsers/`
-
-#### 2.4 Update SmsReceiver for Multi-Source
-
-Modify [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:24) to use `SmsParserRegistry` instead of hardcoded M-PESA checks:
-
-```kotlin
-// Before:
-if (SmsParser.isMpesaSms(sender) && SmsParser.isTransactionSms(body))
-
-// After:
-val parsed = SmsParserRegistry.parseTransaction(sender, body)
-if (parsed != null) { ... }
-```
-
-#### 2.5 Settings — Bank Selection
-
-Create a Settings screen where users can enable/disable which banks to track:
-- Toggle: Track M-PESA transactions ✅
-- Toggle: Track Equity Bank transactions ☐
-- Toggle: Track KCB transactions ☐
-- Each toggle configures which parsers are active in the registry
-
-#### 2.6 Historical Import — Extend to Banks
-
-Update `SmsImportService` to also query bank sender IDs when importing history:
-
-```kotlin
-val senderIds = listOf("MPESA") + enabledBankSenders  // e.g., ["EquityBnk", "KCB"]
-```
+Updated [`SmsImportService.kt`](../android/app/src/main/java/com/pesatrack/services/SmsImportService.kt:36):
+- Queries all enabled bank sender IDs in addition to MPESA
+- Uses `SmsParserRegistry.parseTransaction(sender, body)` for multi-source parsing
+- Reads per-sender from ContentResolver, merges and sorts by date
 
 ---
 

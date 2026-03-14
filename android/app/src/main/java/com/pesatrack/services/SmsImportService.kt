@@ -3,20 +3,26 @@ package com.pesatrack.services
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
+import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Service for importing historical M-PESA SMS from the device inbox.
+ * Service for importing historical SMS from the device inbox.
  *
- * Reads SMS via ContentResolver, parses using SmsParser, deduplicates
- * against existing DB records, and applies auto-categorization rules.
+ * Supports multi-source import:
+ * - M-PESA SMS (always imported)
+ * - Bank SMS (NCBA, etc.) imported only if enabled in AppPreferences
+ *
+ * Reads SMS via ContentResolver, parses using [SmsParserRegistry],
+ * deduplicates against existing DB records, and applies auto-categorization rules.
  *
  * Usage flow:
  * 1. User selects date range on ImportScreen
@@ -28,7 +34,8 @@ import javax.inject.Singleton
 class SmsImportService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val expenseRepository: ExpenseRepository,
-    private val recipientMappingRepository: RecipientMappingRepository
+    private val recipientMappingRepository: RecipientMappingRepository,
+    private val appPreferences: AppPreferences
 ) {
 
     companion object {
@@ -37,7 +44,7 @@ class SmsImportService @Inject constructor(
         /** SMS content provider URI for inbox */
         private val SMS_INBOX_URI: Uri = Uri.parse("content://sms/inbox")
 
-        /** M-PESA sender address to filter by */
+        /** M-PESA sender address (always included) */
         private const val MPESA_SENDER = "MPESA"
 
         /** Batch size for database inserts */
@@ -48,7 +55,7 @@ class SmsImportService @Inject constructor(
      * Result of a historical SMS import operation
      */
     data class ImportResult(
-        /** Total M-PESA SMS found in inbox */
+        /** Total SMS found in inbox across all sources */
         val totalSmsFound: Int = 0,
         /** SMS that were successfully parsed as expense transactions */
         val totalParsed: Int = 0,
@@ -64,12 +71,14 @@ class SmsImportService @Inject constructor(
         val needsManualCategorization: Int = 0,
         /** Transaction costs saved as separate expenses */
         val transactionCostsSaved: Int = 0,
+        /** Number of sources that were imported from */
+        val sourcesImported: Int = 0,
         /** Errors encountered during import */
         val errors: Int = 0
     )
 
     /**
-     * Import historical M-PESA SMS from the device inbox.
+     * Import historical SMS from the device inbox (all enabled sources).
      *
      * @param fromTimestamp Start of date range (null = all history)
      * @param toTimestamp End of date range (null = now)
@@ -83,12 +92,16 @@ class SmsImportService @Inject constructor(
     ): ImportResult {
         Log.d(TAG, "Starting historical SMS import (from=${fromTimestamp}, to=${toTimestamp})")
 
-        // 1. Read SMS from inbox
-        val smsList = readMpesaSmsFromInbox(fromTimestamp, toTimestamp)
-        Log.d(TAG, "Found ${smsList.size} M-PESA SMS in inbox")
+        // Build list of sender IDs to query
+        val senderIds = getActiveSenderIds()
+        Log.d(TAG, "Active sender IDs: $senderIds")
+
+        // 1. Read SMS from inbox for all active senders
+        val smsList = readSmsFromInbox(senderIds, fromTimestamp, toTimestamp)
+        Log.d(TAG, "Found ${smsList.size} SMS in inbox from ${senderIds.size} sources")
 
         if (smsList.isEmpty()) {
-            return ImportResult(totalSmsFound = 0)
+            return ImportResult(totalSmsFound = 0, sourcesImported = senderIds.size)
         }
 
         // 2. Load confident mappings for auto-categorization (≥80% confidence only)
@@ -112,8 +125,8 @@ class SmsImportService @Inject constructor(
                 // Report progress
                 onProgress(index + 1, smsList.size)
 
-                // Parse SMS
-                val parsed = SmsParser.parseSms(sms.body) ?: continue
+                // Parse SMS using the registry (dispatches to correct parser by sender)
+                val parsed = SmsParserRegistry.parseTransaction(sms.sender, sms.body) ?: continue
                 totalParsed++
 
                 // Create main expense with rawSms
@@ -182,6 +195,7 @@ class SmsImportService @Inject constructor(
             autoCategorizedByMapping = autoCategorizedByMapping,
             needsManualCategorization = needsManualCategorization,
             transactionCostsSaved = transactionCostsSaved,
+            sourcesImported = senderIds.size,
             errors = errors
         )
 
@@ -190,13 +204,58 @@ class SmsImportService @Inject constructor(
     }
 
     /**
-     * Read M-PESA SMS from the device inbox via ContentResolver.
+     * Get the list of active sender IDs to import from.
      *
+     * M-PESA is always included. Bank senders are included only
+     * if bank tracking is enabled AND the specific bank is toggled on.
+     */
+    private suspend fun getActiveSenderIds(): List<String> {
+        val senders = mutableListOf(MPESA_SENDER)
+
+        // Add enabled bank sender IDs
+        val enabledBanks = appPreferences.getEnabledBanksSnapshot()
+        if (enabledBanks.isNotEmpty()) {
+            val bankSenderIds = SmsParserRegistry.getEnabledSenderIds(enabledBanks)
+            senders.addAll(bankSenderIds)
+        }
+
+        return senders.distinct()
+    }
+
+    /**
+     * Read SMS from the device inbox for multiple senders via ContentResolver.
+     *
+     * @param senderIds List of sender addresses to query (e.g., "MPESA", "NCBA_BANK")
      * @param fromTimestamp Optional start date filter
      * @param toTimestamp Optional end date filter
-     * @return List of SMS messages with body and date
+     * @return List of SMS messages with body, date, and sender
      */
-    private fun readMpesaSmsFromInbox(
+    private fun readSmsFromInbox(
+        senderIds: List<String>,
+        fromTimestamp: Long?,
+        toTimestamp: Long?
+    ): List<SmsMessage> {
+        val messages = mutableListOf<SmsMessage>()
+
+        for (senderId in senderIds) {
+            val senderMessages = readSmsForSender(senderId, fromTimestamp, toTimestamp)
+            messages.addAll(senderMessages)
+        }
+
+        // Sort by date (oldest first for chronological import)
+        messages.sortBy { it.date }
+
+        Log.d(TAG, "Read ${messages.size} SMS from ${senderIds.size} senders: " +
+                senderIds.joinToString(", ") { "$it(${messages.count { msg -> msg.sender == it }})" })
+
+        return messages
+    }
+
+    /**
+     * Read SMS from a single sender.
+     */
+    private fun readSmsForSender(
+        senderId: String,
         fromTimestamp: Long?,
         toTimestamp: Long?
     ): List<SmsMessage> {
@@ -204,7 +263,7 @@ class SmsImportService @Inject constructor(
 
         // Build selection query
         val selectionParts = mutableListOf("address = ?")
-        val selectionArgs = mutableListOf(MPESA_SENDER)
+        val selectionArgs = mutableListOf(senderId)
 
         if (fromTimestamp != null) {
             selectionParts.add("date >= ?")
@@ -227,21 +286,23 @@ class SmsImportService @Inject constructor(
             )?.use { cursor ->
                 val bodyIndex = cursor.getColumnIndexOrThrow("body")
                 val dateIndex = cursor.getColumnIndexOrThrow("date")
+                val addressIndex = cursor.getColumnIndexOrThrow("address")
 
                 while (cursor.moveToNext()) {
                     val body = cursor.getString(bodyIndex) ?: continue
                     val date = cursor.getLong(dateIndex)
+                    val address = cursor.getString(addressIndex) ?: senderId
 
-                    // Only process transaction SMS (skip marketing, balance checks, etc.)
-                    if (SmsParser.isTransactionSms(body)) {
-                        messages.add(SmsMessage(body = body, date = date))
+                    // Check if any parser can handle this SMS
+                    if (SmsParserRegistry.canHandleAny(address, body)) {
+                        messages.add(SmsMessage(body = body, date = date, sender = address))
                     }
                 }
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "SMS read permission not granted", e)
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading SMS inbox", e)
+            Log.e(TAG, "Error reading SMS inbox for sender $senderId", e)
         }
 
         return messages
@@ -249,7 +310,7 @@ class SmsImportService @Inject constructor(
 
     /**
      * Apply categorization rules to an expense:
-     * 1. Deterministic rules (Airtime → category 1001)
+     * 1. Deterministic rules (Airtime → category 202)
      * 2. Recipient mapping (only if ≥80% confidence)
      */
     private suspend fun applyCategorization(
@@ -340,6 +401,7 @@ class SmsImportService @Inject constructor(
      */
     private data class SmsMessage(
         val body: String,
-        val date: Long
+        val date: Long,
+        val sender: String = MPESA_SENDER
     )
 }

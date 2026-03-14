@@ -149,6 +149,7 @@ fun getPaymentTypeIcon(paymentType: PaymentType): ImageVector {
         PaymentType.AIRTIME -> Icons.Filled.PhoneAndroid
         PaymentType.MPESA_CARD -> Icons.Filled.CreditCard
         PaymentType.TRANSACTION_COST -> Icons.Filled.MonetizationOn
+        PaymentType.BANK_DEBIT -> Icons.Filled.AccountBalance
     }
 }
 

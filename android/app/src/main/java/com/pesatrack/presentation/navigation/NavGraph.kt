@@ -12,6 +12,7 @@ import com.pesatrack.presentation.screens.categorize.CategorizeScreen
 import com.pesatrack.presentation.screens.expenses.ExpenseListScreen
 import com.pesatrack.presentation.screens.home.HomeScreen
 import com.pesatrack.presentation.screens.import_history.ImportScreen
+import com.pesatrack.presentation.screens.settings.SettingsScreen
 
 /**
  * Main navigation graph for the app
@@ -38,6 +39,9 @@ fun NavGraph(
                 },
                 onNavigateToImport = {
                     navController.navigate(Screen.ImportHistory.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Screen.Settings.route)
                 }
             )
         }
@@ -87,6 +91,15 @@ fun NavGraph(
         // Batch Categorize Screen
         composable(route = Screen.BatchCategorize.route) {
             BatchCategorizeScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Settings Screen
+        composable(route = Screen.Settings.route) {
+            SettingsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

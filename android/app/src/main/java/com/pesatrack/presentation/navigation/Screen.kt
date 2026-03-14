@@ -11,6 +11,7 @@ sealed class Screen(val route: String) {
     }
     object ImportHistory : Screen("import_history")
     object BatchCategorize : Screen("batch_categorize")
+    object Settings : Screen("settings")
 }
 
 /**
