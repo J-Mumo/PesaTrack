@@ -1,5 +1,6 @@
 package com.pesatrack.data.repository
 
+import com.pesatrack.data.local.database.dao.DateRangeResult
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.data.local.database.entities.ExpenseEntity
@@ -171,6 +172,43 @@ class ExpenseRepository @Inject constructor(
             excluded += expenseDao.excludeByRecipient(recipient)
         }
         return excluded
+    }
+
+    // ==================== Excel Import Matching ====================
+
+    /**
+     * Get the min/max timestamps of SMS-imported expenses.
+     * Returns null if no SMS expenses exist.
+     */
+    suspend fun getSmsCoveredDateRange(): DateRangeResult? {
+        return expenseDao.getSmsCoveredDateRange()
+    }
+
+    /**
+     * Find an uncategorized expense matching amount (±tolerance) within a date window.
+     * Used by Excel import to match Excel rows to SMS-imported expenses.
+     */
+    suspend fun findMatchByAmountAndDate(
+        amount: Double,
+        tolerance: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): Expense? {
+        return expenseDao.findMatchByAmountAndDate(amount, tolerance, dayStartMs, dayEndMs)
+            ?.toDomain()
+    }
+
+    /**
+     * Check if any expense exists at a given amount+date.
+     * Used to avoid importing standalone Excel duplicates.
+     */
+    suspend fun expenseExistsAtAmountAndDate(
+        amount: Double,
+        tolerance: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): Boolean {
+        return expenseDao.expenseExistsAtAmountAndDate(amount, tolerance, dayStartMs, dayEndMs)
     }
 
     /**

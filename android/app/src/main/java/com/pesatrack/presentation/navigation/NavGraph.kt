@@ -11,6 +11,7 @@ import com.pesatrack.presentation.screens.batch_categorize.BatchCategorizeScreen
 import com.pesatrack.presentation.screens.categorize.CategorizeScreen
 import com.pesatrack.presentation.screens.expenses.ExpenseListScreen
 import com.pesatrack.presentation.screens.home.HomeScreen
+import com.pesatrack.presentation.screens.excel_import.ExcelImportScreen
 import com.pesatrack.presentation.screens.import_history.ImportScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 
@@ -82,6 +83,21 @@ fun NavGraph(
         // Import History Screen
         composable(route = Screen.ImportHistory.route) {
             ImportScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToBatchCategorize = {
+                    navController.navigate(Screen.BatchCategorize.route)
+                },
+                onNavigateToExcelImport = {
+                    navController.navigate(Screen.ExcelImport.route)
+                }
+            )
+        }
+
+        // Excel Import Screen
+        composable(route = Screen.ExcelImport.route) {
+            ExcelImportScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 },

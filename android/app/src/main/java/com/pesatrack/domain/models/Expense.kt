@@ -81,10 +81,11 @@ enum class PaymentType {
  * Source of the expense record
  */
 enum class ExpenseSource {
-    STK_PUSH,    // Created via app-initiated payment (legacy, kept for DB compat)
-    SMS_PARSED,  // Detected from M-PESA SMS
-    SMS_BANK,    // Detected from bank SMS (NCBA, etc.)
-    MANUAL;      // Manually entered
+    STK_PUSH,      // Created via app-initiated payment (legacy, kept for DB compat)
+    SMS_PARSED,    // Detected from M-PESA SMS
+    SMS_BANK,      // Detected from bank SMS (NCBA, etc.)
+    EXCEL_IMPORT,  // Imported from Excel spreadsheet
+    MANUAL;        // Manually entered
 
     companion object {
         fun fromString(value: String): ExpenseSource {

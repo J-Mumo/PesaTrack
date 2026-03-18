@@ -23,6 +23,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M1: Historical SMS Import + Recipient Learning** | ✅ Complete | 100% |
 | **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
 | **Phase 2 M3: AI-Powered Categorization** | ✅ Complete | 100% |
+| **Excel Import (match + standalone)** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ⏳ Pending | 0% |
 | **Phase 2 M5: Settings & Configuration** | ⏳ Pending | 0% |
 
@@ -36,14 +37,16 @@ SMS Sources ──────────────────────�
 │  M-PESA SMS ──► SmsReceiver ──► SmsParserRegistry ──► MpesaSmsParser       │
 │  NCBA  SMS ──► SmsReceiver ──► SmsParserRegistry ──► NcbaBankParser        │
 │  Historical ──► SmsImportService ──► SmsParserRegistry                     │
+│  Excel .xlsx ──► ExcelImportService ──► ExcelParser + ExcelCategoryMapper  │
 │                                        │                                   │
-│                                  ParsedTransaction                         │
+│                                  ParsedTransaction / ExcelExpenseRow       │
 │                                   ├── expense (main)                       │
-│                                   └── transactionCost (optional)           │
+│                                   └── transactionCost (optional, SMS only) │
 │                                        │                                   │
 │                         Auto-Categorization                                │
 │                          ├── Deterministic rules                           │
-│                          └── Recipient mapping                             │
+│                          ├── Recipient mapping                             │
+│                          └── Excel label→category mapping                  │
 │                                        │                                   │
 │                               ExpenseRepository                            │
 │                                        │                                   │
@@ -51,12 +54,13 @@ SMS Sources ──────────────────────�
 │                                        │                                   │
 │                    ┌───────────┬────────┼──────────┬──────────┐             │
 │               HomeScreen  ExpenseList  Categorize  Batch   Settings        │
+│                                                    ExcelImport             │
 ──────────────────────────────────────────────────────────────────────────────
 ```
 
 **Key design decisions:**
 - No backend communication — all data is local (Room + DataStore)
-- SMS parsing is the sole source of expense data (M-PESA + bank SMS, plus future manual entry)
+- SMS parsing + Excel import are the sources of expense data (M-PESA + bank SMS + Excel spreadsheets, plus future manual entry)
 - Strategy pattern for SMS parsers — new banks are added as `SmsParserStrategy` implementations
 - Transaction costs are auto-extracted and saved as separate expenses under category 606
 - Non-expense SMS (Receive Money, Deposit, Reversal) are silently skipped
@@ -133,7 +137,7 @@ SMS Sources ──────────────────────�
 | Expense Model | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:6) | Domain model with `isCategorized` + `isExcluded` flags |
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
 | PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:30) | 8 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT |
-| ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, MANUAL |
+| ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, EXCEL_IMPORT, MANUAL |
 
 **PaymentType details:**
 
@@ -158,7 +162,7 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 6 routes: Home, Expenses, Categorize, Import, BatchCategorize, Settings |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 7 routes: Home, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:17) | 2 tabs: Home, Expenses |
 | **Main Activity** | | |
@@ -191,6 +195,10 @@ SMS Sources ──────────────────────�
 | SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + AI config model |
 | **AI Categorization** | | |
 | AiCategorizationService | [`AiCategorizationService.kt`](../android/app/src/main/java/com/pesatrack/services/AiCategorizationService.kt:1) | Gemini API integration for category suggestions |
+| **Excel Import** | | |
+| ExcelImportScreen | [`ExcelImportScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportScreen.kt:26) | File picker, progress, results summary |
+| ExcelImportViewModel | [`ExcelImportViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportViewModel.kt:29) | Multi-file URI handling, import orchestration |
+| ExcelImportUiState | [`ExcelImportUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportUiState.kt:8) | READY, FILES_SELECTED, IMPORTING, COMPLETED, ERROR |
 
 #### ⏳ Pending
 
@@ -222,6 +230,9 @@ SMS Sources ──────────────────────�
 |---------|------|-------------|
 | Constants | [`Constants.kt`](../android/app/src/main/java/com/pesatrack/utils/Constants.kt:6) | `formatAsCurrency()` extension |
 | Phone Number Helper | [`PhoneNumberHelper.kt`](../android/app/src/main/java/com/pesatrack/utils/PhoneNumberHelper.kt:1) | SIM number reading, Kenyan phone normalization |
+| **Excel Utilities** | | |
+| ExcelParser | [`ExcelParser.kt`](../android/app/src/main/java/com/pesatrack/utils/excel/ExcelParser.kt:20) | Apache POI .xlsx parser with dual date format support |
+| ExcelCategoryMapper | [`ExcelCategoryMapper.kt`](../android/app/src/main/java/com/pesatrack/utils/excel/ExcelCategoryMapper.kt:12) | 55+ hardcoded Excel label → PesaTrack category ID mappings |
 
 ---
 
@@ -281,6 +292,7 @@ SMS Sources ──────────────────────�
 - DataStore 1.0.0 (preferences)
 - Coroutines 1.7.3
 - Google Generative AI SDK 0.9.0 (Gemini — AI categorization)
+- Apache POI 5.2.5 (Excel .xlsx parsing)
 
 ---
 
@@ -333,12 +345,12 @@ app/src/main/java/com/pesatrack/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       └── CategoryRepository.kt            ✅ Category management
 ├── domain/models/
-│   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (4)
+│   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   └── Category.kt                          ✅ Domain model
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Permissions + Scaffold + bottom nav
 │   ├── navigation/
-│   │   ├── NavGraph.kt                      ✅ 6 routes: Home, Expenses, Categorize, Import, BatchCategorize, Settings
+│   │   ├── NavGraph.kt                      ✅ 7 routes: Home, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum
 │   ├── screens/
 │   │   ├── home/
@@ -353,6 +365,10 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── CategorizeScreen.kt           ✅ Category assignment
 │   │   │   ├── CategorizeViewModel.kt        ✅ State management
 │   │   │   └── CategorizeUiState.kt          ✅ UI state
+│   │   ├── excel_import/
+│   │   │   ├── ExcelImportScreen.kt          ✅ File picker + progress + results
+│   │   │   ├── ExcelImportViewModel.kt       ✅ Multi-file import orchestration
+│   │   │   └── ExcelImportUiState.kt         ✅ 5 phases (READY→COMPLETED)
 │   │   └── settings/
 │   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles
 │   │       ├── SettingsViewModel.kt          ✅ Preferences management
@@ -368,12 +384,16 @@ app/src/main/java/com/pesatrack/
 ├── services/
 │   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
+│   ├── ExcelImportService.kt                ✅ Excel import orchestration (match + standalone)
 │   ├── AiCategorizationService.kt           ✅ Gemini AI categorization (M3)
 │   └── NotificationHelper.kt               ✅ Channel + expense alerts
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
     ├── Constants.kt                         ✅ formatAsCurrency()
     ├── PhoneNumberHelper.kt                 ✅ SIM number reading
+    ├── excel/
+    │   ├── ExcelParser.kt                   ✅ Apache POI .xlsx parser (dual date formats)
+    │   └── ExcelCategoryMapper.kt           ✅ 55+ label→category ID mappings
     └── parsers/
         ├── SmsParserStrategy.kt             ✅ Strategy interface for SMS parsers
         ├── SmsParserRegistry.kt             ✅ Central dispatcher (sender → parser)
@@ -429,6 +449,7 @@ backend/
 5. **Multi-part SMS** — SmsReceiver concatenates multi-part messages before parsing.
 6. **Dual expense saving** — Each SMS can produce main expense + transaction cost (both saved).
 7. **Duplicate detection** — transactionId checked before saving to avoid double entries.
+8. **Excel Import** — Match Excel rows to uncategorized SMS expenses by amount±1 KES / date±1 day; apply categories via 55+ hardcoded mappings; import unmatched rows as standalone expenses; save recipient→category mappings for future auto-categorization; multi-file support via SAF file picker.
 
 ---
 
@@ -452,6 +473,7 @@ backend/
 | Runtime permission flow | ✅ Complete | All permissions requested on launch |
 | Manual expense entry | ⏳ Pending | No manual add screen yet |
 | Historical SMS import | ✅ Complete | ContentResolver-based import with date range picker |
+| Excel spreadsheet import | ✅ Complete | Match to SMS + import unmatched + multi-file |
 | Recipient-based auto-categorization | ✅ Complete | Learned mappings applied to new transactions |
 | Batch categorization by recipient | ✅ Complete | Group uncategorized expenses by recipient |
 | Bank SMS tracking (NCBA) | ✅ Complete | Strategy pattern with parser registry |
@@ -474,6 +496,7 @@ backend/
 | **M2** | Bank SMS Tracking (NCBA) | ✅ Complete | Strategy pattern + parser registry + Settings UI |
 | — | Exclude pass-through expenses | ✅ Complete | `isExcluded` flag, long-press toggle, dimmed + strikethrough UI |
 | **M3** | AI-Powered Categorization (Gemini) | ✅ Complete | Gemini SDK + AiCategorizationService + BatchCategorize AI UI + Settings AI prefs |
+| — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
 | **M4** | Manual expense entry screen | ⏳ Pending | Add expense without SMS |
 | **M5** | Settings & Configuration | ⏳ Pending | Bank selection, AI prefs |
 | — | Expense charts and analytics | ⏳ Pending | Category breakdown, trends |

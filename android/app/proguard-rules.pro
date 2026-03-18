@@ -32,3 +32,14 @@
 -keep class com.google.ai.client.generativeai.** { *; }
 -keep class com.google.ai.client.generativeai.type.** { *; }
 -dontwarn com.google.ai.client.generativeai.**
+
+# Apache POI (Excel parsing)
+-keep class org.apache.poi.** { *; }
+-keep class org.apache.xmlbeans.** { *; }
+-keep class org.openxmlformats.** { *; }
+-dontwarn org.apache.poi.**
+-dontwarn org.apache.xmlbeans.**
+-dontwarn org.openxmlformats.**
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.apache.logging.**
+-dontwarn org.slf4j.**

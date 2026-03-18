@@ -111,6 +111,13 @@ dependencies {
     // Google Generative AI SDK (Gemini) for AI-powered categorization
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
+    // Apache POI for Excel (.xlsx) file parsing
+    implementation("org.apache.poi:poi-ooxml:5.2.5") {
+        // Exclude unnecessary modules to reduce APK size
+        exclude(group = "org.apache.commons", module = "commons-compress")
+    }
+    implementation("org.apache.commons:commons-compress:1.24.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

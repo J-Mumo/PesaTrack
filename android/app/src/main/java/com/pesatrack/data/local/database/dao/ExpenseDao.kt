@@ -203,7 +203,70 @@ interface ExpenseDao {
      */
     @Query("SELECT COUNT(*) FROM expenses")
     suspend fun getTotalExpenseCount(): Int
+
+    // ==================== Excel Import Matching ====================
+
+    /**
+     * Get the min and max timestamps of SMS-imported expenses.
+     * Used to determine the date range covered by SMS imports,
+     * so Excel rows outside this range are not imported as standalone.
+     */
+    @Query("""
+        SELECT MIN(timestamp) as minTimestamp, MAX(timestamp) as maxTimestamp
+        FROM expenses
+        WHERE source IN ('SMS_PARSED', 'SMS_BANK')
+    """)
+    suspend fun getSmsCoveredDateRange(): DateRangeResult?
+
+    /**
+     * Find an uncategorized expense matching an amount (±tolerance) within a date window.
+     * Used by Excel import to match Excel rows to SMS-imported expenses.
+     * Returns the closest amount match first.
+     */
+    @Query("""
+        SELECT * FROM expenses
+        WHERE isCategorized = 0
+          AND isExcluded = 0
+          AND ABS(amount - :amount) < :tolerance
+          AND timestamp >= :dayStartMs
+          AND timestamp <= :dayEndMs
+        ORDER BY ABS(amount - :amount) ASC
+        LIMIT 1
+    """)
+    suspend fun findMatchByAmountAndDate(
+        amount: Double,
+        tolerance: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): ExpenseEntity?
+
+    /**
+     * Check if any expense (categorized or not) exists at a given amount+date.
+     * Used to avoid importing standalone Excel duplicates.
+     */
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM expenses
+            WHERE ABS(amount - :amount) < :tolerance
+              AND timestamp >= :dayStartMs
+              AND timestamp <= :dayEndMs
+        )
+    """)
+    suspend fun expenseExistsAtAmountAndDate(
+        amount: Double,
+        tolerance: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): Boolean
 }
+
+/**
+ * Result class for SMS date range query
+ */
+data class DateRangeResult(
+    val minTimestamp: Long?,
+    val maxTimestamp: Long?
+)
 
 /**
  * Result class for grouped uncategorized expenses query

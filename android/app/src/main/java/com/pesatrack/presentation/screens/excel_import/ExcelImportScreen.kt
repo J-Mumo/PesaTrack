@@ -1,8 +1,12 @@
-package com.pesatrack.presentation.screens.import_history
+package com.pesatrack.presentation.screens.excel_import
 
-import androidx.compose.animation.AnimatedVisibility
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,23 +19,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.pesatrack.services.SmsImportService
-import com.pesatrack.utils.formatAsCurrency
+import com.pesatrack.services.ExcelImportService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ImportScreen(
+fun ExcelImportScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBatchCategorize: () -> Unit,
-    onNavigateToExcelImport: () -> Unit = {},
-    viewModel: ImportViewModel = hiltViewModel()
+    viewModel: ExcelImportViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Multi-file picker launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val uris = mutableListOf<android.net.Uri>()
+
+            // Check for multiple selections
+            val clipData = data?.clipData
+            if (clipData != null) {
+                for (i in 0 until clipData.itemCount) {
+                    uris.add(clipData.getItemAt(i).uri)
+                }
+            } else {
+                // Single selection
+                data?.data?.let { uris.add(it) }
+            }
+
+            viewModel.onFilesSelected(uris)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Import History") },
+                title = { Text("Import from Excel") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.ArrowBack, "Back")
@@ -48,65 +73,119 @@ fun ImportScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when (uiState.phase) {
-                ImportPhase.READY -> {
-                    // Info card
+                ExcelImportPhase.READY -> {
+                    item { ExcelInfoCard() }
                     item {
-                        ImportInfoCard()
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    type = "*/*"
+                                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        "application/vnd.ms-excel"
+                                    ))
+                                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                }
+                                filePickerLauncher.launch(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            Icon(Icons.Filled.FolderOpen, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Select Excel File(s)")
+                        }
+                    }
+                }
+
+                ExcelImportPhase.FILES_SELECTED -> {
+                    item { ExcelInfoCard() }
+
+                    // Show selected files
+                    item {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Selected Files",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                uiState.selectedFileNames.forEach { name ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Description,
+                                            null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = name,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    // Date range selection
-                    item {
-                        DateRangeSelector(
-                            selectedRange = uiState.selectedRange,
-                            onRangeSelected = viewModel::selectDateRange
-                        )
-                    }
-
-                    // Start import button
+                    // Action buttons
                     item {
                         Button(
                             onClick = viewModel::startImport,
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(16.dp)
                         ) {
-                            Icon(Icons.Filled.FileDownload, null)
+                            Icon(Icons.Filled.PlayArrow, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Import M-PESA History")
+                            Text("Start Import")
                         }
                     }
-
-                    // Excel import button
                     item {
                         OutlinedButton(
-                            onClick = onNavigateToExcelImport,
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    type = "*/*"
+                                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        "application/vnd.ms-excel"
+                                    ))
+                                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                                }
+                                filePickerLauncher.launch(intent)
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(16.dp)
                         ) {
-                            Icon(Icons.Filled.TableChart, null)
+                            Icon(Icons.Filled.FolderOpen, null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Import from Excel")
+                            Text("Change Files")
                         }
                     }
                 }
 
-                ImportPhase.IMPORTING -> {
+                ExcelImportPhase.IMPORTING -> {
                     item {
                         ImportProgressCard(
                             current = uiState.progressCurrent,
-                            total = uiState.progressTotal
+                            total = uiState.progressTotal,
+                            phase = uiState.progressPhase
                         )
                     }
                 }
 
-                ImportPhase.COMPLETED -> {
+                ExcelImportPhase.COMPLETED -> {
                     val result = uiState.result
                     if (result != null) {
-                        item {
-                            ImportResultCard(result = result)
-                        }
+                        item { ExcelResultCard(result = result) }
 
-                        // Navigate to batch categorize if there are uncategorized expenses
-                        if (result.needsManualCategorization > 0) {
+                        // Navigate to batch categorize if there are uncategorized imports
+                        if (result.rowsWithUnknownCategory > 0 || result.rowsImportedAsStandalone > 0) {
                             item {
                                 Button(
                                     onClick = onNavigateToBatchCategorize,
@@ -115,8 +194,20 @@ fun ImportScreen(
                                 ) {
                                     Icon(Icons.Filled.Category, null)
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Categorize ${result.needsManualCategorization} Expenses")
+                                    Text("Categorize Expenses")
                                 }
+                            }
+                        }
+
+                        item {
+                            OutlinedButton(
+                                onClick = viewModel::reset,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.Refresh, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import More Files")
                             }
                         }
 
@@ -132,7 +223,7 @@ fun ImportScreen(
                     }
                 }
 
-                ImportPhase.ERROR -> {
+                ExcelImportPhase.ERROR -> {
                     item {
                         ErrorCard(
                             error = uiState.error ?: "Unknown error",
@@ -146,7 +237,7 @@ fun ImportScreen(
 }
 
 @Composable
-private fun ImportInfoCard() {
+private fun ExcelInfoCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -158,7 +249,7 @@ private fun ImportInfoCard() {
             verticalAlignment = Alignment.Top
         ) {
             Icon(
-                imageVector = Icons.Filled.Sms,
+                imageVector = Icons.Filled.TableChart,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(28.dp)
@@ -166,14 +257,16 @@ private fun ImportInfoCard() {
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Import M-PESA SMS History",
+                    text = "Import Excel Expense History",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "PesaTrack will read your existing M-PESA SMS messages and import them as expenses. " +
-                            "Duplicates are automatically skipped. Known recipients will be auto-categorized.",
+                    text = "Upload your expense tracking spreadsheet (.xlsx). " +
+                            "PesaTrack will match entries to your SMS transactions and auto-categorize them. " +
+                            "Unmatched entries within your SMS date range will be imported as new expenses. " +
+                            "You can select multiple files.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                 )
@@ -183,44 +276,10 @@ private fun ImportInfoCard() {
 }
 
 @Composable
-private fun DateRangeSelector(
-    selectedRange: DateRange,
-    onRangeSelected: (DateRange) -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Select Date Range",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
-            DateRange.entries.forEach { range ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = selectedRange == range,
-                        onClick = { onRangeSelected(range) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = range.displayName,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ImportProgressCard(
     current: Int,
-    total: Int
+    total: Int,
+    phase: String
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -229,32 +288,30 @@ private fun ImportProgressCard(
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(64.dp)
-            )
+            CircularProgressIndicator(modifier = Modifier.size(64.dp))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Importing SMS...",
+                text = "Processing Excel...",
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = phase,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
 
             if (total > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "$current / $total messages processed",
+                    text = "$current / $total rows processed",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 LinearProgressIndicator(
-                    progress = { current.toFloat() / total.toFloat() },
+                    progress = { current.toFloat() / total.toFloat().coerceAtLeast(1f) },
                     modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Text(
-                    text = "Reading SMS inbox...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
         }
@@ -262,7 +319,7 @@ private fun ImportProgressCard(
 }
 
 @Composable
-private fun ImportResultCard(result: SmsImportService.ImportResult) {
+private fun ExcelResultCard(result: ExcelImportService.ExcelImportResult) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -279,7 +336,7 @@ private fun ImportResultCard(result: SmsImportService.ImportResult) {
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Import Complete",
+                    text = "Excel Import Complete",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -289,46 +346,47 @@ private fun ImportResultCard(result: SmsImportService.ImportResult) {
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Stats
-            ResultRow("SMS found in inbox", result.totalSmsFound.toString())
-            ResultRow("Parsed as expenses", result.totalParsed.toString())
-            ResultRow("New expenses imported", result.newExpensesImported.toString())
-            ResultRow("Duplicates skipped", result.duplicatesSkipped.toString())
-            ResultRow("Transaction costs saved", result.transactionCostsSaved.toString())
+            // Summary stats
+            ResultRow("Files processed", result.filesProcessed.toString(),
+                icon = Icons.Filled.Description)
+            ResultRow("Sheets processed", result.sheetsProcessed.toString(),
+                icon = Icons.Filled.TableChart)
+            ResultRow("Total Excel rows", result.totalExcelRows.toString(),
+                icon = Icons.Filled.List)
 
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Categorization",
+                text = "Matching Results",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
-            ResultRow(
-                "Auto-categorized (rules)",
-                result.autoCategorizedByRules.toString(),
-                icon = Icons.Filled.AutoAwesome
-            )
-            ResultRow(
-                "Auto-categorized (learned)",
-                result.autoCategorizedByMapping.toString(),
-                icon = Icons.Filled.Psychology
-            )
-            ResultRow(
-                "Needs manual categorization",
-                result.needsManualCategorization.toString(),
-                icon = Icons.Filled.Edit
-            )
 
-            if (result.errors > 0) {
+            ResultRow("Matched to SMS expenses", result.rowsMatchedToSms.toString(),
+                icon = Icons.Filled.Link)
+            ResultRow("Imported as new expenses", result.rowsImportedAsStandalone.toString(),
+                icon = Icons.Filled.AddCircle)
+            ResultRow("Skipped (already exists)", result.rowsSkippedAlreadyExists.toString(),
+                icon = Icons.Filled.SkipNext)
+            ResultRow("Skipped (out of date range)", result.rowsSkippedOutOfRange.toString(),
+                icon = Icons.Filled.DateRange)
+            ResultRow("Unknown categories", result.rowsWithUnknownCategory.toString(),
+                icon = Icons.Filled.HelpOutline)
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ResultRow("Recipient mappings learned", result.recipientMappingsLearned.toString(),
+                icon = Icons.Filled.Psychology)
+
+            if (result.parseErrors > 0) {
                 Spacer(modifier = Modifier.height(8.dp))
-                ResultRow(
-                    "Errors",
-                    result.errors.toString(),
-                    icon = Icons.Filled.Warning
-                )
+                ResultRow("Parse errors", result.parseErrors.toString(),
+                    icon = Icons.Filled.Warning)
             }
         }
     }
