@@ -3,14 +3,18 @@ package com.pesatrack.presentation.screens.batch_categorize
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.RecipientGroup
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.services.AiCategorizationService
+import com.pesatrack.services.RecipientInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -18,9 +22,10 @@ import javax.inject.Inject
 /**
  * ViewModel for the Batch Categorize screen.
  *
- * Supports two modes per recipient group:
+ * Supports three modes per recipient group:
  * - Quick mode: tap recipient → pick category → apply to ALL transactions
  * - Review mode: expand recipient → see individual transactions → override per-transaction
+ * - AI mode: request Gemini AI suggestions → show confidence chips → confirm/override
  *
  * Saves recipient→category mappings for future auto-categorization.
  * Multi-category mappings are supported: one recipient can map to multiple categories.
@@ -29,7 +34,9 @@ import javax.inject.Inject
 class BatchCategorizeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
-    private val recipientMappingRepository: RecipientMappingRepository
+    private val recipientMappingRepository: RecipientMappingRepository,
+    private val aiCategorizationService: AiCategorizationService,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BatchCategorizeUiState())
@@ -37,6 +44,7 @@ class BatchCategorizeViewModel @Inject constructor(
 
     init {
         loadData()
+        loadAiPreference()
     }
 
     private fun loadData() {
@@ -64,6 +72,17 @@ class BatchCategorizeViewModel @Inject constructor(
         viewModelScope.launch {
             categoryRepository.getCategoryGroups().collect { groups ->
                 _uiState.update { it.copy(categoryGroups = groups) }
+            }
+        }
+    }
+
+    /**
+     * Load AI categorization preference from DataStore.
+     */
+    private fun loadAiPreference() {
+        viewModelScope.launch {
+            appPreferences.aiCategorizationEnabled.collect { enabled ->
+                _uiState.update { it.copy(aiEnabled = enabled) }
             }
         }
     }
@@ -140,8 +159,10 @@ class BatchCategorizeViewModel @Inject constructor(
                     )
                 }
 
-                // 3. Refresh the list
+                // 3. Refresh the list and remove applied AI suggestion
                 val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                updatedSuggestions.remove(recipientGroup.recipientKey)
 
                 _uiState.update {
                     it.copy(
@@ -149,7 +170,8 @@ class BatchCategorizeViewModel @Inject constructor(
                         selectedRecipientGroup = null,
                         showCategoryPicker = false,
                         isSaving = false,
-                        categorizedCount = it.categorizedCount + 1
+                        categorizedCount = it.categorizedCount + 1,
+                        aiSuggestions = updatedSuggestions
                     )
                 }
             } catch (e: Exception) {
@@ -288,6 +310,196 @@ class BatchCategorizeViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    // ==================== AI Categorization ====================
+
+    /**
+     * Request AI category suggestions for all uncategorized recipient groups.
+     * Converts RecipientGroup objects to RecipientInfo and calls the AI service.
+     */
+    fun requestAiSuggestions() {
+        val groups = _uiState.value.recipientGroups
+        if (groups.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAiLoading = true, aiError = null) }
+
+            try {
+                // Convert RecipientGroup to RecipientInfo for the AI service
+                val recipientInfoList = groups.map { group ->
+                    RecipientInfo(
+                        recipientKey = group.recipientKey,
+                        displayName = group.recipientName ?: group.recipient,
+                        paymentType = group.paymentType,
+                        totalAmount = group.totalAmount,
+                        transactionCount = group.transactionCount
+                    )
+                }
+
+                val result = aiCategorizationService.suggestCategories(recipientInfoList)
+
+                _uiState.update {
+                    it.copy(
+                        aiSuggestions = result.suggestions,
+                        isAiLoading = false,
+                        aiError = result.error
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isAiLoading = false,
+                        aiError = e.message ?: "AI categorization failed"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply an AI suggestion for a specific recipient group.
+     * Finds the matching RecipientGroup and category, then applies it.
+     */
+    fun applyAiSuggestion(recipientKey: String) {
+        val suggestion = _uiState.value.aiSuggestions[recipientKey] ?: return
+        val group = _uiState.value.recipientGroups.find { it.recipientKey == recipientKey } ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            try {
+                // 1. Bulk update expenses by recipient
+                val recipientName = group.recipientName
+                val recipient = group.recipient
+
+                if (!recipientName.isNullOrBlank()) {
+                    expenseRepository.updateCategoryByRecipientName(
+                        recipientName, suggestion.categoryId
+                    )
+                }
+                if (recipient.isNotBlank()) {
+                    expenseRepository.updateCategoryByRecipient(
+                        recipient, suggestion.categoryId
+                    )
+                }
+
+                // 2. Save recipient→category mapping
+                val mappingKey = recipientName ?: recipient
+                recipientMappingRepository.saveMapping(
+                    recipientKey = mappingKey,
+                    categoryId = suggestion.categoryId,
+                    displayName = recipientName
+                )
+
+                if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                    recipientMappingRepository.saveMapping(
+                        recipientKey = recipient,
+                        categoryId = suggestion.categoryId,
+                        displayName = recipientName
+                    )
+                }
+
+                // 3. Refresh and remove suggestion
+                val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                updatedSuggestions.remove(recipientKey)
+
+                _uiState.update {
+                    it.copy(
+                        recipientGroups = remainingGroups,
+                        aiSuggestions = updatedSuggestions,
+                        isSaving = false,
+                        categorizedCount = it.categorizedCount + 1
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = e.message ?: "Failed to apply AI suggestion"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply ALL AI suggestions at once.
+     * Iterates through each suggestion and applies them sequentially.
+     */
+    fun applyAllAiSuggestions() {
+        val suggestions = _uiState.value.aiSuggestions
+        if (suggestions.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            try {
+                var appliedCount = 0
+
+                for ((recipientKey, suggestion) in suggestions) {
+                    val group = _uiState.value.recipientGroups.find { it.recipientKey == recipientKey }
+                        ?: continue
+
+                    // Bulk update expenses by recipient
+                    if (!group.recipientName.isNullOrBlank()) {
+                        expenseRepository.updateCategoryByRecipientName(
+                            group.recipientName, suggestion.categoryId
+                        )
+                    }
+                    if (group.recipient.isNotBlank()) {
+                        expenseRepository.updateCategoryByRecipient(
+                            group.recipient, suggestion.categoryId
+                        )
+                    }
+
+                    // Save recipient→category mapping
+                    val mappingKey = group.recipientName ?: group.recipient
+                    recipientMappingRepository.saveMapping(
+                        recipientKey = mappingKey,
+                        categoryId = suggestion.categoryId,
+                        displayName = group.recipientName
+                    )
+
+                    if (!group.recipientName.isNullOrBlank() && group.recipient.isNotBlank() && group.recipientName != group.recipient) {
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = group.recipient,
+                            categoryId = suggestion.categoryId,
+                            displayName = group.recipientName
+                        )
+                    }
+
+                    appliedCount++
+                }
+
+                // Refresh
+                val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+
+                _uiState.update {
+                    it.copy(
+                        recipientGroups = remainingGroups,
+                        aiSuggestions = emptyMap(),
+                        isSaving = false,
+                        categorizedCount = it.categorizedCount + appliedCount
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = e.message ?: "Failed to apply AI suggestions"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Dismiss AI error message
+     */
+    fun dismissAiError() {
+        _uiState.update { it.copy(aiError = null) }
     }
 
     // ==================== General ====================

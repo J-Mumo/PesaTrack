@@ -275,9 +275,11 @@ Updated [`SmsImportService.kt`](../android/app/src/main/java/com/pesatrack/servi
 
 ---
 
-### Milestone 3: AI-Powered Categorization
+### Milestone 3: AI-Powered Categorization ✅ COMPLETE
 
 > **Goal:** Use Gemini API to auto-categorize expenses that can't be handled by rules or recipient mappings.
+>
+> **Status:** All sub-tasks implemented. Gemini SDK integrated, AiCategorizationService created with prompt engineering and JSON response parsing. BatchCategorize screen updated with "AI Suggest" button, per-recipient confidence chips, and "Apply All" bulk action. Settings screen updated with AI toggle and Gemini API key entry.
 
 #### 3.1 Add Networking Dependencies
 

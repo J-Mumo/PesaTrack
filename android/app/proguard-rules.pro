@@ -27,3 +27,8 @@
 # Gson
 -keepattributes *Annotation*
 -keep class com.google.gson.** { *; }
+
+# Google Generative AI SDK (Gemini)
+-keep class com.google.ai.client.generativeai.** { *; }
+-keep class com.google.ai.client.generativeai.type.** { *; }
+-dontwarn com.google.ai.client.generativeai.**

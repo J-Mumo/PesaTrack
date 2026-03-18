@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,6 +25,7 @@ import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.presentation.components.GroupedCategoryPicker
+import com.pesatrack.services.AiCategorySuggestion
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
 import java.util.*
@@ -32,9 +34,10 @@ import java.util.*
  * Batch Categorize Screen
  *
  * Shows uncategorized expenses grouped by recipient.
- * Two modes per group:
+ * Three modes per group:
  * - Quick mode: Tap "Categorize All" → apply category to entire group
  * - Review mode: Tap "Review" → expand to see individual transactions, each overridable
+ * - AI mode: Tap "AI Suggest" → Gemini suggests categories with confidence levels
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,10 +99,28 @@ fun BatchCategorizeScreen(
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
+                // AI Suggest button (when AI is enabled)
+                if (uiState.aiEnabled) {
+                    item {
+                        AiSuggestSection(
+                            isAiLoading = uiState.isAiLoading,
+                            aiError = uiState.aiError,
+                            hasSuggestions = uiState.aiSuggestions.isNotEmpty(),
+                            onRequestSuggestions = { viewModel.requestAiSuggestions() },
+                            onApplyAll = { viewModel.applyAllAiSuggestions() },
+                            onDismissError = { viewModel.dismissAiError() }
+                        )
+                    }
+                }
+
                 // Info text
                 item {
                     Text(
-                        text = "Tap \"Categorize All\" to assign one category to all transactions from a recipient, or \"Review\" to categorize them individually.",
+                        text = if (uiState.aiSuggestions.isNotEmpty()) {
+                            "AI suggestions are shown below. Tap a suggestion to apply it, or use \"Categorize All\" to pick a different category."
+                        } else {
+                            "Tap \"Categorize All\" to assign one category to all transactions from a recipient, or \"Review\" to categorize them individually."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -112,16 +133,21 @@ fun BatchCategorizeScreen(
                     key = { it.recipientKey }
                 ) { group ->
                     val isExpanded = uiState.expandedGroupKey == group.recipientKey
+                    val aiSuggestion = uiState.aiSuggestions[group.recipientKey]
 
                     RecipientGroupCard(
                         group = group,
                         isExpanded = isExpanded,
                         expandedExpenses = if (isExpanded) uiState.expandedGroupExpenses else emptyList(),
                         isLoadingExpanded = isExpanded && uiState.isLoadingExpanded,
+                        aiSuggestion = aiSuggestion,
                         onCategorizeAll = { viewModel.selectRecipientGroup(group) },
                         onToggleExpand = { viewModel.toggleExpandGroup(group) },
                         onCategorizeExpense = { expenseId ->
                             viewModel.selectExpenseForCategorize(expenseId)
+                        },
+                        onApplyAiSuggestion = {
+                            viewModel.applyAiSuggestion(group.recipientKey)
                         }
                     )
                 }
@@ -163,6 +189,128 @@ fun BatchCategorizeScreen(
         }
     }
 }
+
+// ==================== AI Suggest Section ====================
+
+@Composable
+private fun AiSuggestSection(
+    isAiLoading: Boolean,
+    aiError: String?,
+    hasSuggestions: Boolean,
+    onRequestSuggestions: () -> Unit,
+    onApplyAll: () -> Unit,
+    onDismissError: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // AI action buttons row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // "AI Suggest" button
+            Button(
+                onClick = onRequestSuggestions,
+                enabled = !isAiLoading,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) {
+                if (isAiLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onTertiary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Analyzing...", color = MaterialTheme.colorScheme.onTertiary)
+                } else {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (hasSuggestions) "Re-analyze" else "AI Suggest All")
+                }
+            }
+
+            // "Apply All" button (only shown when suggestions exist)
+            if (hasSuggestions) {
+                Button(
+                    onClick = onApplyAll,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        Icons.Filled.DoneAll,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Apply All AI")
+                }
+            }
+        }
+
+        // AI loading progress
+        if (isAiLoading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiary
+            )
+        }
+
+        // AI error message
+        if (aiError != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = aiError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onDismissError,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==================== Summary & Group Cards ====================
 
 @Composable
 private fun SummaryCard(
@@ -223,9 +371,11 @@ private fun RecipientGroupCard(
     isExpanded: Boolean,
     expandedExpenses: List<Expense>,
     isLoadingExpanded: Boolean,
+    aiSuggestion: AiCategorySuggestion?,
     onCategorizeAll: () -> Unit,
     onToggleExpand: () -> Unit,
-    onCategorizeExpense: (Long) -> Unit
+    onCategorizeExpense: (Long) -> Unit,
+    onApplyAiSuggestion: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -274,6 +424,15 @@ private fun RecipientGroupCard(
                         )
                     }
                 }
+            }
+
+            // AI Suggestion chip (when available)
+            if (aiSuggestion != null) {
+                AiSuggestionChip(
+                    suggestion = aiSuggestion,
+                    onApply = onApplyAiSuggestion,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                )
             }
 
             // Action buttons row
@@ -366,6 +525,76 @@ private fun RecipientGroupCard(
     }
 }
 
+// ==================== AI Suggestion Chip ====================
+
+/**
+ * Displays an AI category suggestion with confidence indicator.
+ * Color-coded: green (≥90%), amber (70-89%), red (<70%)
+ */
+@Composable
+private fun AiSuggestionChip(
+    suggestion: AiCategorySuggestion,
+    onApply: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val confidencePercent = (suggestion.confidence * 100).toInt()
+    val chipColor = when {
+        suggestion.confidence >= 0.90f -> Color(0xFF4CAF50) // Green
+        suggestion.confidence >= 0.70f -> Color(0xFFFF9800) // Amber
+        else -> Color(0xFFF44336) // Red
+    }
+    val chipContainerColor = chipColor.copy(alpha = 0.12f)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onApply() },
+        shape = MaterialTheme.shapes.small,
+        color = chipContainerColor,
+        tonalElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = chipColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "AI: ${suggestion.categoryName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${suggestion.groupName} · $confidencePercent% confident",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+            FilledTonalButton(
+                onClick = onApply,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = chipColor.copy(alpha = 0.2f),
+                    contentColor = chipColor
+                )
+            ) {
+                Text("Apply", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+// ==================== Individual Expense Row ====================
+
 @Composable
 private fun IndividualExpenseRow(
     expense: Expense,
@@ -408,6 +637,8 @@ private fun IndividualExpenseRow(
         )
     }
 }
+
+// ==================== All Categorized Content ====================
 
 @Composable
 private fun AllCategorizedContent(

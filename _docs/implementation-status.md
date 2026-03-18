@@ -22,7 +22,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Backend Server (unused)** | 🟡 Dormant | N/A |
 | **Phase 2 M1: Historical SMS Import + Recipient Learning** | ✅ Complete | 100% |
 | **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
-| **Phase 2 M3: AI-Powered Categorization** | ⏳ Pending | 0% |
+| **Phase 2 M3: AI-Powered Categorization** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ⏳ Pending | 0% |
 | **Phase 2 M5: Settings & Configuration** | ⏳ Pending | 0% |
 
@@ -186,9 +186,11 @@ SMS Sources ──────────────────────�
 | Typography | [`Type.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Type.kt:1) | Typography definitions |
 
 | **Settings Screen** | | |
-| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Bank SMS tracking toggles |
-| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Preferences management |
-| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle data model |
+| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Bank SMS tracking toggles + AI categorization settings |
+| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank + AI preferences management |
+| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + AI config model |
+| **AI Categorization** | | |
+| AiCategorizationService | [`AiCategorizationService.kt`](../android/app/src/main/java/com/pesatrack/services/AiCategorizationService.kt:1) | Gemini API integration for category suggestions |
 
 #### ⏳ Pending
 
@@ -271,13 +273,14 @@ SMS Sources ──────────────────────�
 | Build Config | [`build.gradle.kts`](../android/app/build.gradle.kts:26) | Release minify + shrink enabled |
 | ProGuard Rules | [`proguard-rules.pro`](../android/app/proguard-rules.pro:1) | Code obfuscation rules |
 
-**Dependencies (no networking libraries):**
+**Dependencies:**
 - Jetpack Compose (BOM 2024.02.00) + Material 3
 - Navigation Compose 2.7.6
 - Hilt 2.50 (DI)
 - Room 2.6.1 (database)
 - DataStore 1.0.0 (preferences)
 - Coroutines 1.7.3
+- Google Generative AI SDK 0.9.0 (Gemini — AI categorization)
 
 ---
 
@@ -365,6 +368,7 @@ app/src/main/java/com/pesatrack/
 ├── services/
 │   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
+│   ├── AiCategorizationService.kt           ✅ Gemini AI categorization (M3)
 │   └── NotificationHelper.kt               ✅ Channel + expense alerts
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
@@ -469,7 +473,7 @@ backend/
 | **M1** | SmsReceiver auto-categorize | ✅ Complete | Uses recipient mapping for live SMS |
 | **M2** | Bank SMS Tracking (NCBA) | ✅ Complete | Strategy pattern + parser registry + Settings UI |
 | — | Exclude pass-through expenses | ✅ Complete | `isExcluded` flag, long-press toggle, dimmed + strikethrough UI |
-| **M3** | AI-Powered Categorization (Gemini) | ⏳ Pending | API-based suggestions |
+| **M3** | AI-Powered Categorization (Gemini) | ✅ Complete | Gemini SDK + AiCategorizationService + BatchCategorize AI UI + Settings AI prefs |
 | **M4** | Manual expense entry screen | ⏳ Pending | Add expense without SMS |
 | **M5** | Settings & Configuration | ⏳ Pending | Bank selection, AI prefs |
 | — | Expense charts and analytics | ⏳ Pending | Category breakdown, trends |
@@ -488,8 +492,7 @@ backend/
 - [ ] Fix any parsing bugs discovered from real-world SMS formats
 - [ ] Generate signed APK for distribution
 
-### Medium Priority — Phase 2 Milestone 3
-- [ ] Phase 2 M3: AI-Powered Categorization (Gemini API)
+### Medium Priority — Phase 2 Milestone 4
 - [ ] Phase 2 M4: Manual expense entry screen
 
 ### Lower Priority

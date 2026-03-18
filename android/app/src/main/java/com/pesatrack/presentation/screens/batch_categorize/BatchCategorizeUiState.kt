@@ -4,13 +4,15 @@ import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.CategoryGroup
 import com.pesatrack.domain.models.Expense
+import com.pesatrack.services.AiCategorySuggestion
 
 /**
  * UI State for the Batch Categorize screen.
  *
- * Supports two modes per recipient group:
+ * Supports three modes per recipient group:
  * - Quick mode: "Apply to All" — one category for the entire group
  * - Review mode: Expand to see individual transactions, each with category override
+ * - AI mode: "AI Suggest" — Gemini suggests categories with confidence levels
  */
 data class BatchCategorizeUiState(
     val isLoading: Boolean = true,
@@ -52,5 +54,19 @@ data class BatchCategorizeUiState(
     val isLoadingExpanded: Boolean = false,
 
     /** Error message */
-    val error: String? = null
+    val error: String? = null,
+
+    // ==================== AI Categorization ====================
+
+    /** AI suggestion results — Map<recipientKey, AiCategorySuggestion> */
+    val aiSuggestions: Map<String, AiCategorySuggestion> = emptyMap(),
+
+    /** Whether AI suggestion request is in progress */
+    val isAiLoading: Boolean = false,
+
+    /** AI-specific error message (shown as inline card/snackbar) */
+    val aiError: String? = null,
+
+    /** Whether AI categorization is enabled in preferences */
+    val aiEnabled: Boolean = false
 )
