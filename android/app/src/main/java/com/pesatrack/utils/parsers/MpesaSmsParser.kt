@@ -105,7 +105,7 @@ class MpesaSmsParser : SmsParserStrategy {
                 body.contains("bought", ignoreCase = true)
     }
 
-    override fun parse(body: String): SmsParser.ParsedTransaction? {
+    override fun parse(body: String, smsDate: Long): SmsParser.ParsedTransaction? {
         // Quick pre-check
         if (!body.contains("Confirmed", ignoreCase = true)) {
             return null
@@ -147,8 +147,8 @@ class MpesaSmsParser : SmsParserStrategy {
                 return null
             }
 
-            // Extract timestamp
-            val timestamp = extractTimestamp(body) ?: System.currentTimeMillis()
+            // Extract timestamp — prefer body-parsed date, fall back to SMS received date
+            val timestamp = extractTimestamp(body) ?: smsDate
 
             // Build main expense
             val mainExpense = Expense(
@@ -346,9 +346,9 @@ class MpesaSmsParser : SmsParserStrategy {
                     }
                 }
 
-                System.currentTimeMillis()
+                null // Let caller use smsDate fallback
             } catch (_: Exception) {
-                System.currentTimeMillis()
+                null // Let caller use smsDate fallback
             }
         }
 

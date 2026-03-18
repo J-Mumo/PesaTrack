@@ -126,7 +126,8 @@ class SmsImportService @Inject constructor(
                 onProgress(index + 1, smsList.size)
 
                 // Parse SMS using the registry (dispatches to correct parser by sender)
-                val parsed = SmsParserRegistry.parseTransaction(sms.sender, sms.body) ?: continue
+                // Pass sms.date so parsers use the actual SMS received date as timestamp
+                val parsed = SmsParserRegistry.parseTransaction(sms.sender, sms.body, sms.date) ?: continue
                 totalParsed++
 
                 // Create main expense with rawSms

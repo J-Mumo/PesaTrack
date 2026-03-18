@@ -112,7 +112,7 @@ class NcbaBankParser : SmsParserStrategy {
                 body.contains("Mpesa Paybill transfer", ignoreCase = true)
     }
 
-    override fun parse(body: String): SmsParser.ParsedTransaction? {
+    override fun parse(body: String, smsDate: Long): SmsParser.ParsedTransaction? {
         // Skip generic debit notifications
         if (genericDebitPattern.matcher(body).find()) {
             Log.d(TAG, "Skipping NCBA generic debit notification")
@@ -146,7 +146,7 @@ class NcbaBankParser : SmsParserStrategy {
                                 recipientName = recipientName,
                                 paymentType = PaymentType.BUY_GOODS,
                                 source = expenseSource,
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = smsDate,
                                 isCategorized = false
                             ),
                             transactionCost = null // NCBA doesn't report M-PESA costs
@@ -175,7 +175,7 @@ class NcbaBankParser : SmsParserStrategy {
                                 paymentType = PaymentType.PAY_BILL,
                                 source = expenseSource,
                                 notes = "Paybill: $paybillNumber, Account: $accountNumber",
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = smsDate,
                                 isCategorized = false
                             ),
                             transactionCost = null
@@ -201,7 +201,7 @@ class NcbaBankParser : SmsParserStrategy {
                                 recipientName = recipientName,
                                 paymentType = PaymentType.SEND_MONEY,
                                 source = expenseSource,
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = smsDate,
                                 isCategorized = false
                             ),
                             transactionCost = null

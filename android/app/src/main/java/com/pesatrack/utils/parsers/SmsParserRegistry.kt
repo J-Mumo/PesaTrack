@@ -42,10 +42,13 @@ object SmsParserRegistry {
      *
      * @param sender The SMS originating address
      * @param body The SMS message body
+     * @param smsDate The SMS received timestamp from the device inbox (millis since epoch).
+     *                Used as the transaction timestamp when the parser cannot extract a date
+     *                from the SMS body itself. Defaults to current time if not provided.
      * @return ParsedTransaction if parsing successful, null otherwise
      */
-    fun parseTransaction(sender: String, body: String): SmsParser.ParsedTransaction? {
-        return findParser(sender, body)?.parse(body)
+    fun parseTransaction(sender: String, body: String, smsDate: Long = System.currentTimeMillis()): SmsParser.ParsedTransaction? {
+        return findParser(sender, body)?.parse(body, smsDate)
     }
 
     /**

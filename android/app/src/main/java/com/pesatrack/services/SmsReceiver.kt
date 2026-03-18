@@ -54,19 +54,26 @@ class SmsReceiver : BroadcastReceiver() {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
         // SMS may be split across multiple parts — concatenate them by sender
+        // Also track the SMS timestamp per sender
         val smsByAddress = mutableMapOf<String, StringBuilder>()
+        val smsTimestamps = mutableMapOf<String, Long>()
         for (message in messages) {
             val sender = message.displayOriginatingAddress ?: continue
             val body = message.messageBody ?: continue
             smsByAddress.getOrPut(sender) { StringBuilder() }.append(body)
+            // Use the SMS timestamp from the carrier (actual send/receive time)
+            if (!smsTimestamps.containsKey(sender)) {
+                smsTimestamps[sender] = message.timestampMillis
+            }
         }
 
         for ((sender, bodyBuilder) in smsByAddress) {
             val body = bodyBuilder.toString()
+            val smsDate = smsTimestamps[sender] ?: System.currentTimeMillis()
 
             // M-PESA SMS — always processed (no preference check needed)
             if (SmsParser.isMpesaSms(sender) && SmsParser.isTransactionSms(body)) {
-                processTransaction(context, sender, body)
+                processTransaction(context, sender, body, smsDate)
                 continue
             }
 
@@ -78,7 +85,7 @@ class SmsReceiver : BroadcastReceiver() {
                         // Check if this bank is enabled in preferences
                         val bankEnabled = appPreferences.isBankEnabled(parser.displayName)
                         if (bankEnabled) {
-                            processTransaction(context, sender, body)
+                            processTransaction(context, sender, body, smsDate)
                         } else {
                             Log.d(TAG, "Ignoring ${parser.displayName} SMS — bank tracking not enabled")
                         }
@@ -99,11 +106,12 @@ class SmsReceiver : BroadcastReceiver() {
      * 1. Deterministic rules (Airtime → 202, Transaction Cost → 606)
      * 2. Recipient mapping (learned from previous categorizations)
      */
-    private fun processTransaction(context: Context, sender: String, smsBody: String) {
+    private fun processTransaction(context: Context, sender: String, smsBody: String, smsDate: Long = System.currentTimeMillis()) {
         scope.launch {
             try {
                 // Parse the SMS using the registry (dispatches to correct parser)
-                val parsed = SmsParserRegistry.parseTransaction(sender, smsBody) ?: return@launch
+                // Pass smsDate so parsers use the actual SMS timestamp instead of current time
+                val parsed = SmsParserRegistry.parseTransaction(sender, smsBody, smsDate) ?: return@launch
 
                 var mainExpense = parsed.expense.copy(rawSms = smsBody)
 
