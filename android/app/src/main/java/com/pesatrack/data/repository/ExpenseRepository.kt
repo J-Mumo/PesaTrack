@@ -157,6 +157,23 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Bulk exclude/ignore all uncategorized expenses matching a recipient.
+     * Used by batch categorize "Ignore" action to dismiss an entire group.
+     *
+     * @return Total number of expenses excluded
+     */
+    suspend fun excludeByRecipientGroup(recipient: String, recipientName: String?): Int {
+        var excluded = 0
+        if (!recipientName.isNullOrBlank()) {
+            excluded += expenseDao.excludeByRecipientName(recipientName)
+        }
+        if (recipient.isNotBlank()) {
+            excluded += expenseDao.excludeByRecipient(recipient)
+        }
+        return excluded
+    }
+
+    /**
      * Get start and end timestamps for current month
      */
     private fun getCurrentMonthRange(): Pair<Long, Long> {

@@ -502,6 +502,87 @@ class BatchCategorizeViewModel @Inject constructor(
         _uiState.update { it.copy(aiError = null) }
     }
 
+    // ==================== Ignore/Exclude ====================
+
+    /**
+     * Ignore/exclude all expenses from a recipient group.
+     * Marks them as isExcluded = true so they won't appear in
+     * batch categorize, totals, or analytics.
+     */
+    fun ignoreRecipientGroup(group: RecipientGroup) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            try {
+                expenseRepository.excludeByRecipientGroup(
+                    recipient = group.recipient,
+                    recipientName = group.recipientName
+                )
+
+                // Refresh and remove any AI suggestion for this group
+                val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                updatedSuggestions.remove(group.recipientKey)
+
+                _uiState.update {
+                    it.copy(
+                        recipientGroups = remainingGroups,
+                        aiSuggestions = updatedSuggestions,
+                        isSaving = false,
+                        // Collapse expanded group if it was the ignored one
+                        expandedGroupKey = if (it.expandedGroupKey == group.recipientKey) null else it.expandedGroupKey,
+                        expandedGroupExpenses = if (it.expandedGroupKey == group.recipientKey) emptyList() else it.expandedGroupExpenses
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = e.message ?: "Failed to ignore expenses"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Ignore/exclude a single expense from the review list.
+     */
+    fun ignoreExpense(expenseId: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            try {
+                expenseRepository.setExcluded(expenseId, true)
+
+                // Refresh expanded group and groups list
+                val expandedKey = _uiState.value.expandedGroupKey
+                val updatedExpenses = if (expandedKey != null) {
+                    expenseRepository.getUncategorizedByRecipientKey(expandedKey)
+                } else emptyList()
+
+                val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+                val shouldCollapse = updatedExpenses.isEmpty()
+
+                _uiState.update {
+                    it.copy(
+                        recipientGroups = remainingGroups,
+                        expandedGroupExpenses = updatedExpenses,
+                        expandedGroupKey = if (shouldCollapse) null else it.expandedGroupKey,
+                        isSaving = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = e.message ?: "Failed to ignore expense"
+                    )
+                }
+            }
+        }
+    }
+
     // ==================== General ====================
 
     /**

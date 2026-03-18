@@ -148,7 +148,9 @@ fun BatchCategorizeScreen(
                         },
                         onApplyAiSuggestion = {
                             viewModel.applyAiSuggestion(group.recipientKey)
-                        }
+                        },
+                        onIgnoreGroup = { viewModel.ignoreRecipientGroup(group) },
+                        onIgnoreExpense = { expenseId -> viewModel.ignoreExpense(expenseId) }
                     )
                 }
             }
@@ -375,7 +377,9 @@ private fun RecipientGroupCard(
     onCategorizeAll: () -> Unit,
     onToggleExpand: () -> Unit,
     onCategorizeExpense: (Long) -> Unit,
-    onApplyAiSuggestion: () -> Unit
+    onApplyAiSuggestion: () -> Unit,
+    onIgnoreGroup: () -> Unit,
+    onIgnoreExpense: (Long) -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -474,6 +478,23 @@ private fun RecipientGroupCard(
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
+
+                // "Ignore" button — exclude all expenses from this recipient
+                OutlinedButton(
+                    onClick = onIgnoreGroup,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                ) {
+                    Icon(
+                        Icons.Filled.VisibilityOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Ignore", style = MaterialTheme.typography.labelMedium)
+                }
             }
 
             // Expanded individual expenses
@@ -514,7 +535,8 @@ private fun RecipientGroupCard(
                         expandedExpenses.forEach { expense ->
                             IndividualExpenseRow(
                                 expense = expense,
-                                onClick = { onCategorizeExpense(expense.id) }
+                                onClick = { onCategorizeExpense(expense.id) },
+                                onIgnore = { onIgnoreExpense(expense.id) }
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -598,7 +620,8 @@ private fun AiSuggestionChip(
 @Composable
 private fun IndividualExpenseRow(
     expense: Expense,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onIgnore: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val dateStr = dateFormat.format(Date(expense.timestamp))
@@ -629,12 +652,32 @@ private fun IndividualExpenseRow(
         )
 
         // "Categorize" indicator
-        Icon(
-            imageVector = Icons.Filled.Edit,
-            contentDescription = "Categorize",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
-        )
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = "Categorize",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        // "Ignore" button
+        IconButton(
+            onClick = onIgnore,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.VisibilityOff,
+                contentDescription = "Ignore",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

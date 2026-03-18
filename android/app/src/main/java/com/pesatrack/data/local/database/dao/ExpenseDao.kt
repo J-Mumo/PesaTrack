@@ -128,7 +128,7 @@ interface ExpenseDao {
     @Query("""
         UPDATE expenses
         SET categoryId = :categoryId, isCategorized = 1
-        WHERE recipient = :recipient AND isCategorized = 0
+        WHERE recipient = :recipient AND isCategorized = 0 AND isExcluded = 0
     """)
     suspend fun updateCategoryByRecipient(recipient: String, categoryId: Long): Int
 
@@ -139,13 +139,14 @@ interface ExpenseDao {
     @Query("""
         UPDATE expenses
         SET categoryId = :categoryId, isCategorized = 1
-        WHERE recipientName = :recipientName AND isCategorized = 0
+        WHERE recipientName = :recipientName AND isCategorized = 0 AND isExcluded = 0
     """)
     suspend fun updateCategoryByRecipientName(recipientName: String, categoryId: Long): Int
 
     /**
      * Get uncategorized expenses grouped by recipient for batch categorize.
      * Returns distinct recipients with count and total amount.
+     * Excludes ignored/excluded expenses.
      */
     @Query("""
         SELECT
@@ -156,7 +157,7 @@ interface ExpenseDao {
             COUNT(*) as transactionCount,
             SUM(amount) as totalAmount
         FROM expenses
-        WHERE isCategorized = 0
+        WHERE isCategorized = 0 AND isExcluded = 0
         GROUP BY COALESCE(recipientName, recipient)
         ORDER BY transactionCount DESC
     """)
@@ -165,14 +166,37 @@ interface ExpenseDao {
     /**
      * Get individual uncategorized expenses for a specific recipient key.
      * Used by the expandable review UI in batch categorize.
+     * Excludes ignored/excluded expenses.
      */
     @Query("""
         SELECT * FROM expenses
-        WHERE isCategorized = 0
+        WHERE isCategorized = 0 AND isExcluded = 0
         AND COALESCE(recipientName, recipient) = :recipientKey
         ORDER BY timestamp DESC
     """)
     suspend fun getUncategorizedByRecipientKey(recipientKey: String): List<ExpenseEntity>
+
+    /**
+     * Bulk exclude/ignore all uncategorized expenses matching a recipient.
+     * Used by batch categorize "Ignore" action.
+     */
+    @Query("""
+        UPDATE expenses
+        SET isExcluded = 1
+        WHERE recipient = :recipient AND isCategorized = 0 AND isExcluded = 0
+    """)
+    suspend fun excludeByRecipient(recipient: String): Int
+
+    /**
+     * Bulk exclude/ignore all uncategorized expenses matching a recipientName.
+     * Used by batch categorize "Ignore" action.
+     */
+    @Query("""
+        UPDATE expenses
+        SET isExcluded = 1
+        WHERE recipientName = :recipientName AND isCategorized = 0 AND isExcluded = 0
+    """)
+    suspend fun excludeByRecipientName(recipientName: String): Int
 
     /**
      * Get total count of expenses
