@@ -7,6 +7,7 @@ import com.pesatrack.BuildConfig
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.domain.models.CategoryGroup
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -77,11 +78,25 @@ class AiCategorizationService @Inject constructor(
     companion object {
         private const val TAG = "AiCategorizationService"
 
-        /** Maximum recipients per API call to avoid prompt bloat */
-        private const val MAX_RECIPIENTS_PER_BATCH = 20
+        /**
+         * Maximum recipients per API call.
+         * Set to 25 to keep response size manageable (each recipient → ~50 tokens of JSON output).
+         * Gemini 2.5 Flash uses thinking tokens that count against maxOutputTokens,
+         * so smaller batches help avoid MAX_TOKENS truncation.
+         */
+        private const val MAX_RECIPIENTS_PER_BATCH = 25
 
-        /** Gemini model to use */
-        private const val GEMINI_MODEL = "gemini-2.0-flash"
+        /** Gemini model to use — stable v1beta model confirmed via listModels */
+        private const val GEMINI_MODEL = "gemini-2.5-flash"
+
+        /** Delay between batch API calls (ms) to stay under RPM limits */
+        private const val INTER_BATCH_DELAY_MS = 4000L
+
+        /** Maximum retry attempts for rate-limited requests */
+        private const val MAX_RETRIES = 3
+
+        /** Initial retry delay (ms), doubled on each retry */
+        private const val INITIAL_RETRY_DELAY_MS = 5000L
     }
 
     /**
@@ -119,19 +134,29 @@ class AiCategorizationService @Inject constructor(
         // 3. Build valid category ID set for validation
         val validCategoryIds = buildValidCategoryIdMap(categoryGroups)
 
-        // 4. Process in batches
+        // 4. Process in batches with rate limiting
         val allSuggestions = mutableMapOf<String, AiCategorySuggestion>()
         val batches = recipients.chunked(MAX_RECIPIENTS_PER_BATCH)
+        Log.d(TAG, "Processing ${recipients.size} recipients in ${batches.size} batch(es)")
 
-        for (batch in batches) {
+        for ((batchIndex, batch) in batches.withIndex()) {
+            // Add delay between batches to avoid hitting RPM limits
+            if (batchIndex > 0) {
+                Log.d(TAG, "Waiting ${INTER_BATCH_DELAY_MS}ms before batch ${batchIndex + 1}...")
+                delay(INTER_BATCH_DELAY_MS)
+            }
+
             try {
-                val batchResult = processBatch(apiKey, batch, categoryGroups, validCategoryIds)
+                val batchResult = processBatchWithRetry(apiKey, batch, categoryGroups, validCategoryIds)
                 allSuggestions.putAll(batchResult)
+                Log.d(TAG, "Batch ${batchIndex + 1}/${batches.size}: got ${batchResult.size} suggestions")
             } catch (e: Exception) {
-                Log.e(TAG, "AI categorization batch failed", e)
+                Log.e(TAG, "AI categorization batch ${batchIndex + 1} failed after retries", e)
+                // Return partial results with error instead of throwing everything away
                 return AiCategorizationResult(
                     suggestions = allSuggestions,
-                    error = "AI request failed: ${e.message}"
+                    error = "Batch ${batchIndex + 1}/${batches.size} failed: ${e.message}" +
+                            if (allSuggestions.isNotEmpty()) " (${allSuggestions.size} suggestions from earlier batches available)" else ""
                 )
             }
         }
@@ -156,6 +181,50 @@ class AiCategorizationService @Inject constructor(
     }
 
     /**
+     * Process a single batch with retry logic for rate limiting.
+     * Retries up to [MAX_RETRIES] times with exponential backoff.
+     */
+    private suspend fun processBatchWithRetry(
+        apiKey: String,
+        recipients: List<RecipientInfo>,
+        categoryGroups: List<CategoryGroup>,
+        validCategoryIds: Map<Long, Pair<String, String>>
+    ): Map<String, AiCategorySuggestion> {
+        var lastException: Exception? = null
+        var retryDelay = INITIAL_RETRY_DELAY_MS
+
+        for (attempt in 0..MAX_RETRIES) {
+            try {
+                if (attempt > 0) {
+                    Log.d(TAG, "Retry attempt $attempt after ${retryDelay}ms...")
+                    delay(retryDelay)
+                    retryDelay *= 2 // Exponential backoff
+                }
+                return processBatch(apiKey, recipients, categoryGroups, validCategoryIds)
+            } catch (e: Exception) {
+                lastException = e
+                val message = e.message?.lowercase() ?: ""
+                // Retry on rate limit (429), server errors (5xx), or MAX_TOKENS truncation
+                val isRetryable = message.contains("429") ||
+                        message.contains("rate") ||
+                        message.contains("quota") ||
+                        message.contains("resource_exhausted") ||
+                        message.contains("503") ||
+                        message.contains("unavailable") ||
+                        message.contains("max_tokens") ||
+                        message.contains("content generation stopped")
+
+                if (!isRetryable || attempt >= MAX_RETRIES) {
+                    throw e
+                }
+                Log.w(TAG, "Rate limited on attempt $attempt, will retry: ${e.message}")
+            }
+        }
+
+        throw lastException ?: Exception("Unknown error after retries")
+    }
+
+    /**
      * Process a single batch of recipients through Gemini API.
      */
     private suspend fun processBatch(
@@ -170,7 +239,7 @@ class AiCategorizationService @Inject constructor(
             generationConfig = generationConfig {
                 temperature = 0.1f
                 topP = 0.95f
-                maxOutputTokens = 2048
+                maxOutputTokens = 16384
             }
         )
 
