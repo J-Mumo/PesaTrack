@@ -377,48 +377,67 @@ fun parseTransaction(sender: String, body: String): ParsedTransaction? {
 
 ---
 
-### Milestone 4: Manual Expense Entry
+### Milestone 4: Manual Expense Entry ✅ COMPLETE
 
 > **Goal:** Allow users to add expenses that don't come through SMS (cash, card, etc.)
+>
+> **Status:** All sub-tasks implemented. ManualEntryScreen with full form (amount, recipient, name, payment type dropdown, date picker, category picker, notes), ManualEntryViewModel with validation and recipient mapping, CASH PaymentType added as default for manual entries. Entry points on HomeScreen (card) and ExpenseListScreen (FAB).
 
-#### 4.1 Manual Entry Screen
+#### 4.1 Manual Entry Screen ✅
 
-Create `ManualEntryScreen.kt`:
-- Amount input (KES)
-- Recipient/Description text field
-- Category picker (reuse [`GroupedCategoryPicker.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/GroupedCategoryPicker.kt:1))
-- Date/time picker
-- Notes field
-- Payment type selector (Send Money, Buy Goods, Cash, Card, etc.)
+Created [`ManualEntryScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryScreen.kt:26):
+- Amount input (KES) with decimal keyboard and sanitization
+- Recipient text field (phone/till/paybill)
+- Recipient name (optional)
+- Category picker (reuses [`GroupedCategoryPicker.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/GroupedCategoryPicker.kt:1))
+- Material 3 DatePickerDialog
+- Notes field (multiline)
+- Payment type dropdown (Cash, Buy Goods, Send Money, Pay Bill, Withdraw, Airtime, M-PESA Card, Bank Debit)
 - Source = `ExpenseSource.MANUAL`
+- Saves recipient→category mapping on save
 
-#### 4.2 Extend PaymentType for Manual Entries
+#### 4.2 Extend PaymentType for Manual Entries ✅
 
+Added `CASH` to [`PaymentType`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:40):
 ```kotlin
 enum class PaymentType {
     // ... existing types ...
-    CASH,           // Cash payment
-    CARD_PAYMENT,   // Debit/credit card (not M-PESA card)
-    OTHER;          // Catch-all
+    CASH;            // Cash payment (manual entry)
 }
 ```
+No DB migration needed — stored as String in Room.
 
-#### 4.3 Navigation Update
+#### 4.3 Navigation Update ✅
 
-Add manual entry route to [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) and a FAB or "+" button on the expenses screen.
+- Added `ManualEntry` route to [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:15)
+- Added composable to [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) (8 total routes)
+- Added "Add Expense Manually" card on [`HomeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeScreen.kt:76)
+- Added FAB (+) button on [`ExpenseListScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/expenses/ExpenseListScreen.kt:47)
 
 ---
 
-### Milestone 5: Settings & Configuration
+### Milestone 5: Settings & Configuration — Partially Complete
 
-#### 5.1 Settings Screen
+> **Status:** Core settings infrastructure (bank SMS toggles + AI categorization config) built during M2 and M3. Extended settings and onboarding still pending.
 
-- **Import History** — trigger historical SMS import
-- **Bank Tracking** — enable/disable banks
-- **AI Categorization** — enable/disable, API key entry
-- **About** — app version, credits
+#### 5.1 Settings Screen — ✅ Core Done, ⏳ Extended Pending
 
-#### 5.2 Onboarding Flow (First Launch)
+**✅ Implemented (during M2 & M3):**
+- Bank SMS master toggle + individual bank toggles ([`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:96))
+- M-PESA always-on indicator
+- AI-powered categorization toggle
+- Gemini API key entry with show/hide, save, external link
+- Built-in vs. custom API key status indicator
+- DataStore persistence for all settings ([`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:31))
+- Settings gear icon accessible from HomeScreen header
+
+**⏳ Still Pending:**
+- **About section** — app version, credits, links
+- **Data management** — clear all data, reset categories to defaults, export/backup
+- **Notification preferences** — enable/disable expense notifications
+- **Category management UI** — view/edit custom categories
+
+#### 5.2 Onboarding Flow (First Launch) — ⏳ Pending
 
 On first launch:
 1. Welcome screen explaining PesaTrack
@@ -426,6 +445,8 @@ On first launch:
 3. Offer historical SMS import with date range picker
 4. Import → auto-categorize → batch review
 5. Redirect to home screen
+
+> Currently the app just shows a permission dialog on first launch in [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:69) — no guided onboarding.
 
 ---
 

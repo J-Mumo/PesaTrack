@@ -8,18 +8,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.pesatrack.data.local.database.dao.MonthlyTotal
+import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.components.ExpenseCard
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +40,8 @@ fun HomeScreen(
     onNavigateToImport: () -> Unit,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToBatchCategorize: () -> Unit = {},
+    onNavigateToManualEntry: () -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -67,7 +80,23 @@ fun HomeScreen(
                 total = uiState.totalThisMonth
             )
         }
+
+        // Spending Trend Card (mini chart)
+        if (uiState.monthlyTrend.isNotEmpty()) {
+            item {
+                SpendingTrendCard(
+                    trendData = uiState.monthlyTrend,
+                    comparison = uiState.monthComparison,
+                    onViewAnalytics = onNavigateToAnalytics
+                )
+            }
+        }
         
+        // Add Expense Card
+        item {
+            AddExpenseCard(onAdd = onNavigateToManualEntry)
+        }
+
         // Import History Card
         item {
             ImportHistoryCard(onImport = onNavigateToImport)
@@ -288,6 +317,49 @@ fun EmptyExpensesCard() {
 }
 
 @Composable
+fun AddExpenseCard(onAdd: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onAdd() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Add Expense Manually",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Record a cash or non-SMS expense.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+@Composable
 fun ImportHistoryCard(onImport: () -> Unit) {
     Card(
         modifier = Modifier
@@ -326,6 +398,86 @@ fun ImportHistoryCard(onImport: () -> Unit) {
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onTertiaryContainer
             )
+        }
+    }
+}
+
+@Composable
+fun SpendingTrendCard(
+    trendData: List<MonthlyTotal>,
+    comparison: MonthComparison?,
+    onViewAnalytics: () -> Unit
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(trendData) {
+        if (trendData.isNotEmpty()) {
+            modelProducer.runTransaction {
+                lineSeries {
+                    series(trendData.map { it.total })
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onViewAnalytics() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Spending Trend",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (comparison != null && comparison.previousMonthTotal > 0) {
+                        val isIncrease = comparison.percentageChange > 0
+                        val arrow = if (isIncrease) "↑" else "↓"
+                        val color = if (isIncrease) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            Color(0xFF2E7D32)
+                        }
+                        Text(
+                            text = "$arrow${String.format("%.0f", comparison.percentageChange.absoluteValue)}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = color
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = "View →",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mini line chart — no axes, just the trend line
+            if (trendData.isNotEmpty()) {
+                CartesianChartHost(
+                    chart = rememberCartesianChart(
+                        rememberLineCartesianLayer(),
+                    ),
+                    modelProducer = modelProducer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                )
+            }
         }
     }
 }

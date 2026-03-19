@@ -1,8 +1,13 @@
 package com.pesatrack.data.repository
 
+import com.pesatrack.data.local.database.dao.CategoryTotal
+import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.DateRangeResult
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.MonthlyTotal
+import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.RecipientGroup
+import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
@@ -209,6 +214,84 @@ class ExpenseRepository @Inject constructor(
         dayEndMs: Long
     ): Boolean {
         return expenseDao.expenseExistsAtAmountAndDate(amount, tolerance, dayStartMs, dayEndMs)
+    }
+
+    // ==================== Analytics ====================
+
+    /**
+     * Get monthly totals for the last N months (for trend chart).
+     * Returns list ordered chronologically.
+     */
+    suspend fun getMonthlyTotals(monthsBack: Int = 6): List<MonthlyTotal> {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.MONTH, -(monthsBack - 1))
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return expenseDao.getMonthlyTotals(calendar.timeInMillis)
+    }
+
+    /**
+     * Get category totals for a specific month.
+     */
+    suspend fun getCategoryTotalsForMonth(year: Int, month: Int): List<CategoryTotal> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.getCategoryTotalsForMonth(start, end)
+    }
+
+    /**
+     * Get daily totals for a specific month.
+     */
+    suspend fun getDailyTotalsForMonth(year: Int, month: Int): List<DailyTotal> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.getDailyTotalsForMonth(start, end)
+    }
+
+    /**
+     * Get top spenders for a specific month.
+     */
+    suspend fun getTopSpendersForMonth(year: Int, month: Int, limit: Int = 10): List<TopSpender> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.getTopSpendersForMonth(start, end, limit)
+    }
+
+    /**
+     * Get payment type breakdown for a specific month.
+     */
+    suspend fun getPaymentTypeBreakdownForMonth(year: Int, month: Int): List<PaymentTypeTotal> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.getPaymentTypeBreakdownForMonth(start, end)
+    }
+
+    /**
+     * Get total for a specific month (non-Flow, for analytics).
+     */
+    suspend fun getTotalForMonth(year: Int, month: Int): Double {
+        val (start, end) = getMonthRange(year, month)
+        // Reuse the DAO query — but we need a suspend version.
+        // For simplicity, sum from category totals:
+        return getCategoryTotalsForMonth(year, month).sumOf { it.total }
+    }
+
+    /**
+     * Get start and end timestamps for a specific year/month.
+     * Month is 1-based (January = 1).
+     */
+    fun getMonthRange(year: Int, month: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month - 1) // Calendar.MONTH is 0-based
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val start = calendar.timeInMillis
+        calendar.add(Calendar.MONTH, 1)
+        val end = calendar.timeInMillis
+        return Pair(start, end)
     }
 
     /**

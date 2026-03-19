@@ -51,7 +51,7 @@ app/src/main/java/com/pesatrack/
 
 - Android Studio Hedgehog (2023.1.1) or later
 - JDK 17
-- Android SDK 34
+- Android SDK 35
 
 ### Building the App
 

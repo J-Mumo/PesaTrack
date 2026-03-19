@@ -258,6 +258,112 @@ interface ExpenseDao {
         dayStartMs: Long,
         dayEndMs: Long
     ): Boolean
+
+    // ==================== Analytics Queries ====================
+
+    /**
+     * Get monthly totals since a given timestamp.
+     * Groups by year-month and returns totals ordered chronologically.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            strftime('%Y-%m', timestamp / 1000, 'unixepoch', 'localtime') AS monthKey,
+            COALESCE(SUM(amount), 0.0) AS total
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :sinceTimestamp
+        GROUP BY monthKey
+        ORDER BY monthKey ASC
+    """)
+    suspend fun getMonthlyTotals(sinceTimestamp: Long): List<MonthlyTotal>
+
+    /**
+     * Get category totals for a specific month.
+     * Joins with categories table to get name/color.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            c.id AS categoryId,
+            COALESCE(c.name, 'Uncategorized') AS categoryName,
+            c.color AS categoryColor,
+            c.parentId AS parentId,
+            COALESCE(SUM(e.amount), 0.0) AS total,
+            COUNT(e.id) AS transactionCount
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :startOfMonth AND e.timestamp < :endOfMonth
+        GROUP BY e.categoryId
+        ORDER BY total DESC
+    """)
+    suspend fun getCategoryTotalsForMonth(
+        startOfMonth: Long,
+        endOfMonth: Long
+    ): List<CategoryTotal>
+
+    /**
+     * Get daily totals for a specific month.
+     * Returns one row per day with spending total.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            CAST(strftime('%d', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) AS dayOfMonth,
+            COALESCE(SUM(amount), 0.0) AS total
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfMonth AND timestamp < :endOfMonth
+        GROUP BY dayOfMonth
+        ORDER BY dayOfMonth ASC
+    """)
+    suspend fun getDailyTotalsForMonth(
+        startOfMonth: Long,
+        endOfMonth: Long
+    ): List<DailyTotal>
+
+    /**
+     * Get top spenders (recipients) for a specific month.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            COALESCE(recipientName, recipient) AS recipientKey,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfMonth AND timestamp < :endOfMonth
+        GROUP BY recipientKey
+        ORDER BY total DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopSpendersForMonth(
+        startOfMonth: Long,
+        endOfMonth: Long,
+        limit: Int = 10
+    ): List<TopSpender>
+
+    /**
+     * Get payment type breakdown for a specific month.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            paymentType,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfMonth AND timestamp < :endOfMonth
+        GROUP BY paymentType
+        ORDER BY total DESC
+    """)
+    suspend fun getPaymentTypeBreakdownForMonth(
+        startOfMonth: Long,
+        endOfMonth: Long
+    ): List<PaymentTypeTotal>
 }
 
 /**
@@ -278,4 +384,52 @@ data class RecipientGroup(
     val paymentType: String,
     val transactionCount: Int,
     val totalAmount: Double
+)
+
+// ==================== Analytics Result Classes ====================
+
+/**
+ * Monthly spending total (for trend chart)
+ */
+data class MonthlyTotal(
+    val monthKey: String,  // "2026-03"
+    val total: Double
+)
+
+/**
+ * Category spending total (for category breakdown)
+ */
+data class CategoryTotal(
+    val categoryId: Long?,
+    val categoryName: String,
+    val categoryColor: String?,
+    val parentId: Long?,
+    val total: Double,
+    val transactionCount: Int
+)
+
+/**
+ * Daily spending total (for daily chart)
+ */
+data class DailyTotal(
+    val dayOfMonth: Int,
+    val total: Double
+)
+
+/**
+ * Top spender / recipient (for top spenders list)
+ */
+data class TopSpender(
+    val recipientKey: String,
+    val total: Double,
+    val transactionCount: Int
+)
+
+/**
+ * Payment type total (for payment type breakdown)
+ */
+data class PaymentTypeTotal(
+    val paymentType: String,
+    val total: Double,
+    val transactionCount: Int
 )

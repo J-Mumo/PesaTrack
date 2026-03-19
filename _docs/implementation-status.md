@@ -24,8 +24,9 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
 | **Phase 2 M3: AI-Powered Categorization** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
-| **Phase 2 M4: Manual Expense Entry** | ⏳ Pending | 0% |
-| **Phase 2 M5: Settings & Configuration** | ⏳ Pending | 0% |
+| **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
+| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~60% |
+| **Expense Charts & Analytics** | ✅ Complete | 100% |
 
 ---
 
@@ -136,7 +137,7 @@ SMS Sources ──────────────────────�
 |---------|------|-------------|
 | Expense Model | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:6) | Domain model with `isCategorized` + `isExcluded` flags |
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
-| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:30) | 8 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT |
+| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:32) | 9 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT, CASH |
 | ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, EXCEL_IMPORT, MANUAL |
 
 **PaymentType details:**
@@ -150,6 +151,7 @@ SMS Sources ──────────────────────�
 | `AIRTIME` | Airtime | `"bought ... of airtime"` |
 | `MPESA_CARD` | M-PESA Card | `"sent to M-PESA CARD for account"` |
 | `TRANSACTION_COST` | Transaction Cost | `"Transaction cost, KshXX.XX"` (auto-categorized as category 811) |
+| `CASH` | Cash | Manual entry only (no SMS pattern) |
 
 **Legacy backward compatibility:** `fromString()` maps old values `"REVERSAL"`, `"RECEIVE_MONEY"`, `"DEPOSIT"` to `SEND_MONEY` for existing DB records.
 
@@ -162,9 +164,9 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 7 routes: Home, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 9 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
-| Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:17) | 2 tabs: Home, Expenses |
+| Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:23) | 3 tabs: Home, Analytics, Expenses |
 | **Main Activity** | | |
 | MainActivity | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:32) | Runtime permissions, notification channel, bottom nav scaffold |
 | MainScreen | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:108) | Scaffold with NavigationBar + NavGraph |
@@ -200,11 +202,16 @@ SMS Sources ──────────────────────�
 | ExcelImportViewModel | [`ExcelImportViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportViewModel.kt:29) | Multi-file URI handling, import orchestration |
 | ExcelImportUiState | [`ExcelImportUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportUiState.kt:8) | READY, FILES_SELECTED, IMPORTING, COMPLETED, ERROR |
 
-#### ⏳ Pending
+| **Manual Entry Screen** | | |
+| ManualEntryScreen | [`ManualEntryScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryScreen.kt:26) | Form: amount, recipient, name, payment type, date picker, category picker, notes |
+| ManualEntryViewModel | [`ManualEntryViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryViewModel.kt:20) | Validation, save with recipient mapping |
+| ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| Manual Expense Entry Screen | Medium | No UI to manually add expenses yet |
+| **Analytics Screen** | | |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | Month selector, MoM comparison, trend line, daily columns, category bars, top spenders, payment type breakdown (Vico charts) |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month navigation, MoM computation |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month selection |
+| AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison domain model |
 
 ---
 
@@ -293,6 +300,7 @@ SMS Sources ──────────────────────�
 - Coroutines 1.7.3
 - Google Generative AI SDK 0.9.0 (Gemini — AI categorization)
 - Apache POI 5.2.5 (Excel .xlsx parsing)
+- Vico 2.0.1 (Compose charting library — analytics charts)
 
 ---
 
@@ -346,17 +354,18 @@ app/src/main/java/com/pesatrack/
 │       └── CategoryRepository.kt            ✅ Category management
 ├── domain/models/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
-│   └── Category.kt                          ✅ Domain model
+│   ├── Category.kt                          ✅ Domain model
+│   └── AnalyticsModels.kt                   ✅ MonthComparison domain model
 ├── presentation/
-│   ├── MainActivity.kt                      ✅ Permissions + Scaffold + bottom nav
+│   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav
 │   ├── navigation/
-│   │   ├── NavGraph.kt                      ✅ 7 routes: Home, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings
-│   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum
+│   │   ├── NavGraph.kt                      ✅ 9 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry
+│   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs)
 │   ├── screens/
 │   │   ├── home/
-│   │   │   ├── HomeScreen.kt                ✅ Monthly summary + recent expenses
-│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + default init
-│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory
+│   │   │   ├── HomeScreen.kt                ✅ Monthly summary + mini trend chart + recent expenses
+│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + trend data + default init
+│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory + MonthlyTrend + MonthComparison
 │   │   ├── expenses/
 │   │   │   ├── ExpenseListScreen.kt          ✅ Full expense list
 │   │   │   ├── ExpensesViewModel.kt          ✅ Category mapping
@@ -369,6 +378,14 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ExcelImportScreen.kt          ✅ File picker + progress + results
 │   │   │   ├── ExcelImportViewModel.kt       ✅ Multi-file import orchestration
 │   │   │   └── ExcelImportUiState.kt         ✅ 5 phases (READY→COMPLETED)
+│   │   ├── manual_entry/
+│   │   │   ├── ManualEntryScreen.kt       ✅ Manual expense form with validation
+│   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
+│   │   │   └── ManualEntryUiState.kt      ✅ Form state model
+│   │   ├── analytics/
+│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics: Vico charts, month selector, MoM, categories, daily, top spenders, payment types
+│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation
+│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + month selection
 │   │   └── settings/
 │   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles
 │   │       ├── SettingsViewModel.kt          ✅ Preferences management
@@ -471,7 +488,7 @@ backend/
 | Correct payment type labels | ✅ Complete | `fromString()` handles both formats |
 | Category-aware expense cards | ✅ Complete | Category name as title |
 | Runtime permission flow | ✅ Complete | All permissions requested on launch |
-| Manual expense entry | ⏳ Pending | No manual add screen yet |
+| Manual expense entry | ✅ Complete | Form with amount, recipient, payment type, date, category, notes |
 | Historical SMS import | ✅ Complete | ContentResolver-based import with date range picker |
 | Excel spreadsheet import | ✅ Complete | Match to SMS + import unmatched + multi-file |
 | Recipient-based auto-categorization | ✅ Complete | Learned mappings applied to new transactions |
@@ -497,11 +514,12 @@ backend/
 | — | Exclude pass-through expenses | ✅ Complete | `isExcluded` flag, long-press toggle, dimmed + strikethrough UI |
 | **M3** | AI-Powered Categorization (Gemini) | ✅ Complete | Gemini SDK + AiCategorizationService + BatchCategorize AI UI + Settings AI prefs |
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
-| **M4** | Manual expense entry screen | ⏳ Pending | Add expense without SMS |
-| **M5** | Settings & Configuration | ⏳ Pending | Bank selection, AI prefs |
-| — | Expense charts and analytics | ⏳ Pending | Category breakdown, trends |
-| — | Monthly/weekly summaries | ⏳ Pending | Time-based grouping |
+| **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
+| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles + AI config done (M2/M3); About, data mgmt, onboarding pending |
+| — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
+| — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
 | — | Category-based budgets | ⏳ Pending | Set spending limits |
+| — | Forecasting | ⏳ Pending | "you'll likely run out by the 23rd" |
 | — | Export to CSV | ⏳ Pending | Shareable reports |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
 | — | Recurring expense tracking | ⏳ Pending | Detect repeating patterns |
@@ -515,11 +533,15 @@ backend/
 - [ ] Fix any parsing bugs discovered from real-world SMS formats
 - [ ] Generate signed APK for distribution
 
-### Medium Priority — Phase 2 Milestone 4
-- [ ] Phase 2 M4: Manual expense entry screen
+### Medium Priority — Phase 2 Milestone 5
+- [ ] About section (app version, credits)
+- [ ] Data management (clear data, reset categories, export/backup)
+- [ ] Notification preferences
+- [ ] Category management UI
+- [ ] First-launch onboarding flow
 
 ### Lower Priority
 - [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
-- [ ] Expense charts/analytics
+- [x] Expense charts/analytics (Vico library — monthly trend, daily spending, category breakdown, top spenders, payment types, MoM comparison)
 - [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway

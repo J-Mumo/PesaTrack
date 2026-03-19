@@ -22,6 +22,7 @@ import java.util.*
 fun ExpenseListScreen(
     onNavigateBack: () -> Unit,
     onNavigateToCategorize: (Long) -> Unit,
+    onNavigateToManualEntry: () -> Unit = {},
     viewModel: ExpensesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -36,6 +37,18 @@ fun ExpenseListScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToManualEntry,
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = "Add expense",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     ) { paddingValues ->
         if (uiState.isLoading) {

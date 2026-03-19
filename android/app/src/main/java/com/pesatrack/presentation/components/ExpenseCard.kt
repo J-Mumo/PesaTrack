@@ -179,6 +179,7 @@ fun ExpenseCard(
 @Suppress("DEPRECATION")
 fun getPaymentTypeIcon(paymentType: PaymentType): ImageVector {
     return when (paymentType) {
+        PaymentType.CASH -> Icons.Filled.Payments
         PaymentType.SEND_MONEY -> Icons.Filled.Send
         PaymentType.BUY_GOODS -> Icons.Filled.ShoppingCart
         PaymentType.PAY_BILL -> Icons.Filled.Receipt

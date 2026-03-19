@@ -2,13 +2,18 @@ package com.pesatrack.presentation.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,6 +31,7 @@ class HomeViewModel @Inject constructor(
         initializeData()
         loadCategories()
         loadData()
+        loadTrendData()
     }
     
     private fun initializeData() {
@@ -56,7 +62,7 @@ class HomeViewModel @Inject constructor(
         // Load recent expenses with category info
         viewModelScope.launch {
             expenseRepository.getExpensesForCurrentMonth()
-                .map { expenses -> 
+                .map { expenses ->
                     expenses.take(5).map { expense ->
                         val category = expense.categoryId?.let { categoriesMap[it] }
                         ExpenseWithCategory(
@@ -67,7 +73,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 .collect { expensesWithCategory ->
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
                             recentExpenses = expensesWithCategory,
                             isLoading = false
@@ -84,6 +90,62 @@ class HomeViewModel @Inject constructor(
                     _uiState.update { it.copy(uncategorizedCount = count) }
                 }
         }
+    }
+
+    /**
+     * Load 6-month spending trend and month-over-month comparison
+     */
+    private fun loadTrendData() {
+        viewModelScope.launch {
+            try {
+                val trend = expenseRepository.getMonthlyTotals(6)
+                val filledTrend = fillMissingMonths(trend, 6)
+
+                // Compute MoM comparison
+                val now = Calendar.getInstance()
+                val currentYear = now.get(Calendar.YEAR)
+                val currentMonth = now.get(Calendar.MONTH) + 1
+                val currentTotal = expenseRepository.getTotalForMonth(currentYear, currentMonth)
+
+                val prevCal = Calendar.getInstance().apply { add(Calendar.MONTH, -1) }
+                val prevYear = prevCal.get(Calendar.YEAR)
+                val prevMonth = prevCal.get(Calendar.MONTH) + 1
+                val prevTotal = expenseRepository.getTotalForMonth(prevYear, prevMonth)
+
+                val pctChange = if (prevTotal > 0) {
+                    ((currentTotal - prevTotal) / prevTotal) * 100.0
+                } else if (currentTotal > 0) 100.0 else 0.0
+
+                val fmt = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+                val comparison = MonthComparison(
+                    currentMonthTotal = currentTotal,
+                    previousMonthTotal = prevTotal,
+                    percentageChange = pctChange,
+                    currentMonthLabel = fmt.format(now.time),
+                    previousMonthLabel = fmt.format(prevCal.time)
+                )
+
+                _uiState.update {
+                    it.copy(monthlyTrend = filledTrend, monthComparison = comparison)
+                }
+            } catch (_: Exception) {
+                // Silently fail — trend is non-critical
+            }
+        }
+    }
+
+    private fun fillMissingMonths(data: List<MonthlyTotal>, count: Int): List<MonthlyTotal> {
+        val result = mutableListOf<MonthlyTotal>()
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.MONTH, -(count - 1))
+        val existing = data.associateBy { it.monthKey }
+        val fmt = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+        repeat(count) {
+            val key = fmt.format(cal.time)
+            result.add(existing[key] ?: MonthlyTotal(monthKey = key, total = 0.0))
+            cal.add(Calendar.MONTH, 1)
+        }
+        return result
     }
     
     private fun refreshExpensesWithCategories() {

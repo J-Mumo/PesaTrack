@@ -5,6 +5,7 @@ package com.pesatrack.presentation.navigation
  */
 sealed class Screen(val route: String) {
     object Home : Screen("home")
+    object Analytics : Screen("analytics")
     object Expenses : Screen("expenses")
     object Categorize : Screen("categorize/{expenseId}") {
         fun createRoute(expenseId: Long) = "categorize/$expenseId"
@@ -13,6 +14,7 @@ sealed class Screen(val route: String) {
     object ExcelImport : Screen("excel_import")
     object BatchCategorize : Screen("batch_categorize")
     object Settings : Screen("settings")
+    object ManualEntry : Screen("manual_entry")
 }
 
 /**
@@ -24,5 +26,6 @@ enum class BottomNavItem(
     val icon: String
 ) {
     HOME(Screen.Home.route, "Home", "home"),
+    ANALYTICS(Screen.Analytics.route, "Analytics", "bar_chart"),
     EXPENSES(Screen.Expenses.route, "Expenses", "receipt_long")
 }

@@ -7,12 +7,14 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.pesatrack.presentation.screens.analytics.AnalyticsScreen
 import com.pesatrack.presentation.screens.batch_categorize.BatchCategorizeScreen
 import com.pesatrack.presentation.screens.categorize.CategorizeScreen
 import com.pesatrack.presentation.screens.expenses.ExpenseListScreen
 import com.pesatrack.presentation.screens.home.HomeScreen
 import com.pesatrack.presentation.screens.excel_import.ExcelImportScreen
 import com.pesatrack.presentation.screens.import_history.ImportScreen
+import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 
 /**
@@ -46,8 +48,19 @@ fun NavGraph(
                 },
                 onNavigateToBatchCategorize = {
                     navController.navigate(Screen.BatchCategorize.route)
+                },
+                onNavigateToManualEntry = {
+                    navController.navigate(Screen.ManualEntry.route)
+                },
+                onNavigateToAnalytics = {
+                    navController.navigate(Screen.Analytics.route)
                 }
             )
+        }
+
+        // Analytics Screen
+        composable(route = Screen.Analytics.route) {
+            AnalyticsScreen()
         }
         
         // Expenses List Screen
@@ -58,6 +71,9 @@ fun NavGraph(
                 },
                 onNavigateToCategorize = { expenseId ->
                     navController.navigate(Screen.Categorize.createRoute(expenseId))
+                },
+                onNavigateToManualEntry = {
+                    navController.navigate(Screen.ManualEntry.route)
                 }
             )
         }
@@ -119,6 +135,15 @@ fun NavGraph(
         // Settings Screen
         composable(route = Screen.Settings.route) {
             SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Manual Entry Screen
+        composable(route = Screen.ManualEntry.route) {
+            ManualEntryScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

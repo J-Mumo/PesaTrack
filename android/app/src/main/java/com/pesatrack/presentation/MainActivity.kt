@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.*
@@ -115,6 +116,7 @@ fun MainScreen() {
     // Define bottom nav items with icons
     val items = listOf(
         Triple(BottomNavItem.HOME, Icons.Filled.Home, "Home"),
+        Triple(BottomNavItem.ANALYTICS, Icons.Filled.BarChart, "Analytics"),
         Triple(BottomNavItem.EXPENSES, Icons.Filled.ReceiptLong, "Expenses")
     )
     
