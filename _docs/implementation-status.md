@@ -22,7 +22,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Backend Server (unused)** | 🟡 Dormant | N/A |
 | **Phase 2 M1: Historical SMS Import + Recipient Learning** | ✅ Complete | 100% |
 | **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
-| **Phase 2 M3: AI-Powered Categorization** | ✅ Complete | 100% |
+| **Phase 2 M3: Smart Categorization (Rules Engine)** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
 | **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~60% |
@@ -45,8 +45,9 @@ SMS Sources ──────────────────────�
 │                                   └── transactionCost (optional, SMS only) │
 │                                        │                                   │
 │                         Auto-Categorization                                │
-│                          ├── Deterministic rules                           │
-│                          ├── Recipient mapping                             │
+│                          ├── KeywordRulesEngine (100+ business names)      │
+│                          ├── PaymentType heuristics                        │
+│                          ├── Recipient mapping (learned from user)         │
 │                          └── Excel label→category mapping                  │
 │                                        │                                   │
 │                               ExpenseRepository                            │
@@ -192,11 +193,12 @@ SMS Sources ──────────────────────�
 | Typography | [`Type.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Type.kt:1) | Typography definitions |
 
 | **Settings Screen** | | |
-| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Bank SMS tracking toggles + AI categorization settings |
-| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank + AI preferences management |
-| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + AI config model |
-| **AI Categorization** | | |
-| AiCategorizationService | [`AiCategorizationService.kt`](../android/app/src/main/java/com/pesatrack/services/AiCategorizationService.kt:1) | Gemini API integration for category suggestions |
+| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Bank SMS tracking toggles |
+| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences management |
+| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle model |
+| **Smart Categorization** | | |
+| CategorizationService | [`AiCategorizationService.kt`](../android/app/src/main/java/com/pesatrack/services/AiCategorizationService.kt:1) | On-device rules engine for category suggestions (replaced Gemini AI) |
+| KeywordRulesEngine | [`KeywordRulesEngine.kt`](../android/app/src/main/java/com/pesatrack/services/KeywordRulesEngine.kt:1) | 100+ exact name matches, 100+ keyword rules, PaymentType heuristics |
 | **Excel Import** | | |
 | ExcelImportScreen | [`ExcelImportScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportScreen.kt:26) | File picker, progress, results summary |
 | ExcelImportViewModel | [`ExcelImportViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportViewModel.kt:29) | Multi-file URI handling, import orchestration |
@@ -298,7 +300,6 @@ SMS Sources ──────────────────────�
 - Room 2.6.1 (database)
 - DataStore 1.0.0 (preferences)
 - Coroutines 1.7.3
-- Google Generative AI SDK 0.9.0 (Gemini — AI categorization)
 - Apache POI 5.2.5 (Excel .xlsx parsing)
 - Vico 2.0.1 (Compose charting library — analytics charts)
 
@@ -321,6 +322,11 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 | `data/remote/` directory | `data/` | Entire remote layer removed |
 | Retrofit dependency | `build.gradle.kts` | No networking needed |
 | OkHttp dependency | `build.gradle.kts` | No networking needed |
+| Google Generative AI SDK 0.9.0 | `build.gradle.kts` | Replaced with on-device KeywordRulesEngine (free tier rate limits, ~2MB dependency) |
+| `GEMINI_API_KEY` BuildConfig | `build.gradle.kts` | No API key needed for rules engine |
+| Gemini API key settings UI | `SettingsScreen.kt` | Removed AiCategorizationSection (API key input, toggle, links) |
+| `aiCategorizationEnabled` preference | `AppPreferences.kt` | Smart suggest is always available |
+| `geminiApiKey` preference | `AppPreferences.kt` | No API key needed |
 | Quick Action buttons | `HomeScreen.kt` | Send Money/Buy Goods/Pay Bill buttons removed |
 | `PaymentType.RECEIVE_MONEY` | `Expense.kt` | Not an expense |
 | `PaymentType.DEPOSIT` | `Expense.kt` | Not an expense |
@@ -387,8 +393,8 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based category trend detection
 │   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + month selection + categoryTrends
 │   │   └── settings/
-│   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles
-│   │       ├── SettingsViewModel.kt          ✅ Preferences management
+│   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles (AI section removed)
+│   │       ├── SettingsViewModel.kt          ✅ Bank preferences management
 │   │       └── SettingsUiState.kt            ✅ BankToggle model
 │   ├── components/
 │   │   ├── ExpenseCard.kt                   ✅ Payment type icons, category title
@@ -402,7 +408,8 @@ app/src/main/java/com/pesatrack/
 │   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
 │   ├── ExcelImportService.kt                ✅ Excel import orchestration (match + standalone)
-│   ├── AiCategorizationService.kt           ✅ Gemini AI categorization (M3)
+│   ├── AiCategorizationService.kt           ✅ CategorizationService — on-device rules engine (replaced Gemini)
+│   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
 │   └── NotificationHelper.kt               ✅ Channel + expense alerts
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
@@ -512,10 +519,10 @@ backend/
 | **M1** | SmsReceiver auto-categorize | ✅ Complete | Uses recipient mapping for live SMS |
 | **M2** | Bank SMS Tracking (NCBA) | ✅ Complete | Strategy pattern + parser registry + Settings UI |
 | — | Exclude pass-through expenses | ✅ Complete | `isExcluded` flag, long-press toggle, dimmed + strikethrough UI |
-| **M3** | AI-Powered Categorization (Gemini) | ✅ Complete | Gemini SDK + AiCategorizationService + BatchCategorize AI UI + Settings AI prefs |
+| **M3** | Smart Categorization (Rules Engine) | ✅ Complete | On-device KeywordRulesEngine (replaced Gemini AI) — 100+ business names, keyword rules, PaymentType heuristics; zero cost, offline, always-on |
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
-| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles + AI config done (M2/M3); About, data mgmt, onboarding pending |
+| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles done (M2); AI config removed (M3 → rules engine); About, data mgmt, onboarding pending |
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
 | — | Category-based budgets | ⏳ Pending | Set spending limits |
