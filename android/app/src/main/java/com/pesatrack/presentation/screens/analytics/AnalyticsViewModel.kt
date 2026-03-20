@@ -3,10 +3,12 @@ package com.pesatrack.presentation.screens.analytics
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.MonthlyTotal
+import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
 import com.pesatrack.domain.models.MonthComparison
+import com.pesatrack.domain.models.YearComparison
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,15 +32,33 @@ class AnalyticsViewModel @Inject constructor(
     private val calendar = Calendar.getInstance()
 
     init {
-        // Start with current month
+        // Start with current month/year
+        val currentYear = calendar.get(Calendar.YEAR)
+        val currentMonth = calendar.get(Calendar.MONTH) + 1 // 1-based
         _uiState.update {
             it.copy(
-                selectedYear = calendar.get(Calendar.YEAR),
-                selectedMonth = calendar.get(Calendar.MONTH) + 1 // 1-based
+                selectedYear = currentYear,
+                selectedMonth = currentMonth,
+                selectedYearForYearly = currentYear
             )
         }
         loadAllData()
     }
+
+    // ==================== Tab Management ====================
+
+    /**
+     * Switch between Monthly and Yearly tabs.
+     * Yearly data is loaded lazily on first access.
+     */
+    fun selectTab(tab: AnalyticsTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+        if (tab == AnalyticsTab.YEARLY && _uiState.value.yearComparison == null) {
+            loadYearlyData()
+        }
+    }
+
+    // ==================== Monthly Navigation ====================
 
     /**
      * Navigate to the previous month
@@ -96,6 +116,47 @@ class AnalyticsViewModel @Inject constructor(
         return !(state.selectedYear == now.get(Calendar.YEAR) &&
                 state.selectedMonth == now.get(Calendar.MONTH) + 1)
     }
+
+    // ==================== Yearly Navigation ====================
+
+    /**
+     * Navigate to the previous year
+     */
+    fun previousYear() {
+        _uiState.update {
+            it.copy(
+                selectedYearForYearly = it.selectedYearForYearly - 1,
+                yearlyIsLoading = true,
+                yearComparison = null // Force reload
+            )
+        }
+        loadYearlyData()
+    }
+
+    /**
+     * Navigate to the next year (capped at current year)
+     */
+    fun nextYear() {
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        if (_uiState.value.selectedYearForYearly >= currentYear) return
+        _uiState.update {
+            it.copy(
+                selectedYearForYearly = it.selectedYearForYearly + 1,
+                yearlyIsLoading = true,
+                yearComparison = null // Force reload
+            )
+        }
+        loadYearlyData()
+    }
+
+    /**
+     * Check if we can navigate to next year (not past current year)
+     */
+    fun canGoNextYear(): Boolean {
+        return _uiState.value.selectedYearForYearly < Calendar.getInstance().get(Calendar.YEAR)
+    }
+
+    // ==================== Monthly Data Loading ====================
 
     /**
      * Load all analytics data (trend + month-specific + category trends)
@@ -267,6 +328,80 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
+    // ==================== Yearly Data Loading ====================
+
+    /**
+     * Load all data for the yearly analytics tab.
+     */
+    private fun loadYearlyData() {
+        val year = _uiState.value.selectedYearForYearly
+
+        _uiState.update { it.copy(yearlyIsLoading = true) }
+
+        viewModelScope.launch {
+            try {
+                val annualTotal = expenseRepository.getAnnualTotal(year)
+                val prevTotal = expenseRepository.getAnnualTotal(year - 1)
+                val currentMonths = expenseRepository.getMonthlyTotalsForYear(year)
+                val prevMonths = expenseRepository.getMonthlyTotalsForYear(year - 1)
+                val categories = expenseRepository.getCategoryTotalsForYear(year)
+                val topSpenders = expenseRepository.getTopSpendersForYear(year, 10)
+                val paymentTypes = expenseRepository.getPaymentTypeBreakdownForYear(year)
+
+                // YoY percentage change
+                val pctChange = if (prevTotal > 0) {
+                    ((annualTotal - prevTotal) / prevTotal) * 100.0
+                } else if (annualTotal > 0) 100.0 else 0.0
+
+                val yearComparison = YearComparison(
+                    currentYearTotal = annualTotal,
+                    previousYearTotal = prevTotal,
+                    percentageChange = pctChange,
+                    currentYearLabel = year.toString(),
+                    previousYearLabel = (year - 1).toString()
+                )
+
+                val txCount = categories.sumOf { it.transactionCount }
+
+                // Months elapsed: if current year, use current month count; otherwise 12
+                val now = Calendar.getInstance()
+                val monthsElapsed = if (year == now.get(Calendar.YEAR)) {
+                    now.get(Calendar.MONTH) + 1 // 1-based
+                } else 12
+                val avgMonthly = if (monthsElapsed > 0) annualTotal / monthsElapsed else 0.0
+
+                // Fill missing months (1-12) with 0 for both years
+                val filledCurrent = fillYearMonths(currentMonths)
+                val filledPrev = fillYearMonths(prevMonths)
+
+                _uiState.update {
+                    it.copy(
+                        yearlyIsLoading = false,
+                        yearComparison = yearComparison,
+                        yearlyTotalForYear = annualTotal,
+                        yearlyTransactionCount = txCount,
+                        yearlyAvgMonthlySpend = avgMonthly,
+                        currentYearMonthlyTotals = filledCurrent,
+                        previousYearMonthlyTotals = filledPrev,
+                        yearlyCategoryBreakdown = categories,
+                        yearlyTopSpenders = topSpenders,
+                        yearlyPaymentTypeBreakdown = paymentTypes,
+                        error = null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        yearlyIsLoading = false,
+                        error = "Failed to load yearly analytics: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    // ==================== Helper Functions ====================
+
     /**
      * Build a CategoryTrend from filled monthly data.
      * Returns null if the category doesn't qualify (CV too low and not in default list).
@@ -349,6 +484,15 @@ class AnalyticsViewModel @Inject constructor(
             cal.add(Calendar.MONTH, 1)
         }
         return result
+    }
+
+    /**
+     * Ensure all 12 months (1-12) are represented for yearly chart.
+     * Gap-fills missing months with 0.
+     */
+    private fun fillYearMonths(data: List<YearMonthTotal>): List<YearMonthTotal> {
+        val map = data.associateBy { it.monthNumber }
+        return (1..12).map { m -> map[m] ?: YearMonthTotal(monthNumber = m, total = 0.0) }
     }
 
     /**

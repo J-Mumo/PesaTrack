@@ -386,6 +386,107 @@ interface ExpenseDao {
         ORDER BY e.categoryId, monthKey ASC
     """)
     suspend fun getCategoryMonthlyTotals(sinceTimestamp: Long): List<CategoryMonthlyTotal>
+
+    // ==================== Yearly Analytics Queries ====================
+
+    /**
+     * Get total spending for an entire year.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0.0)
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfYear AND timestamp < :endOfYear
+    """)
+    suspend fun getAnnualTotal(startOfYear: Long, endOfYear: Long): Double
+
+    /**
+     * Get monthly totals for a specific year (12 data points for overlay chart).
+     * Returns one row per month with spending total.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            CAST(strftime('%m', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) AS monthNumber,
+            COALESCE(SUM(amount), 0.0) AS total
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfYear AND timestamp < :endOfYear
+        GROUP BY monthNumber
+        ORDER BY monthNumber ASC
+    """)
+    suspend fun getMonthlyTotalsForYear(
+        startOfYear: Long,
+        endOfYear: Long
+    ): List<YearMonthTotal>
+
+    /**
+     * Get category totals for a full year.
+     * Joins with categories table to get name/color.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            c.id AS categoryId,
+            COALESCE(c.name, 'Uncategorized') AS categoryName,
+            c.color AS categoryColor,
+            c.parentId AS parentId,
+            COALESCE(SUM(e.amount), 0.0) AS total,
+            COUNT(e.id) AS transactionCount
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :startOfYear AND e.timestamp < :endOfYear
+        GROUP BY e.categoryId
+        ORDER BY total DESC
+    """)
+    suspend fun getCategoryTotalsForYear(
+        startOfYear: Long,
+        endOfYear: Long
+    ): List<CategoryTotal>
+
+    /**
+     * Get top spenders (recipients) for a full year.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            COALESCE(recipientName, recipient) AS recipientKey,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfYear AND timestamp < :endOfYear
+        GROUP BY recipientKey
+        ORDER BY total DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopSpendersForYear(
+        startOfYear: Long,
+        endOfYear: Long,
+        limit: Int = 10
+    ): List<TopSpender>
+
+    /**
+     * Get payment type breakdown for a full year.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            paymentType,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startOfYear AND timestamp < :endOfYear
+        GROUP BY paymentType
+        ORDER BY total DESC
+    """)
+    suspend fun getPaymentTypeBreakdownForYear(
+        startOfYear: Long,
+        endOfYear: Long
+    ): List<PaymentTypeTotal>
 }
 
 /**
@@ -465,5 +566,14 @@ data class CategoryMonthlyTotal(
     val categoryName: String,
     val categoryColor: String?,
     val monthKey: String,   // "2026-03"
+    val total: Double
+)
+
+/**
+ * Monthly total within a specific year (for YoY overlay chart).
+ * monthNumber is 1-12 (January=1, December=12).
+ */
+data class YearMonthTotal(
+    val monthNumber: Int,
     val total: Double
 )

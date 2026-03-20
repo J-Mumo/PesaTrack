@@ -61,6 +61,19 @@ data class CategoryTrend(
  * in a typical Kenyan context. Used as fallback when not enough
  * data exists for CV-based detection.
  */
+/**
+ * Year-over-Year comparison result.
+ * Produced by the ViewModel from two annual totals.
+ */
+data class YearComparison(
+    val currentYearTotal: Double,
+    val previousYearTotal: Double,
+    /** Positive = spending increased, negative = spending decreased */
+    val percentageChange: Double,
+    val currentYearLabel: String,    // e.g. "2026"
+    val previousYearLabel: String    // e.g. "2025"
+)
+
 val DEFAULT_VARIABLE_SPEND_CATEGORIES = setOf(
     1712L, // Fuel
     703L,  // Groceries

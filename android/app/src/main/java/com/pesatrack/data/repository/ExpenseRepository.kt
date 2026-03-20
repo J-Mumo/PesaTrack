@@ -9,6 +9,7 @@ import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.data.local.database.dao.TopSpender
+import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
@@ -289,6 +290,67 @@ class ExpenseRepository @Inject constructor(
         // Reuse the DAO query — but we need a suspend version.
         // For simplicity, sum from category totals:
         return getCategoryTotalsForMonth(year, month).sumOf { it.total }
+    }
+
+    // ==================== Yearly Analytics ====================
+
+    /**
+     * Get total spending for an entire year.
+     */
+    suspend fun getAnnualTotal(year: Int): Double {
+        val (start, end) = getYearRange(year)
+        return expenseDao.getAnnualTotal(start, end)
+    }
+
+    /**
+     * Get monthly totals for a specific year (12 data points for YoY overlay).
+     */
+    suspend fun getMonthlyTotalsForYear(year: Int): List<YearMonthTotal> {
+        val (start, end) = getYearRange(year)
+        return expenseDao.getMonthlyTotalsForYear(start, end)
+    }
+
+    /**
+     * Get category totals for a full year.
+     */
+    suspend fun getCategoryTotalsForYear(year: Int): List<CategoryTotal> {
+        val (start, end) = getYearRange(year)
+        return expenseDao.getCategoryTotalsForYear(start, end)
+    }
+
+    /**
+     * Get top spenders for a full year.
+     */
+    suspend fun getTopSpendersForYear(year: Int, limit: Int = 10): List<TopSpender> {
+        val (start, end) = getYearRange(year)
+        return expenseDao.getTopSpendersForYear(start, end, limit)
+    }
+
+    /**
+     * Get payment type breakdown for a full year.
+     */
+    suspend fun getPaymentTypeBreakdownForYear(year: Int): List<PaymentTypeTotal> {
+        val (start, end) = getYearRange(year)
+        return expenseDao.getPaymentTypeBreakdownForYear(start, end)
+    }
+
+    /**
+     * Get start and end timestamps for a specific year.
+     * Returns Pair(Jan 1 00:00:00, Jan 1 next year 00:00:00).
+     */
+    fun getYearRange(year: Int): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, Calendar.JANUARY)
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val start = calendar.timeInMillis
+        calendar.add(Calendar.YEAR, 1)
+        val end = calendar.timeInMillis
+        return Pair(start, end)
     }
 
     /**

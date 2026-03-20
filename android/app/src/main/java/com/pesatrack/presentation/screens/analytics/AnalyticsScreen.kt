@@ -38,9 +38,11 @@ import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
+import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.presentation.theme.getCategoryColor
 import com.pesatrack.utils.formatAsCurrency
 import kotlin.math.absoluteValue
@@ -53,6 +55,51 @@ fun AnalyticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Tab Row: Monthly / Yearly
+        TabRow(
+            selectedTabIndex = if (uiState.selectedTab == AnalyticsTab.MONTHLY) 0 else 1,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Tab(
+                selected = uiState.selectedTab == AnalyticsTab.MONTHLY,
+                onClick = { viewModel.selectTab(AnalyticsTab.MONTHLY) },
+                text = { Text("Monthly") }
+            )
+            Tab(
+                selected = uiState.selectedTab == AnalyticsTab.YEARLY,
+                onClick = { viewModel.selectTab(AnalyticsTab.YEARLY) },
+                text = { Text("Yearly") }
+            )
+        }
+
+        // Tab content
+        when (uiState.selectedTab) {
+            AnalyticsTab.MONTHLY -> MonthlyTabContent(
+                uiState = uiState,
+                onPreviousMonth = { viewModel.previousMonth() },
+                onNextMonth = { viewModel.nextMonth() },
+                canGoNext = viewModel.canGoNext()
+            )
+            AnalyticsTab.YEARLY -> YearlyTabContent(
+                uiState = uiState,
+                onPreviousYear = { viewModel.previousYear() },
+                onNextYear = { viewModel.nextYear() },
+                canGoNextYear = viewModel.canGoNextYear()
+            )
+        }
+    }
+}
+
+// ==================== Monthly Tab (existing content) ====================
+
+@Composable
+fun MonthlyTabContent(
+    uiState: AnalyticsUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    canGoNext: Boolean
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -63,9 +110,9 @@ fun AnalyticsScreen(
         item {
             MonthSelectorRow(
                 monthLabel = uiState.selectedMonthLabel,
-                canGoNext = viewModel.canGoNext(),
-                onPrevious = { viewModel.previousMonth() },
-                onNext = { viewModel.nextMonth() }
+                canGoNext = canGoNext,
+                onPrevious = onPreviousMonth,
+                onNext = onNextMonth
             )
         }
 
@@ -176,6 +223,342 @@ fun AnalyticsScreen(
         // Bottom spacer for navigation bar
         item {
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+// ==================== Yearly Tab (new content) ====================
+
+@Composable
+fun YearlyTabContent(
+    uiState: AnalyticsUiState,
+    onPreviousYear: () -> Unit,
+    onNextYear: () -> Unit,
+    canGoNextYear: Boolean
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Year Selector
+        item {
+            YearSelectorRow(
+                yearLabel = uiState.selectedYearForYearly.toString(),
+                canGoNext = canGoNextYear,
+                onPrevious = onPreviousYear,
+                onNext = onNextYear
+            )
+        }
+
+        // Loading indicator
+        if (uiState.yearlyIsLoading) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+
+        // Year-over-Year Comparison Card
+        if (uiState.yearComparison != null) {
+            item {
+                YearComparisonCard(comparison = uiState.yearComparison!!)
+            }
+        }
+
+        // Yearly Summary Stats Row
+        if (!uiState.yearlyIsLoading) {
+            item {
+                YearlySummaryStatsRow(
+                    avgMonthly = uiState.yearlyAvgMonthlySpend,
+                    transactionCount = uiState.yearlyTransactionCount
+                )
+            }
+        }
+
+        // 12-Month Overlay Chart (this year vs last year)
+        if (uiState.currentYearMonthlyTotals.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Monthly Comparison")
+            }
+            item {
+                YearlyOverlayChart(
+                    currentYearData = uiState.currentYearMonthlyTotals,
+                    previousYearData = uiState.previousYearMonthlyTotals,
+                    currentYearLabel = uiState.selectedYearForYearly.toString(),
+                    previousYearLabel = (uiState.selectedYearForYearly - 1).toString()
+                )
+            }
+        }
+
+        // Category Breakdown for Year
+        if (uiState.yearlyCategoryBreakdown.isNotEmpty()) {
+            item {
+                SectionHeader(title = "By Category")
+            }
+            item {
+                CategoryBreakdownChart(
+                    data = uiState.yearlyCategoryBreakdown,
+                    totalForMonth = uiState.yearlyTotalForYear
+                )
+            }
+        }
+
+        // Top Spenders for Year
+        if (uiState.yearlyTopSpenders.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Top Recipients")
+            }
+            items(uiState.yearlyTopSpenders) { spender ->
+                TopSpenderRow(
+                    spender = spender,
+                    maxTotal = uiState.yearlyTopSpenders.firstOrNull()?.total ?: 1.0
+                )
+            }
+        }
+
+        // Payment Type Breakdown for Year
+        if (uiState.yearlyPaymentTypeBreakdown.isNotEmpty()) {
+            item {
+                SectionHeader(title = "By Payment Type")
+            }
+            item {
+                PaymentTypeBreakdownChart(
+                    data = uiState.yearlyPaymentTypeBreakdown,
+                    totalForMonth = uiState.yearlyTotalForYear
+                )
+            }
+        }
+
+        // Bottom spacer for navigation bar
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+// ==================== Year Selector ====================
+
+@Composable
+fun YearSelectorRow(
+    yearLabel: String,
+    canGoNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onPrevious) {
+            Icon(
+                imageVector = Icons.Filled.ChevronLeft,
+                contentDescription = "Previous year"
+            )
+        }
+        Text(
+            text = yearLabel,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+        IconButton(
+            onClick = onNext,
+            enabled = canGoNext
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = "Next year",
+                tint = if (canGoNext)
+                    MaterialTheme.colorScheme.onSurface
+                else
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+        }
+    }
+}
+
+// ==================== Year-over-Year Comparison Card ====================
+
+@Composable
+fun YearComparisonCard(comparison: YearComparison) {
+    val isIncrease = comparison.percentageChange > 0
+    val changeColor = if (isIncrease) {
+        MaterialTheme.colorScheme.error // red = spending more
+    } else {
+        Color(0xFF2E7D32) // green = spending less
+    }
+    val arrow = if (isIncrease) "↑" else "↓"
+    val changeText = if (comparison.previousYearTotal == 0.0 && comparison.currentYearTotal == 0.0) {
+        "No data"
+    } else if (comparison.previousYearTotal == 0.0) {
+        "New spending"
+    } else {
+        "$arrow ${String.format("%.1f", comparison.percentageChange.absoluteValue)}%"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Text(
+                text = "Annual Total",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = comparison.currentYearTotal.formatAsCurrency(),
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = changeText,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = changeColor
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "vs ${comparison.previousYearLabel}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+            if (comparison.previousYearTotal > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Previous: ${comparison.previousYearTotal.formatAsCurrency()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                )
+            }
+        }
+    }
+}
+
+// ==================== Yearly Summary Stats ====================
+
+@Composable
+fun YearlySummaryStatsRow(
+    avgMonthly: Double,
+    transactionCount: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatCard(
+            modifier = Modifier.weight(1f),
+            label = "Avg/Month",
+            value = avgMonthly.formatAsCurrency()
+        )
+        StatCard(
+            modifier = Modifier.weight(1f),
+            label = "Transactions",
+            value = transactionCount.toString()
+        )
+    }
+}
+
+// ==================== 12-Month Overlay Chart ====================
+
+@Composable
+fun YearlyOverlayChart(
+    currentYearData: List<YearMonthTotal>,
+    previousYearData: List<YearMonthTotal>,
+    currentYearLabel: String,
+    previousYearLabel: String
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+    val monthAbbreviations = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
+    val monthLabels = remember {
+        (0..11).associateWith { monthAbbreviations[it] }
+    }
+
+    val hasPreviousData = previousYearData.any { it.total > 0 }
+
+    LaunchedEffect(currentYearData, previousYearData) {
+        modelProducer.runTransaction {
+            lineSeries {
+                series(currentYearData.map { it.total })
+                if (hasPreviousData) {
+                    series(previousYearData.map { it.total })
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(260.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Legend
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = currentYearLabel,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                if (hasPreviousData) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.outline)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = previousYearLabel,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(
+                        valueFormatter = CartesianValueFormatter { _, value, _ ->
+                            monthLabels[value.toInt()] ?: ""
+                        }
+                    ),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }

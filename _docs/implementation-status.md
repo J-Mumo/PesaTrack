@@ -27,6 +27,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
 | **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~60% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
+| **Year-over-Year Analytics** | ✅ Complete | 100% |
 
 ---
 
@@ -210,10 +211,10 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts) |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month navigation, MoM computation, **CV-based volatile category detection** |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month selection, **categoryTrends** |
-| AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields |
+| AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 ---
 
@@ -524,6 +525,7 @@ backend/
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
 | **M5** | Settings & Configuration | 🟡 Partial | Bank toggles done (M2); AI config removed (M3 → rules engine); About, data mgmt, onboarding pending |
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
+| — | Year-over-Year analytics | ✅ Complete | Tab-based Monthly/Yearly view: annual total card, YoY % change, 12-month overlay chart (this year vs last year), yearly category breakdown, top recipients by year, payment type breakdown by year |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
 | — | Category-based budgets | ⏳ Pending | Set spending limits |
 | — | Forecasting | ⏳ Pending | "you'll likely run out by the 23rd" |
@@ -549,6 +551,6 @@ backend/
 
 ### Lower Priority
 - [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
-- [x] Expense charts/analytics (Vico library — monthly trend, variable-spend category trends with CV detection, daily spending, category breakdown, top spenders, payment types, MoM comparison)
+- [x] Expense charts/analytics (Vico library — monthly trend, variable-spend category trends with CV detection, daily spending, category breakdown, top spenders, payment types, MoM comparison, **YoY yearly analytics with tab-based view**)
 - [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway
