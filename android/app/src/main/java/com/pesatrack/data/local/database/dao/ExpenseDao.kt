@@ -364,6 +364,28 @@ interface ExpenseDao {
         startOfMonth: Long,
         endOfMonth: Long
     ): List<PaymentTypeTotal>
+
+    /**
+     * Get monthly totals grouped by category since a given timestamp.
+     * Used for variable-spend category trend detection (CV analysis).
+     * Excludes pass-through and uncategorized expenses.
+     */
+    @Query("""
+        SELECT
+            e.categoryId,
+            COALESCE(c.name, 'Uncategorized') AS categoryName,
+            c.color AS categoryColor,
+            strftime('%Y-%m', e.timestamp / 1000, 'unixepoch', 'localtime') AS monthKey,
+            COALESCE(SUM(e.amount), 0.0) AS total
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :sinceTimestamp
+          AND e.categoryId IS NOT NULL
+        GROUP BY e.categoryId, monthKey
+        ORDER BY e.categoryId, monthKey ASC
+    """)
+    suspend fun getCategoryMonthlyTotals(sinceTimestamp: Long): List<CategoryMonthlyTotal>
 }
 
 /**
@@ -432,4 +454,16 @@ data class PaymentTypeTotal(
     val paymentType: String,
     val total: Double,
     val transactionCount: Int
+)
+
+/**
+ * Category monthly total (for variable-spend trend detection).
+ * One row per category per month.
+ */
+data class CategoryMonthlyTotal(
+    val categoryId: Long,
+    val categoryName: String,
+    val categoryColor: String?,
+    val monthKey: String,   // "2026-03"
+    val total: Double
 )

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -37,6 +38,7 @@ import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
+import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.presentation.theme.getCategoryColor
@@ -102,6 +104,23 @@ fun AnalyticsScreen(
             }
             item {
                 MonthlyTrendChart(data = uiState.monthlyTrend)
+            }
+        }
+
+        // Variable-Spend Category Trends
+        if (uiState.categoryTrends.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Spending Trends")
+            }
+            item {
+                Text(
+                    text = "Categories with variable monthly spending",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            items(uiState.categoryTrends) { trend ->
+                CategoryTrendCard(trend = trend)
             }
         }
 
@@ -612,6 +631,141 @@ fun PaymentTypeBreakdownChart(
                     )
                 }
             }
+        }
+    }
+}
+
+// ==================== Category Trend Card (Variable-Spend) ====================
+
+@Composable
+fun CategoryTrendCard(trend: CategoryTrend) {
+    val categoryColor = trend.categoryColor?.let {
+        try { getCategoryColor(it) } catch (_: Exception) { MaterialTheme.colorScheme.primary }
+    } ?: MaterialTheme.colorScheme.primary
+
+    val spendLevel = trend.spendLevel
+    val statusColor = when (spendLevel) {
+        CategoryTrend.SpendLevel.NORMAL -> Color(0xFF2E7D32)   // green
+        CategoryTrend.SpendLevel.ELEVATED -> Color(0xFFF57C00) // amber
+        CategoryTrend.SpendLevel.HIGH -> Color(0xFFD32F2F)     // red
+    }
+    val statusIcon = when (spendLevel) {
+        CategoryTrend.SpendLevel.NORMAL -> "✅"
+        CategoryTrend.SpendLevel.ELEVATED -> "⚠️"
+        CategoryTrend.SpendLevel.HIGH -> "🔴"
+    }
+    val statusLabel = when (spendLevel) {
+        CategoryTrend.SpendLevel.NORMAL -> "Normal"
+        CategoryTrend.SpendLevel.ELEVATED -> "+${String.format("%.0f", trend.overspendPercentage.absoluteValue)}% above avg"
+        CategoryTrend.SpendLevel.HIGH -> "+${String.format("%.0f", trend.overspendPercentage.absoluteValue)}% above avg"
+    }
+
+    // Chart model
+    val modelProducer = remember { CartesianChartModelProducer() }
+    val monthLabels = remember(trend.monthlyData) {
+        trend.monthlyData.mapIndexed { index, mt ->
+            index to mt.monthKey.takeLast(2).let { m ->
+                when (m) {
+                    "01" -> "Jan"; "02" -> "Feb"; "03" -> "Mar"
+                    "04" -> "Apr"; "05" -> "May"; "06" -> "Jun"
+                    "07" -> "Jul"; "08" -> "Aug"; "09" -> "Sep"
+                    "10" -> "Oct"; "11" -> "Nov"; "12" -> "Dec"
+                    else -> m
+                }
+            }
+        }.toMap()
+    }
+
+    LaunchedEffect(trend.monthlyData) {
+        modelProducer.runTransaction {
+            lineSeries {
+                series(trend.monthlyData.map { it.total })
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header row: colored dot + name + current total
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(categoryColor)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = trend.categoryName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = trend.currentMonthTotal.formatAsCurrency(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Status badge
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "$statusIcon $statusLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = statusColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Line chart
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+            ) {
+                CartesianChartHost(
+                    chart = rememberCartesianChart(
+                        rememberLineCartesianLayer(),
+                        startAxis = VerticalAxis.rememberStart(),
+                        bottomAxis = HorizontalAxis.rememberBottom(
+                            valueFormatter = CartesianValueFormatter { _, value, _ ->
+                                monthLabels[value.toInt()] ?: ""
+                            }
+                        ),
+                    ),
+                    modelProducer = modelProducer,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Average footer
+            Text(
+                text = "Avg: ${trend.mean.formatAsCurrency()}/mo  •  CV: ${String.format("%.0f", trend.coefficientOfVariation)}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
         }
     }
 }

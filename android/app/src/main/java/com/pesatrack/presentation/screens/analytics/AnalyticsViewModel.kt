@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.domain.models.CategoryTrend
+import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
 import com.pesatrack.domain.models.MonthComparison
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +17,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.sqrt
 
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
@@ -95,11 +98,12 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Load all analytics data (trend + month-specific)
+     * Load all analytics data (trend + month-specific + category trends)
      */
     private fun loadAllData() {
         loadMonthlyTrend()
         loadMonthData()
+        loadCategoryTrends()
     }
 
     /**
@@ -208,6 +212,120 @@ class AnalyticsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Load per-category monthly trends, compute CV, and filter to volatile categories.
+     * Uses data-driven CV detection with a fallback to DEFAULT_VARIABLE_SPEND_CATEGORIES.
+     */
+    private fun loadCategoryTrends() {
+        viewModelScope.launch {
+            try {
+                val monthsBack = 6
+                val rawData = expenseRepository.getCategoryMonthlyTrend(monthsBack)
+
+                // Group by categoryId
+                val grouped = rawData.groupBy { it.categoryId }
+
+                // Build month keys for all N months (for gap-filling)
+                val allMonthKeys = buildMonthKeys(monthsBack)
+
+                val trends = grouped.mapNotNull { (categoryId, entries) ->
+                    val name = entries.first().categoryName
+                    val color = entries.first().categoryColor
+
+                    // Build a map of monthKey -> total for this category
+                    val monthMap = entries.associate { it.monthKey to it.total }
+
+                    // Fill missing months with 0
+                    val filledData = allMonthKeys.map { key ->
+                        MonthlyTotal(monthKey = key, total = monthMap[key] ?: 0.0)
+                    }
+
+                    // Count months with actual data (non-zero)
+                    val activeMonths = filledData.count { it.total > 0 }
+
+                    // Need at least 3 months with data for meaningful analysis
+                    if (activeMonths < 3) {
+                        // Still include if in default list and has *some* data
+                        if (categoryId in DEFAULT_VARIABLE_SPEND_CATEGORIES && activeMonths >= 1) {
+                            buildCategoryTrend(categoryId, name, color, filledData, forceInclude = true)
+                        } else {
+                            null
+                        }
+                    } else {
+                        buildCategoryTrend(categoryId, name, color, filledData, forceInclude = false)
+                    }
+                }
+
+                // Sort by CV descending, take top 8
+                val topTrends = trends
+                    .sortedByDescending { it.coefficientOfVariation }
+                    .take(8)
+
+                _uiState.update { it.copy(categoryTrends = topTrends) }
+            } catch (e: Exception) {
+                // Don't fail the whole screen for this optional section
+                _uiState.update { it.copy(categoryTrends = emptyList()) }
+            }
+        }
+    }
+
+    /**
+     * Build a CategoryTrend from filled monthly data.
+     * Returns null if the category doesn't qualify (CV too low and not in default list).
+     */
+    private fun buildCategoryTrend(
+        categoryId: Long,
+        name: String,
+        color: String?,
+        filledData: List<MonthlyTotal>,
+        forceInclude: Boolean
+    ): CategoryTrend? {
+        val totals = filledData.map { it.total }
+        val mean = totals.average()
+        val variance = totals.map { (it - mean) * (it - mean) }.average()
+        val stdDev = sqrt(variance)
+        val cv = if (mean > 0) (stdDev / mean) * 100.0 else 0.0
+
+        val currentMonthTotal = filledData.lastOrNull()?.total ?: 0.0
+        val isOverspending = mean > 0 && currentMonthTotal > mean + stdDev
+        val overspendPct = if (mean > 0) ((currentMonthTotal - mean) / mean) * 100.0 else 0.0
+
+        // Include if CV > 30% OR in default list with data OR forced
+        val cvThreshold = 30.0
+        val isInDefaultList = categoryId in DEFAULT_VARIABLE_SPEND_CATEGORIES
+        val qualifies = forceInclude || cv > cvThreshold || (isInDefaultList && mean > 0)
+
+        if (!qualifies) return null
+
+        return CategoryTrend(
+            categoryId = categoryId,
+            categoryName = name,
+            categoryColor = color,
+            monthlyData = filledData,
+            mean = mean,
+            standardDeviation = stdDev,
+            coefficientOfVariation = cv,
+            currentMonthTotal = currentMonthTotal,
+            isOverspending = isOverspending,
+            overspendPercentage = overspendPct
+        )
+    }
+
+    /**
+     * Build a list of month keys (e.g. "2025-10", "2025-11", ...) for the last N months.
+     */
+    private fun buildMonthKeys(count: Int): List<String> {
+        val keys = mutableListOf<String>()
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.MONTH, -(count - 1))
+        val fmt = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+        repeat(count) {
+            keys.add(fmt.format(cal.time))
+            cal.add(Calendar.MONTH, 1)
+        }
+        return keys
     }
 
     /**

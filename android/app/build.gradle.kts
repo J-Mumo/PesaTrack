@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -24,17 +22,6 @@ android {
             useSupportLibrary = true
         }
 
-        // Gemini API key from local.properties (not committed to VCS)
-        val properties = Properties()
-        val localPropsFile = rootProject.file("local.properties")
-        if (localPropsFile.exists()) {
-            properties.load(localPropsFile.inputStream())
-        }
-        buildConfigField(
-            "String",
-            "GEMINI_API_KEY",
-            "\"${properties.getProperty("GEMINI_API_KEY", "")}\""
-        )
     }
 
     buildTypes {
@@ -104,9 +91,6 @@ dependencies {
 
     // DataStore for preferences
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Google Generative AI SDK (Gemini) for AI-powered categorization
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Apache POI for Excel (.xlsx) file parsing
     implementation("org.apache.poi:poi-ooxml:5.2.5") {

@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.pesatrack.utils.parsers.SmsParserRegistry
@@ -25,7 +24,6 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * Stores:
  * - User phone number (payment auto-fill)
  * - Enabled bank SMS parsers (M-PESA always on, banks toggleable)
- * - AI categorization settings (enabled toggle, Gemini API key)
  */
 @Singleton
 class AppPreferences @Inject constructor(
@@ -33,8 +31,6 @@ class AppPreferences @Inject constructor(
 ) {
 
     companion object {
-        private val KEY_PHONE_NUMBER = stringPreferencesKey("user_phone_number")
-
         /**
          * Set of enabled bank parser display names (e.g., "NCBA Bank").
          * M-PESA is always enabled and not stored here.
@@ -46,45 +42,6 @@ class AppPreferences @Inject constructor(
          * When false, only M-PESA SMS are processed regardless of individual bank toggles.
          */
         private val KEY_BANK_TRACKING_ENABLED = booleanPreferencesKey("bank_tracking_enabled")
-
-        /**
-         * Whether AI-powered categorization is enabled.
-         * When true, the "AI Suggest" button appears in Batch Categorize.
-         */
-        private val KEY_AI_CATEGORIZATION_ENABLED = booleanPreferencesKey("ai_categorization_enabled")
-
-        /**
-         * User-provided Gemini API key (entered at runtime via Settings).
-         * Takes priority over BuildConfig.GEMINI_API_KEY.
-         */
-        private val KEY_GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
-    }
-
-    // ==================== Phone Number ====================
-
-    /**
-     * Get the stored phone number as a Flow
-     */
-    val phoneNumber: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_PHONE_NUMBER]
-    }
-
-    /**
-     * Save the user's phone number
-     */
-    suspend fun savePhoneNumber(phoneNumber: String) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_PHONE_NUMBER] = phoneNumber
-        }
-    }
-
-    /**
-     * Clear the stored phone number
-     */
-    suspend fun clearPhoneNumber() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(KEY_PHONE_NUMBER)
-        }
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -165,59 +122,5 @@ class AppPreferences @Inject constructor(
         return SmsParserRegistry.getAllParserNames()
             .filter { it != "M-PESA" }
             .toSet()
-    }
-
-    // ==================== AI Categorization ====================
-
-    /**
-     * Whether AI-powered categorization is enabled.
-     * Default: true — the AI Suggest button is shown in Batch Categorize.
-     */
-    val aiCategorizationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[KEY_AI_CATEGORIZATION_ENABLED] ?: true
-    }
-
-    /**
-     * Toggle AI categorization on/off.
-     */
-    suspend fun setAiCategorizationEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_AI_CATEGORIZATION_ENABLED] = enabled
-        }
-    }
-
-    /**
-     * User-provided Gemini API key as a Flow.
-     * Null/empty means use BuildConfig.GEMINI_API_KEY as fallback.
-     */
-    val geminiApiKey: Flow<String?> = context.dataStore.data.map { preferences ->
-        preferences[KEY_GEMINI_API_KEY]
-    }
-
-    /**
-     * Save a user-provided Gemini API key.
-     */
-    suspend fun saveGeminiApiKey(key: String) {
-        context.dataStore.edit { preferences ->
-            preferences[KEY_GEMINI_API_KEY] = key
-        }
-    }
-
-    /**
-     * Clear the user-provided Gemini API key (reverts to BuildConfig key).
-     */
-    suspend fun clearGeminiApiKey() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(KEY_GEMINI_API_KEY)
-        }
-    }
-
-    /**
-     * Get the Gemini API key snapshot (not Flow).
-     * Returns user-provided key if set, otherwise null.
-     */
-    suspend fun getGeminiApiKeySnapshot(): String? {
-        val prefs = context.dataStore.data.first()
-        return prefs[KEY_GEMINI_API_KEY]
     }
 }

@@ -3,18 +3,16 @@ package com.pesatrack.presentation.screens.batch_categorize
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.RecipientGroup
-import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Category
-import com.pesatrack.services.AiCategorizationService
+import com.pesatrack.services.CategorizationService
 import com.pesatrack.services.RecipientInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,7 +23,7 @@ import javax.inject.Inject
  * Supports three modes per recipient group:
  * - Quick mode: tap recipient → pick category → apply to ALL transactions
  * - Review mode: expand recipient → see individual transactions → override per-transaction
- * - AI mode: request Gemini AI suggestions → show confidence chips → confirm/override
+ * - Auto mode: request rules engine suggestions → show confidence chips → confirm/override
  *
  * Saves recipient→category mappings for future auto-categorization.
  * Multi-category mappings are supported: one recipient can map to multiple categories.
@@ -35,8 +33,7 @@ class BatchCategorizeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val recipientMappingRepository: RecipientMappingRepository,
-    private val aiCategorizationService: AiCategorizationService,
-    private val appPreferences: AppPreferences
+    private val categorizationService: CategorizationService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BatchCategorizeUiState())
@@ -44,7 +41,6 @@ class BatchCategorizeViewModel @Inject constructor(
 
     init {
         loadData()
-        loadAiPreference()
     }
 
     private fun loadData() {
@@ -72,17 +68,6 @@ class BatchCategorizeViewModel @Inject constructor(
         viewModelScope.launch {
             categoryRepository.getCategoryGroups().collect { groups ->
                 _uiState.update { it.copy(categoryGroups = groups) }
-            }
-        }
-    }
-
-    /**
-     * Load AI categorization preference from DataStore.
-     */
-    private fun loadAiPreference() {
-        viewModelScope.launch {
-            appPreferences.aiCategorizationEnabled.collect { enabled ->
-                _uiState.update { it.copy(aiEnabled = enabled) }
             }
         }
     }
@@ -159,9 +144,9 @@ class BatchCategorizeViewModel @Inject constructor(
                     )
                 }
 
-                // 3. Refresh the list and remove applied AI suggestion
+                // 3. Refresh the list and remove applied suggestion
                 val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
-                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                val updatedSuggestions = _uiState.value.autoSuggestions.toMutableMap()
                 updatedSuggestions.remove(recipientGroup.recipientKey)
 
                 _uiState.update {
@@ -171,7 +156,7 @@ class BatchCategorizeViewModel @Inject constructor(
                         showCategoryPicker = false,
                         isSaving = false,
                         categorizedCount = it.categorizedCount + 1,
-                        aiSuggestions = updatedSuggestions
+                        autoSuggestions = updatedSuggestions
                     )
                 }
             } catch (e: Exception) {
@@ -312,21 +297,21 @@ class BatchCategorizeViewModel @Inject constructor(
         }
     }
 
-    // ==================== AI Categorization ====================
+    // ==================== Auto-Categorization (Rules Engine) ====================
 
     /**
-     * Request AI category suggestions for all uncategorized recipient groups.
-     * Converts RecipientGroup objects to RecipientInfo and calls the AI service.
+     * Request category suggestions from the on-device rules engine
+     * for all uncategorized recipient groups.
      */
-    fun requestAiSuggestions() {
+    fun requestAutoSuggestions() {
         val groups = _uiState.value.recipientGroups
         if (groups.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isAiLoading = true, aiError = null) }
+            _uiState.update { it.copy(isAutoSuggestLoading = true, autoSuggestError = null) }
 
             try {
-                // Convert RecipientGroup to RecipientInfo for the AI service
+                // Convert RecipientGroup to RecipientInfo for the categorization service
                 val recipientInfoList = groups.map { group ->
                     RecipientInfo(
                         recipientKey = group.recipientKey,
@@ -337,20 +322,20 @@ class BatchCategorizeViewModel @Inject constructor(
                     )
                 }
 
-                val result = aiCategorizationService.suggestCategories(recipientInfoList)
+                val result = categorizationService.suggestCategories(recipientInfoList)
 
                 _uiState.update {
                     it.copy(
-                        aiSuggestions = result.suggestions,
-                        isAiLoading = false,
-                        aiError = result.error
+                        autoSuggestions = result.suggestions,
+                        isAutoSuggestLoading = false,
+                        autoSuggestError = result.error
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
-                        isAiLoading = false,
-                        aiError = e.message ?: "AI categorization failed"
+                        isAutoSuggestLoading = false,
+                        autoSuggestError = e.message ?: "Auto-categorization failed"
                     )
                 }
             }
@@ -358,11 +343,11 @@ class BatchCategorizeViewModel @Inject constructor(
     }
 
     /**
-     * Apply an AI suggestion for a specific recipient group.
+     * Apply an auto-suggestion for a specific recipient group.
      * Finds the matching RecipientGroup and category, then applies it.
      */
-    fun applyAiSuggestion(recipientKey: String) {
-        val suggestion = _uiState.value.aiSuggestions[recipientKey] ?: return
+    fun applyAutoSuggestion(recipientKey: String) {
+        val suggestion = _uiState.value.autoSuggestions[recipientKey] ?: return
         val group = _uiState.value.recipientGroups.find { it.recipientKey == recipientKey } ?: return
 
         viewModelScope.launch {
@@ -402,13 +387,13 @@ class BatchCategorizeViewModel @Inject constructor(
 
                 // 3. Refresh and remove suggestion
                 val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
-                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                val updatedSuggestions = _uiState.value.autoSuggestions.toMutableMap()
                 updatedSuggestions.remove(recipientKey)
 
                 _uiState.update {
                     it.copy(
                         recipientGroups = remainingGroups,
-                        aiSuggestions = updatedSuggestions,
+                        autoSuggestions = updatedSuggestions,
                         isSaving = false,
                         categorizedCount = it.categorizedCount + 1
                     )
@@ -417,7 +402,7 @@ class BatchCategorizeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        error = e.message ?: "Failed to apply AI suggestion"
+                        error = e.message ?: "Failed to apply suggestion"
                     )
                 }
             }
@@ -425,11 +410,11 @@ class BatchCategorizeViewModel @Inject constructor(
     }
 
     /**
-     * Apply ALL AI suggestions at once.
+     * Apply ALL auto-suggestions at once.
      * Iterates through each suggestion and applies them sequentially.
      */
-    fun applyAllAiSuggestions() {
-        val suggestions = _uiState.value.aiSuggestions
+    fun applyAllAutoSuggestions() {
+        val suggestions = _uiState.value.autoSuggestions
         if (suggestions.isEmpty()) return
 
         viewModelScope.launch {
@@ -479,7 +464,7 @@ class BatchCategorizeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         recipientGroups = remainingGroups,
-                        aiSuggestions = emptyMap(),
+                        autoSuggestions = emptyMap(),
                         isSaving = false,
                         categorizedCount = it.categorizedCount + appliedCount
                     )
@@ -488,7 +473,7 @@ class BatchCategorizeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        error = e.message ?: "Failed to apply AI suggestions"
+                        error = e.message ?: "Failed to apply suggestions"
                     )
                 }
             }
@@ -496,10 +481,10 @@ class BatchCategorizeViewModel @Inject constructor(
     }
 
     /**
-     * Dismiss AI error message
+     * Dismiss auto-suggest error message
      */
-    fun dismissAiError() {
-        _uiState.update { it.copy(aiError = null) }
+    fun dismissAutoSuggestError() {
+        _uiState.update { it.copy(autoSuggestError = null) }
     }
 
     // ==================== Ignore/Exclude ====================
@@ -519,15 +504,15 @@ class BatchCategorizeViewModel @Inject constructor(
                     recipientName = group.recipientName
                 )
 
-                // Refresh and remove any AI suggestion for this group
+                // Refresh and remove any suggestion for this group
                 val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
-                val updatedSuggestions = _uiState.value.aiSuggestions.toMutableMap()
+                val updatedSuggestions = _uiState.value.autoSuggestions.toMutableMap()
                 updatedSuggestions.remove(group.recipientKey)
 
                 _uiState.update {
                     it.copy(
                         recipientGroups = remainingGroups,
-                        aiSuggestions = updatedSuggestions,
+                        autoSuggestions = updatedSuggestions,
                         isSaving = false,
                         // Collapse expanded group if it was the ignored one
                         expandedGroupKey = if (it.expandedGroupKey == group.recipientKey) null else it.expandedGroupKey,

@@ -28,11 +28,6 @@
 -keepattributes *Annotation*
 -keep class com.google.gson.** { *; }
 
-# Google Generative AI SDK (Gemini)
--keep class com.google.ai.client.generativeai.** { *; }
--keep class com.google.ai.client.generativeai.type.** { *; }
--dontwarn com.google.ai.client.generativeai.**
-
 # Apache POI (Excel parsing)
 -keep class org.apache.poi.** { *; }
 -keep class org.apache.xmlbeans.** { *; }

@@ -5,6 +5,7 @@ import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
+import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.MonthComparison
 
 /**
@@ -24,6 +25,9 @@ data class AnalyticsUiState(
     val dailySpending: List<DailyTotal> = emptyList(),
     val topSpenders: List<TopSpender> = emptyList(),
     val paymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
+
+    // Variable-spend category trends (CV-detected)
+    val categoryTrends: List<CategoryTrend> = emptyList(),
 
     // Month-over-month comparison
     val monthComparison: MonthComparison? = null,

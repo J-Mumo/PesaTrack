@@ -1,5 +1,6 @@
 package com.pesatrack.data.repository
 
+import com.pesatrack.data.local.database.dao.CategoryMonthlyTotal
 import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.DateRangeResult
@@ -263,6 +264,21 @@ class ExpenseRepository @Inject constructor(
     suspend fun getPaymentTypeBreakdownForMonth(year: Int, month: Int): List<PaymentTypeTotal> {
         val (start, end) = getMonthRange(year, month)
         return expenseDao.getPaymentTypeBreakdownForMonth(start, end)
+    }
+
+    /**
+     * Get monthly totals grouped by category for the last N months.
+     * Used for variable-spend category trend detection (CV analysis).
+     */
+    suspend fun getCategoryMonthlyTrend(monthsBack: Int = 6): List<CategoryMonthlyTotal> {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.MONTH, -(monthsBack - 1))
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return expenseDao.getCategoryMonthlyTotals(calendar.timeInMillis)
     }
 
     /**

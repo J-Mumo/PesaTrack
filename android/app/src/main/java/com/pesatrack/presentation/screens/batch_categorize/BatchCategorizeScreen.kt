@@ -25,7 +25,7 @@ import com.pesatrack.data.local.database.dao.RecipientGroup
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.presentation.components.GroupedCategoryPicker
-import com.pesatrack.services.AiCategorySuggestion
+import com.pesatrack.services.CategorySuggestion
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
 import java.util.*
@@ -37,7 +37,7 @@ import java.util.*
  * Three modes per group:
  * - Quick mode: Tap "Categorize All" → apply category to entire group
  * - Review mode: Tap "Review" → expand to see individual transactions, each overridable
- * - AI mode: Tap "AI Suggest" → Gemini suggests categories with confidence levels
+ * - Auto mode: Tap "Auto-Suggest" → rules engine suggests categories with confidence levels
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,25 +99,23 @@ fun BatchCategorizeScreen(
 
                 item { Spacer(modifier = Modifier.height(8.dp)) }
 
-                // AI Suggest button (when AI is enabled)
-                if (uiState.aiEnabled) {
-                    item {
-                        AiSuggestSection(
-                            isAiLoading = uiState.isAiLoading,
-                            aiError = uiState.aiError,
-                            hasSuggestions = uiState.aiSuggestions.isNotEmpty(),
-                            onRequestSuggestions = { viewModel.requestAiSuggestions() },
-                            onApplyAll = { viewModel.applyAllAiSuggestions() },
-                            onDismissError = { viewModel.dismissAiError() }
-                        )
-                    }
+                // Auto-Suggest section
+                item {
+                    AutoSuggestSection(
+                        isLoading = uiState.isAutoSuggestLoading,
+                        error = uiState.autoSuggestError,
+                        hasSuggestions = uiState.autoSuggestions.isNotEmpty(),
+                        onRequestSuggestions = { viewModel.requestAutoSuggestions() },
+                        onApplyAll = { viewModel.applyAllAutoSuggestions() },
+                        onDismissError = { viewModel.dismissAutoSuggestError() }
+                    )
                 }
 
                 // Info text
                 item {
                     Text(
-                        text = if (uiState.aiSuggestions.isNotEmpty()) {
-                            "AI suggestions are shown below. Tap a suggestion to apply it, or use \"Categorize All\" to pick a different category."
+                        text = if (uiState.autoSuggestions.isNotEmpty()) {
+                            "Suggestions are shown below. Tap a suggestion to apply it, or use \"Categorize All\" to pick a different category."
                         } else {
                             "Tap \"Categorize All\" to assign one category to all transactions from a recipient, or \"Review\" to categorize them individually."
                         },
@@ -133,21 +131,21 @@ fun BatchCategorizeScreen(
                     key = { it.recipientKey }
                 ) { group ->
                     val isExpanded = uiState.expandedGroupKey == group.recipientKey
-                    val aiSuggestion = uiState.aiSuggestions[group.recipientKey]
+                    val suggestion = uiState.autoSuggestions[group.recipientKey]
 
                     RecipientGroupCard(
                         group = group,
                         isExpanded = isExpanded,
                         expandedExpenses = if (isExpanded) uiState.expandedGroupExpenses else emptyList(),
                         isLoadingExpanded = isExpanded && uiState.isLoadingExpanded,
-                        aiSuggestion = aiSuggestion,
+                        suggestion = suggestion,
                         onCategorizeAll = { viewModel.selectRecipientGroup(group) },
                         onToggleExpand = { viewModel.toggleExpandGroup(group) },
                         onCategorizeExpense = { expenseId ->
                             viewModel.selectExpenseForCategorize(expenseId)
                         },
-                        onApplyAiSuggestion = {
-                            viewModel.applyAiSuggestion(group.recipientKey)
+                        onApplySuggestion = {
+                            viewModel.applyAutoSuggestion(group.recipientKey)
                         },
                         onIgnoreGroup = { viewModel.ignoreRecipientGroup(group) },
                         onIgnoreExpense = { expenseId -> viewModel.ignoreExpense(expenseId) }
@@ -192,12 +190,12 @@ fun BatchCategorizeScreen(
     }
 }
 
-// ==================== AI Suggest Section ====================
+// ==================== Auto-Suggest Section ====================
 
 @Composable
-private fun AiSuggestSection(
-    isAiLoading: Boolean,
-    aiError: String?,
+private fun AutoSuggestSection(
+    isLoading: Boolean,
+    error: String?,
     hasSuggestions: Boolean,
     onRequestSuggestions: () -> Unit,
     onApplyAll: () -> Unit,
@@ -207,21 +205,21 @@ private fun AiSuggestSection(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // AI action buttons row
+        // Action buttons row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // "AI Suggest" button
+            // "Auto-Suggest" button
             Button(
                 onClick = onRequestSuggestions,
-                enabled = !isAiLoading,
+                enabled = !isLoading,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.tertiary
                 )
             ) {
-                if (isAiLoading) {
+                if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
@@ -236,7 +234,7 @@ private fun AiSuggestSection(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (hasSuggestions) "Re-analyze" else "AI Suggest All")
+                    Text(if (hasSuggestions) "Re-analyze" else "Auto-Suggest All")
                 }
             }
 
@@ -255,21 +253,21 @@ private fun AiSuggestSection(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Apply All AI")
+                    Text("Apply All")
                 }
             }
         }
 
-        // AI loading progress
-        if (isAiLoading) {
+        // Loading progress
+        if (isLoading) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.tertiary
             )
         }
 
-        // AI error message
-        if (aiError != null) {
+        // Error message
+        if (error != null) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -290,7 +288,7 @@ private fun AiSuggestSection(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = aiError,
+                        text = error,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.weight(1f)
@@ -373,11 +371,11 @@ private fun RecipientGroupCard(
     isExpanded: Boolean,
     expandedExpenses: List<Expense>,
     isLoadingExpanded: Boolean,
-    aiSuggestion: AiCategorySuggestion?,
+    suggestion: CategorySuggestion?,
     onCategorizeAll: () -> Unit,
     onToggleExpand: () -> Unit,
     onCategorizeExpense: (Long) -> Unit,
-    onApplyAiSuggestion: () -> Unit,
+    onApplySuggestion: () -> Unit,
     onIgnoreGroup: () -> Unit,
     onIgnoreExpense: (Long) -> Unit
 ) {
@@ -430,11 +428,11 @@ private fun RecipientGroupCard(
                 }
             }
 
-            // AI Suggestion chip (when available)
-            if (aiSuggestion != null) {
-                AiSuggestionChip(
-                    suggestion = aiSuggestion,
-                    onApply = onApplyAiSuggestion,
+            // Suggestion chip (when available)
+            if (suggestion != null) {
+                SuggestionChip(
+                    suggestion = suggestion,
+                    onApply = onApplySuggestion,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
                 )
             }
@@ -547,15 +545,15 @@ private fun RecipientGroupCard(
     }
 }
 
-// ==================== AI Suggestion Chip ====================
+// ==================== Suggestion Chip ====================
 
 /**
- * Displays an AI category suggestion with confidence indicator.
+ * Displays a category suggestion with confidence indicator.
  * Color-coded: green (≥90%), amber (70-89%), red (<70%)
  */
 @Composable
-private fun AiSuggestionChip(
-    suggestion: AiCategorySuggestion,
+private fun SuggestionChip(
+    suggestion: CategorySuggestion,
     onApply: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -590,7 +588,7 @@ private fun AiSuggestionChip(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "AI: ${suggestion.categoryName}",
+                    text = suggestion.categoryName,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
