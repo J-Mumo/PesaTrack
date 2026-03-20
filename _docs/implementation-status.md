@@ -208,10 +208,10 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | Month selector, MoM comparison, trend line, daily columns, category bars, top spenders, payment type breakdown (Vico charts) |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month navigation, MoM computation |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month selection |
-| AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison domain model |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts) |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month navigation, MoM computation, **CV-based volatile category detection** |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month selection, **categoryTrends** |
+| AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 ---
 
@@ -340,7 +340,7 @@ app/src/main/java/com/pesatrack/
 ├── data/
 │   ├── local/
 │   │   ├── database/
-│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v3 with migrations
+│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v7 with migrations
 │   │   │   ├── dao/
 │   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check
 │   │   │   │   └── CategoryDao.kt           ✅ CRUD + search + default seeding
@@ -355,7 +355,7 @@ app/src/main/java/com/pesatrack/
 ├── domain/models/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   ├── Category.kt                          ✅ Domain model
-│   └── AnalyticsModels.kt                   ✅ MonthComparison domain model
+│   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav
 │   ├── navigation/
@@ -383,9 +383,9 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
 │   │   │   └── ManualEntryUiState.kt      ✅ Form state model
 │   │   ├── analytics/
-│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics: Vico charts, month selector, MoM, categories, daily, top spenders, payment types
-│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation
-│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + month selection
+│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics: Vico charts, month selector, MoM, variable-spend category trends, daily, top spenders, payment types
+│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based category trend detection
+│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + month selection + categoryTrends
 │   │   └── settings/
 │   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles
 │   │       ├── SettingsViewModel.kt          ✅ Preferences management
@@ -516,7 +516,7 @@ backend/
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
 | **M5** | Settings & Configuration | 🟡 Partial | Bank toggles + AI config done (M2/M3); About, data mgmt, onboarding pending |
-| — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
+| — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
 | — | Category-based budgets | ⏳ Pending | Set spending limits |
 | — | Forecasting | ⏳ Pending | "you'll likely run out by the 23rd" |
@@ -542,6 +542,6 @@ backend/
 
 ### Lower Priority
 - [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
-- [x] Expense charts/analytics (Vico library — monthly trend, daily spending, category breakdown, top spenders, payment types, MoM comparison)
+- [x] Expense charts/analytics (Vico library — monthly trend, variable-spend category trends with CV detection, daily spending, category breakdown, top spenders, payment types, MoM comparison)
 - [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway

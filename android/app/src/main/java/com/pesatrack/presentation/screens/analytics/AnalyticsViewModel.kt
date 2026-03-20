@@ -245,16 +245,12 @@ class AnalyticsViewModel @Inject constructor(
                     // Count months with actual data (non-zero)
                     val activeMonths = filledData.count { it.total > 0 }
 
-                    // Need at least 3 months with data for meaningful analysis
+                    // Need at least 3 months with data for meaningful analysis.
+                    // One-off or rare expenses (1-2 months) are NOT volatile — they're just sparse.
                     if (activeMonths < 3) {
-                        // Still include if in default list and has *some* data
-                        if (categoryId in DEFAULT_VARIABLE_SPEND_CATEGORIES && activeMonths >= 1) {
-                            buildCategoryTrend(categoryId, name, color, filledData, forceInclude = true)
-                        } else {
-                            null
-                        }
+                        null
                     } else {
-                        buildCategoryTrend(categoryId, name, color, filledData, forceInclude = false)
+                        buildCategoryTrend(categoryId, name, color, filledData)
                     }
                 }
 
@@ -279,23 +275,32 @@ class AnalyticsViewModel @Inject constructor(
         categoryId: Long,
         name: String,
         color: String?,
-        filledData: List<MonthlyTotal>,
-        forceInclude: Boolean
+        filledData: List<MonthlyTotal>
     ): CategoryTrend? {
-        val totals = filledData.map { it.total }
-        val mean = totals.average()
-        val variance = totals.map { (it - mean) * (it - mean) }.average()
-        val stdDev = sqrt(variance)
-        val cv = if (mean > 0) (stdDev / mean) * 100.0 else 0.0
+        val allTotals = filledData.map { it.total }
+        val overallMean = allTotals.average()
+
+        // Minimum mean threshold: if average monthly spend is under KES 100,
+        // the category isn't significant enough to track as a trend.
+        val minimumMeanThreshold = 100.0
+        if (overallMean < minimumMeanThreshold) return null
+
+        // Compute CV only from non-zero months to avoid diluting variance with zeros.
+        // This prevents sparse-but-consistent categories from appearing volatile.
+        val nonZeroTotals = allTotals.filter { it > 0 }
+        val activeMean = nonZeroTotals.average()
+        val activeVariance = nonZeroTotals.map { (it - activeMean) * (it - activeMean) }.average()
+        val activeStdDev = sqrt(activeVariance)
+        val cv = if (activeMean > 0) (activeStdDev / activeMean) * 100.0 else 0.0
 
         val currentMonthTotal = filledData.lastOrNull()?.total ?: 0.0
-        val isOverspending = mean > 0 && currentMonthTotal > mean + stdDev
-        val overspendPct = if (mean > 0) ((currentMonthTotal - mean) / mean) * 100.0 else 0.0
+        val isOverspending = activeMean > 0 && currentMonthTotal > activeMean + activeStdDev
+        val overspendPct = if (activeMean > 0) ((currentMonthTotal - activeMean) / activeMean) * 100.0 else 0.0
 
-        // Include if CV > 30% OR in default list with data OR forced
+        // Include if CV > 30% OR in default list with meaningful data
         val cvThreshold = 30.0
         val isInDefaultList = categoryId in DEFAULT_VARIABLE_SPEND_CATEGORIES
-        val qualifies = forceInclude || cv > cvThreshold || (isInDefaultList && mean > 0)
+        val qualifies = cv > cvThreshold || (isInDefaultList && activeMean > 0)
 
         if (!qualifies) return null
 
@@ -304,8 +309,8 @@ class AnalyticsViewModel @Inject constructor(
             categoryName = name,
             categoryColor = color,
             monthlyData = filledData,
-            mean = mean,
-            standardDeviation = stdDev,
+            mean = activeMean,
+            standardDeviation = activeStdDev,
             coefficientOfVariation = cv,
             currentMonthTotal = currentMonthTotal,
             isOverspending = isOverspending,
