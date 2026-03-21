@@ -52,6 +52,12 @@ interface CategoryDao {
      */
     @Query("SELECT * FROM categories WHERE isGroup = 1 ORDER BY sortOrder ASC")
     fun getGroupCategories(): Flow<List<CategoryEntity>>
+
+    /**
+     * Get only group (parent) categories (suspend, for one-shot queries)
+     */
+    @Query("SELECT * FROM categories WHERE isGroup = 1 ORDER BY sortOrder ASC")
+    suspend fun getGroupCategoriesSync(): List<CategoryEntity>
     
     /**
      * Get child categories for a specific parent

@@ -3,6 +3,8 @@ package com.pesatrack.presentation.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.MonthlyTotal
+import com.pesatrack.data.local.preferences.AppPreferences
+import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
@@ -19,7 +21,9 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val budgetRepository: BudgetRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -32,6 +36,7 @@ class HomeViewModel @Inject constructor(
         loadCategories()
         loadData()
         loadTrendData()
+        loadBudgetData()
     }
     
     private fun initializeData() {
@@ -160,8 +165,85 @@ class HomeViewModel @Inject constructor(
         _uiState.update { it.copy(recentExpenses = updated) }
     }
     
+    /**
+     * Load budget progress (if budgets exist) or budget prompt (if conditions met).
+     */
+    private fun loadBudgetData() {
+        viewModelScope.launch {
+            try {
+                val hasBudgets = budgetRepository.hasActiveBudgets()
+
+                if (hasBudgets) {
+                    // Show budget summary card
+                    val progressList = budgetRepository.getBudgetProgressList()
+                    _uiState.update {
+                        it.copy(
+                            budgetProgressList = progressList
+                                .sortedByDescending { bp -> bp.percentage }
+                                .take(4),
+                            showBudgetPrompt = false
+                        )
+                    }
+                } else {
+                    // Check if we should show the budget prompt
+                    _uiState.update { it.copy(budgetProgressList = emptyList()) }
+                    checkBudgetPrompt()
+                }
+            } catch (_: Exception) {
+                // Non-critical — silently fail
+            }
+        }
+    }
+
+    /**
+     * Check if the data-driven budget prompt should be shown.
+     * Conditions:
+     * 1. No active budgets exist
+     * 2. ≥20 categorized expenses
+     * 3. User hasn't dismissed the prompt
+     */
+    private suspend fun checkBudgetPrompt() {
+        try {
+            val dismissed = appPreferences.isBudgetPromptDismissed()
+            if (dismissed) {
+                _uiState.update { it.copy(showBudgetPrompt = false) }
+                return
+            }
+
+            val categorizedCount = budgetRepository.getCategorizedExpenseCount()
+            if (categorizedCount < 20) {
+                _uiState.update { it.copy(showBudgetPrompt = false) }
+                return
+            }
+
+            // Get top spending category from last month
+            val topGroup = budgetRepository.getTopSpendingGroupLastMonth()
+            _uiState.update {
+                it.copy(
+                    showBudgetPrompt = true,
+                    budgetPromptGroupId = topGroup?.first,
+                    budgetPromptCategoryName = topGroup?.second,
+                    budgetPromptAmount = topGroup?.third
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(showBudgetPrompt = false) }
+        }
+    }
+
+    /**
+     * Dismiss the budget prompt permanently.
+     */
+    fun dismissBudgetPrompt() {
+        viewModelScope.launch {
+            appPreferences.dismissBudgetPrompt()
+            _uiState.update { it.copy(showBudgetPrompt = false) }
+        }
+    }
+
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
         loadData()
+        loadBudgetData()
     }
 }

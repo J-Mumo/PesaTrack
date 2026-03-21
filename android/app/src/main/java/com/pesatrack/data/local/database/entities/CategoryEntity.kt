@@ -76,13 +76,14 @@ object DefaultCategories {
         CategoryEntity(id = 8, name = "Government & Legal", icon = "gavel", color = "#455A64", isGroup = true, isDefault = true, sortOrder = 8),
         CategoryEntity(id = 9, name = "Health", icon = "local_hospital", color = "#F44336", isGroup = true, isDefault = true, sortOrder = 9),
         CategoryEntity(id = 10, name = "Home & Utilities", icon = "home", color = "#4CAF50", isGroup = true, isDefault = true, sortOrder = 10),
-        CategoryEntity(id = 11, name = "Life Events", icon = "cake", color = "#FF9800", isGroup = true, isDefault = true, sortOrder = 11),
-        CategoryEntity(id = 12, name = "Miscellaneous", icon = "more_horiz", color = "#9E9E9E", isGroup = true, isDefault = true, sortOrder = 12),
-        CategoryEntity(id = 13, name = "Personal Care", icon = "face", color = "#00BCD4", isGroup = true, isDefault = true, sortOrder = 13),
-        CategoryEntity(id = 14, name = "Pets", icon = "pets", color = "#8BC34A", isGroup = true, isDefault = true, sortOrder = 14),
-        CategoryEntity(id = 15, name = "Shopping", icon = "shopping_bag", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 15),
-        CategoryEntity(id = 16, name = "Transport & Travel", icon = "commute", color = "#9C27B0", isGroup = true, isDefault = true, sortOrder = 16),
-        CategoryEntity(id = 17, name = "Vehicle", icon = "directions_car", color = "#2196F3", isGroup = true, isDefault = true, sortOrder = 17),
+        CategoryEntity(id = 18, name = "Investment & Savings", icon = "trending_up", color = "#006064", isGroup = true, isDefault = true, sortOrder = 11),
+        CategoryEntity(id = 11, name = "Life Events", icon = "cake", color = "#FF9800", isGroup = true, isDefault = true, sortOrder = 12),
+        CategoryEntity(id = 12, name = "Miscellaneous", icon = "more_horiz", color = "#9E9E9E", isGroup = true, isDefault = true, sortOrder = 13),
+        CategoryEntity(id = 13, name = "Personal Care", icon = "face", color = "#00BCD4", isGroup = true, isDefault = true, sortOrder = 14),
+        CategoryEntity(id = 14, name = "Pets", icon = "pets", color = "#8BC34A", isGroup = true, isDefault = true, sortOrder = 15),
+        CategoryEntity(id = 15, name = "Shopping", icon = "shopping_bag", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 16),
+        CategoryEntity(id = 16, name = "Transport & Travel", icon = "commute", color = "#9C27B0", isGroup = true, isDefault = true, sortOrder = 17),
+        CategoryEntity(id = 17, name = "Vehicle", icon = "directions_car", color = "#2196F3", isGroup = true, isDefault = true, sortOrder = 18),
     )
 
     // ==================== Group 1: Beekeeping ====================
@@ -147,21 +148,15 @@ object DefaultCategories {
         CategoryEntity(id = 506, name = "Tithe", icon = "church", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 6),
     )
 
-    // ==================== Group 6: Financial ====================
+    // ==================== Group 6: Financial (expense-only; investments moved to Group 18) ====================
 
     private val financialCategories = listOf(
         CategoryEntity(id = 601, name = "Bank Charges", icon = "account_balance_wallet", color = "#795548", parentId = 6, isDefault = true, sortOrder = 1),
-        CategoryEntity(id = 602, name = "Investments", icon = "trending_up", color = "#795548", parentId = 6, isDefault = true, sortOrder = 2),
-        CategoryEntity(id = 603, name = "Loan Interest", icon = "percent", color = "#795548", parentId = 6, isDefault = true, sortOrder = 3),
-        CategoryEntity(id = 604, name = "Loan Repayment", icon = "account_balance", color = "#795548", parentId = 6, isDefault = true, sortOrder = 4),
-        CategoryEntity(id = 605, name = "Money Market Fund", icon = "show_chart", color = "#795548", parentId = 6, isDefault = true, sortOrder = 5),
-        CategoryEntity(id = 606, name = "Mpesa Transaction Cost", icon = "phone_android", color = "#795548", parentId = 6, isDefault = true, sortOrder = 6),
-        CategoryEntity(id = 607, name = "NSSF", icon = "elderly", color = "#795548", parentId = 6, isDefault = true, sortOrder = 7),
-        CategoryEntity(id = 608, name = "Pesalink Charges", icon = "swap_horiz", color = "#795548", parentId = 6, isDefault = true, sortOrder = 8),
-        CategoryEntity(id = 609, name = "RTGS Charges", icon = "sync_alt", color = "#795548", parentId = 6, isDefault = true, sortOrder = 9),
-        CategoryEntity(id = 610, name = "SACCO", icon = "groups", color = "#795548", parentId = 6, isDefault = true, sortOrder = 10),
-        CategoryEntity(id = 611, name = "Savings", icon = "savings", color = "#795548", parentId = 6, isDefault = true, sortOrder = 11),
-        CategoryEntity(id = 612, name = "Treasury Bill", icon = "receipt_long", color = "#795548", parentId = 6, isDefault = true, sortOrder = 12),
+        CategoryEntity(id = 603, name = "Loan Interest", icon = "percent", color = "#795548", parentId = 6, isDefault = true, sortOrder = 2),
+        CategoryEntity(id = 604, name = "Loan Repayment", icon = "account_balance", color = "#795548", parentId = 6, isDefault = true, sortOrder = 3),
+        CategoryEntity(id = 606, name = "Mpesa Transaction Cost", icon = "phone_android", color = "#795548", parentId = 6, isDefault = true, sortOrder = 4),
+        CategoryEntity(id = 608, name = "Pesalink Charges", icon = "swap_horiz", color = "#795548", parentId = 6, isDefault = true, sortOrder = 5),
+        CategoryEntity(id = 609, name = "RTGS Charges", icon = "sync_alt", color = "#795548", parentId = 6, isDefault = true, sortOrder = 6),
     )
 
     // ==================== Group 7: Food & Dining ====================
@@ -218,6 +213,24 @@ object DefaultCategories {
         CategoryEntity(id = 1010, name = "Repairs", icon = "handyman", color = "#4CAF50", parentId = 10, isDefault = true, sortOrder = 10),
         CategoryEntity(id = 1011, name = "Security", icon = "shield", color = "#4CAF50", parentId = 10, isDefault = true, sortOrder = 11),
         CategoryEntity(id = 1012, name = "Water Bill", icon = "water_drop", color = "#4CAF50", parentId = 10, isDefault = true, sortOrder = 12),
+    )
+
+    // ==================== Group 18: Investment & Savings ====================
+
+    private val investmentCategories = listOf(
+        CategoryEntity(id = 1801, name = "Chama Contributions", icon = "groups", color = "#006064", parentId = 18, isDefault = true, sortOrder = 1),
+        CategoryEntity(id = 1802, name = "Crypto", icon = "currency_bitcoin", color = "#006064", parentId = 18, isDefault = true, sortOrder = 2),
+        CategoryEntity(id = 1803, name = "Fixed Deposit", icon = "lock", color = "#006064", parentId = 18, isDefault = true, sortOrder = 3),
+        CategoryEntity(id = 1804, name = "Insurance (Investment)", icon = "shield", color = "#006064", parentId = 18, isDefault = true, sortOrder = 4),
+        CategoryEntity(id = 1805, name = "Money Market Fund", icon = "show_chart", color = "#006064", parentId = 18, isDefault = true, sortOrder = 5),
+        CategoryEntity(id = 1806, name = "NSSF", icon = "elderly", color = "#006064", parentId = 18, isDefault = true, sortOrder = 6),
+        CategoryEntity(id = 1807, name = "Pension/Retirement", icon = "account_balance", color = "#006064", parentId = 18, isDefault = true, sortOrder = 7),
+        CategoryEntity(id = 1808, name = "Real Estate", icon = "apartment", color = "#006064", parentId = 18, isDefault = true, sortOrder = 8),
+        CategoryEntity(id = 1809, name = "SACCO", icon = "handshake", color = "#006064", parentId = 18, isDefault = true, sortOrder = 9),
+        CategoryEntity(id = 1810, name = "Savings", icon = "savings", color = "#006064", parentId = 18, isDefault = true, sortOrder = 10),
+        CategoryEntity(id = 1811, name = "Stocks/Shares", icon = "candlestick_chart", color = "#006064", parentId = 18, isDefault = true, sortOrder = 11),
+        CategoryEntity(id = 1812, name = "Treasury Bill/Bond", icon = "receipt_long", color = "#006064", parentId = 18, isDefault = true, sortOrder = 12),
+        CategoryEntity(id = 1813, name = "Unit Trusts/Mutual Funds", icon = "pie_chart", color = "#006064", parentId = 18, isDefault = true, sortOrder = 13),
     )
 
     // ==================== Group 11: Life Events ====================
@@ -304,7 +317,7 @@ object DefaultCategories {
     /**
      * Get all categories (groups + children)
      */
-    val categories: List<CategoryEntity> = groups + 
+    val categories: List<CategoryEntity> = groups +
         beekeepingCategories +
         digitalCategories +
         educationCategories +
@@ -315,6 +328,7 @@ object DefaultCategories {
         governmentCategories +
         healthCategories +
         homeCategories +
+        investmentCategories +
         lifeEventsCategories +
         miscCategories +
         personalCareCategories +

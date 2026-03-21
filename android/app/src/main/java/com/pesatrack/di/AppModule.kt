@@ -4,6 +4,7 @@ import android.content.Context
 import android.telephony.TelephonyManager
 import androidx.room.Room
 import com.pesatrack.data.local.database.PesaTrackDatabase
+import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
@@ -38,7 +39,9 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_3_4,
                 PesaTrackDatabase.MIGRATION_4_5,
                 PesaTrackDatabase.MIGRATION_5_6,
-                PesaTrackDatabase.MIGRATION_6_7
+                PesaTrackDatabase.MIGRATION_6_7,
+                PesaTrackDatabase.MIGRATION_7_8,
+                PesaTrackDatabase.MIGRATION_8_9
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -60,6 +63,12 @@ object AppModule {
     @Singleton
     fun provideRecipientCategoryMappingDao(database: PesaTrackDatabase): RecipientCategoryMappingDao {
         return database.recipientCategoryMappingDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBudgetDao(database: PesaTrackDatabase): BudgetDao {
+        return database.budgetDao()
     }
 
     // ==================== System Services ====================

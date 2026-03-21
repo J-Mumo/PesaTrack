@@ -21,6 +21,10 @@ object NotificationHelper {
     private const val CHANNEL_ID = "pesatrack_expenses"
     private const val CHANNEL_NAME = "Expense Notifications"
     private const val CHANNEL_DESCRIPTION = "Notifications for new M-PESA transactions detected via SMS"
+
+    private const val BUDGET_CHANNEL_ID = "pesatrack_budget_alerts"
+    private const val BUDGET_CHANNEL_NAME = "Budget Alerts"
+    private const val BUDGET_CHANNEL_DESCRIPTION = "Alerts when spending approaches or exceeds budget limits"
     
     /**
      * Create the notification channel (required for Android 8.0+).
@@ -91,5 +95,89 @@ object NotificationHelper {
         
         // Use expense ID as notification ID for uniqueness
         notificationManager.notify(expenseId.toInt(), notification)
+    }
+
+    /**
+     * Create the budget alert notification channel (required for Android 8.0+).
+     * Safe to call multiple times — only creates the channel once.
+     */
+    fun createBudgetAlertChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                BUDGET_CHANNEL_ID,
+                BUDGET_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = BUDGET_CHANNEL_DESCRIPTION
+            }
+
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show a budget alert notification when spending crosses a threshold.
+     *
+     * @param context Application context
+     * @param budgetId The budget ID
+     * @param categoryName Category group name (e.g. "Food & Dining") or "Total Spending"
+     * @param spent Actual spending in the current period (KES)
+     * @param budgetAmount Budget limit (KES)
+     * @param percentage Percentage of budget used
+     * @param threshold The threshold crossed: 80 or 100
+     */
+    fun showBudgetAlertNotification(
+        context: Context,
+        budgetId: Long,
+        categoryName: String,
+        spent: Double,
+        budgetAmount: Double,
+        percentage: Int,
+        threshold: Int
+    ) {
+        // Ensure channel exists
+        createBudgetAlertChannel(context)
+
+        // Intent to open the app (budget screen via main activity)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "budget")
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            (budgetId * 10 + threshold).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedSpent = String.format("KES %,.0f", spent)
+        val formattedBudget = String.format("KES %,.0f", budgetAmount)
+
+        val (icon, title) = if (threshold >= 100) {
+            "🚨" to "$categoryName: Budget exceeded!"
+        } else {
+            "⚠\uFE0F" to "$categoryName: ${threshold}% of budget used"
+        }
+
+        val notification = NotificationCompat.Builder(context, BUDGET_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText("$formattedSpent / $formattedBudget ($percentage%)")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+
+        // Unique notification ID per budget per threshold level
+        val notificationId = (budgetId * 10 + threshold).toInt()
+        notificationManager.notify(notificationId, notification)
     }
 }

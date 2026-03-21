@@ -44,6 +44,9 @@ class SmsReceiver : BroadcastReceiver() {
     @Inject
     lateinit var appPreferences: AppPreferences
 
+    @Inject
+    lateinit var budgetService: BudgetService
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -136,6 +139,27 @@ class SmsReceiver : BroadcastReceiver() {
                 if (expenseId > 0 && !mainExpense.isCategorized) {
                     val recipient = mainExpense.recipientName ?: mainExpense.recipient
                     showCategorizeNotification(context, expenseId, mainExpense.amount, recipient)
+                }
+
+                // Check budget alerts (only for categorized expenses)
+                if (mainExpense.isCategorized && mainExpense.categoryId != null) {
+                    try {
+                        val alerts = budgetService.checkBudgetsAfterExpense(mainExpense.categoryId)
+                        for (alert in alerts) {
+                            val categoryName = alert.budget.categoryGroupName ?: "Total Spending"
+                            NotificationHelper.showBudgetAlertNotification(
+                                context = context,
+                                budgetId = alert.budget.id,
+                                categoryName = categoryName,
+                                spent = alert.spent,
+                                budgetAmount = alert.budget.amount,
+                                percentage = alert.percentage.toInt(),
+                                threshold = alert.threshold
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error checking budget alerts", e)
+                    }
                 }
 
                 // Save the transaction cost as a separate auto-categorized expense

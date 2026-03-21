@@ -51,6 +51,7 @@ import kotlin.math.absoluteValue
 @Composable
 fun AnalyticsScreen(
     onNavigateBack: () -> Unit = {},
+    onNavigateToBudget: () -> Unit = {},
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -79,7 +80,8 @@ fun AnalyticsScreen(
                 uiState = uiState,
                 onPreviousMonth = { viewModel.previousMonth() },
                 onNextMonth = { viewModel.nextMonth() },
-                canGoNext = viewModel.canGoNext()
+                canGoNext = viewModel.canGoNext(),
+                onNavigateToBudget = onNavigateToBudget
             )
             AnalyticsTab.YEARLY -> YearlyTabContent(
                 uiState = uiState,
@@ -98,7 +100,8 @@ fun MonthlyTabContent(
     uiState: AnalyticsUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    canGoNext: Boolean
+    canGoNext: Boolean,
+    onNavigateToBudget: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -130,6 +133,13 @@ fun MonthlyTabContent(
                 avgDaily = uiState.avgDailySpend,
                 transactionCount = uiState.transactionCountForMonth
             )
+        }
+
+        // Budget Banner — shown when no budgets are set up yet
+        if (!uiState.hasActiveBudgets) {
+            item {
+                BudgetSetupBanner(onSetUpBudgets = onNavigateToBudget)
+            }
         }
 
         // Loading indicator
@@ -1149,6 +1159,62 @@ fun CategoryTrendCard(trend: CategoryTrend) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
+        }
+    }
+}
+
+// ==================== Budget Setup Banner ====================
+
+/**
+ * Banner shown in the Monthly analytics tab when no budgets exist.
+ * Prompts users to set up spending limits.
+ */
+@Composable
+fun BudgetSetupBanner(
+    onSetUpBudgets: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountBalanceWallet,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(32.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Track your spending limits",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    text = "Set up budgets to monitor spending by category",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            FilledTonalButton(
+                onClick = onSetUpBudgets,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text("Set Up")
+            }
         }
     }
 }

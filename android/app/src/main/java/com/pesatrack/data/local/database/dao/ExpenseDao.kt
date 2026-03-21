@@ -487,6 +487,41 @@ interface ExpenseDao {
         startOfYear: Long,
         endOfYear: Long
     ): List<PaymentTypeTotal>
+
+    // ==================== Budget Queries ====================
+
+    /**
+     * Get total spending (all non-excluded expenses) in a date range.
+     * Used by the "Total Spending" budget to compute actual spending.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0.0) FROM expenses
+        WHERE isExcluded = 0
+        AND timestamp >= :startMs AND timestamp < :endMs
+    """)
+    suspend fun getTotalSpendingInRange(startMs: Long, endMs: Long): Double
+
+    /**
+     * Get spending for a specific category group in a date range.
+     * Joins categories to sum all sub-categories belonging to a group.
+     * Also includes expenses categorized directly to the group ID (safety).
+     */
+    @Query("""
+        SELECT COALESCE(SUM(e.amount), 0.0)
+        FROM expenses e
+        INNER JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+        AND e.timestamp >= :startMs AND e.timestamp < :endMs
+        AND (c.parentId = :groupId OR c.id = :groupId)
+    """)
+    suspend fun getGroupSpendingInRange(groupId: Long, startMs: Long, endMs: Long): Double
+
+    /**
+     * Get count of categorized (non-excluded) expenses.
+     * Used for budget prompt trigger logic (show prompt after ≥20 categorized expenses).
+     */
+    @Query("SELECT COUNT(*) FROM expenses WHERE isCategorized = 1 AND isExcluded = 0")
+    suspend fun getCategorizedExpenseCount(): Int
 }
 
 /**

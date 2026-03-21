@@ -42,6 +42,12 @@ class AppPreferences @Inject constructor(
          * When false, only M-PESA SMS are processed regardless of individual bank toggles.
          */
         private val KEY_BANK_TRACKING_ENABLED = booleanPreferencesKey("bank_tracking_enabled")
+
+        /**
+         * Whether the user has dismissed the budget setup prompt on the Home screen.
+         * Once dismissed, the prompt does not reappear.
+         */
+        private val KEY_BUDGET_PROMPT_DISMISSED = booleanPreferencesKey("budget_prompt_dismissed")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -112,6 +118,32 @@ class AppPreferences @Inject constructor(
         val bankTrackingOn = prefs[KEY_BANK_TRACKING_ENABLED] ?: true
         if (!bankTrackingOn) return emptySet()
         return prefs[KEY_ENABLED_BANKS] ?: defaultEnabledBanks()
+    }
+
+    // ==================== Budget Prompt ====================
+
+    /**
+     * Whether the budget prompt has been dismissed by the user.
+     */
+    val budgetPromptDismissed: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_BUDGET_PROMPT_DISMISSED] ?: false
+    }
+
+    /**
+     * Check if budget prompt was dismissed (snapshot).
+     */
+    suspend fun isBudgetPromptDismissed(): Boolean {
+        val prefs = context.dataStore.data.first()
+        return prefs[KEY_BUDGET_PROMPT_DISMISSED] ?: false
+    }
+
+    /**
+     * Dismiss the budget prompt permanently.
+     */
+    suspend fun dismissBudgetPrompt() {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_BUDGET_PROMPT_DISMISSED] = true
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.YearMonthTotal
+import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
@@ -23,7 +24,8 @@ import kotlin.math.sqrt
 
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
-    private val expenseRepository: ExpenseRepository
+    private val expenseRepository: ExpenseRepository,
+    private val budgetRepository: BudgetRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnalyticsUiState())
@@ -43,6 +45,7 @@ class AnalyticsViewModel @Inject constructor(
             )
         }
         loadAllData()
+        loadBudgetStatus()
     }
 
     // ==================== Tab Management ====================
@@ -396,6 +399,23 @@ class AnalyticsViewModel @Inject constructor(
                         error = "Failed to load yearly analytics: ${e.message}"
                     )
                 }
+            }
+        }
+    }
+
+    // ==================== Budget Integration ====================
+
+    /**
+     * Check whether the user has any active budgets.
+     * Used to display a "Set up budgets" banner when no budgets exist.
+     */
+    private fun loadBudgetStatus() {
+        viewModelScope.launch {
+            try {
+                val hasBudgets = budgetRepository.hasActiveBudgets()
+                _uiState.update { it.copy(hasActiveBudgets = hasBudgets) }
+            } catch (_: Exception) {
+                // Non-critical — leave default (false)
             }
         }
     }

@@ -300,9 +300,60 @@ class KeywordRulesEngine @Inject constructor() {
         put("NHIF", sha) // Legacy name
         put("SOCIAL HEALTH AUTHORITY", sha)
 
-        // ── Government: NSSF (607) ──
-        val nssf = CategorySuggestion(607L, "NSSF", "Financial", CONFIDENCE_EXACT)
+        // ── Investment & Savings: NSSF (1806) ──
+        val nssf = CategorySuggestion(1806L, "NSSF", "Investment & Savings", CONFIDENCE_EXACT)
         put("NSSF", nssf)
+
+        // ── Investment & Savings: SACCO (1809) ──
+        val sacco = CategorySuggestion(1809L, "SACCO", "Investment & Savings", CONFIDENCE_EXACT)
+        put("STIMA SACCO", sacco)
+        put("MWALIMU NATIONAL SACCO", sacco)
+        put("MWALIMU SACCO", sacco)
+        put("KENYA RE SACCO", sacco)
+        put("SAFARICOM SACCO", sacco)
+        put("HARAMBEE SACCO", sacco)
+
+        // ── Investment & Savings: Money Market Fund (1805) ──
+        val mmf = CategorySuggestion(1805L, "Money Market Fund", "Investment & Savings", CONFIDENCE_EXACT)
+        put("CIC ASSET MANAGEMENT", mmf)
+        put("CIC MONEY MARKET", mmf)
+        put("SANLAM INVESTMENTS", mmf)
+        put("SANLAM", mmf)
+        put("CYTONN INVESTMENTS", mmf)
+        put("CYTONN", mmf)
+        put("ZIMELE ASSET MANAGEMENT", mmf)
+        put("OLD MUTUAL MONEY MARKET", mmf)
+
+        // ── Investment & Savings: Unit Trusts (1813) ──
+        val unitTrusts = CategorySuggestion(1813L, "Unit Trusts/Mutual Funds", "Investment & Savings", CONFIDENCE_EXACT)
+        put("BRITAM ASSET MANAGERS", unitTrusts)
+        put("BRITAM", unitTrusts)
+        put("ICEA LION", unitTrusts)
+        put("NABO CAPITAL", unitTrusts)
+
+        // ── Investment & Savings: Stocks/Shares (1811) ──
+        val stocks = CategorySuggestion(1811L, "Stocks/Shares", "Investment & Savings", CONFIDENCE_EXACT)
+        put("GENGHIS CAPITAL", stocks)
+        put("AIB-AXYS AFRICA", stocks)
+        put("SBG SECURITIES", stocks)
+
+        // ── Investment & Savings: Treasury Bill/Bond (1812) ──
+        val tbill = CategorySuggestion(1812L, "Treasury Bill/Bond", "Investment & Savings", CONFIDENCE_EXACT)
+        put("M-AKIBA", tbill)
+        put("CBK", tbill)
+        put("CENTRAL BANK OF KENYA", tbill)
+
+        // ── Investment & Savings: Pension/Retirement (1807) ──
+        val pension = CategorySuggestion(1807L, "Pension/Retirement", "Investment & Savings", CONFIDENCE_EXACT)
+        put("OLD MUTUAL", pension)
+        put("BRITAM PENSION", pension)
+        put("JUBILEE INSURANCE PENSION", pension)
+
+        // ── Investment & Savings: Crypto (1802) ──
+        val crypto = CategorySuggestion(1802L, "Crypto", "Investment & Savings", CONFIDENCE_EXACT)
+        put("BINANCE", crypto)
+        put("YELLOW CARD", crypto)
+        put("PAXFUL", crypto)
 
         // ── Health: Pharmacy (906) ──
         val pharmacy = CategorySuggestion(906L, "Pharmacy", "Health", CONFIDENCE_EXACT)
@@ -479,15 +530,26 @@ class KeywordRulesEngine @Inject constructor() {
         KeywordRule(listOf("MINISTRIES"), suggestion = CategorySuggestion(501L, "Church Program", "Faith & Giving", CONFIDENCE_KEYWORD)),
         KeywordRule(listOf("MOSQUE"), suggestion = CategorySuggestion(501L, "Church Program", "Faith & Giving", CONFIDENCE_KEYWORD)),
 
-        // ── Financial ──
-        KeywordRule(listOf("SACCO"), suggestion = CategorySuggestion(610L, "SACCO", "Financial", CONFIDENCE_KEYWORD)),
+        // ── Financial (expense-only) ──
         KeywordRule(listOf("LOAN"), paymentTypes = setOf("PAY_BILL"), suggestion = CategorySuggestion(604L, "Loan Repayment", "Financial", CONFIDENCE_KEYWORD)),
         KeywordRule(listOf("TALA"), suggestion = CategorySuggestion(604L, "Loan Repayment", "Financial", CONFIDENCE_KEYWORD)),
         KeywordRule(listOf("FULIZA"), suggestion = CategorySuggestion(604L, "Loan Repayment", "Financial", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("MSHWARI"), suggestion = CategorySuggestion(611L, "Savings", "Financial", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("KCB MPESA"), suggestion = CategorySuggestion(611L, "Savings", "Financial", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("MALI"), suggestion = CategorySuggestion(602L, "Investments", "Financial", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("MONEY MARKET"), suggestion = CategorySuggestion(605L, "Money Market Fund", "Financial", CONFIDENCE_KEYWORD)),
+
+        // ── Investment & Savings ──
+        KeywordRule(listOf("SACCO"), suggestion = CategorySuggestion(1809L, "SACCO", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("MSHWARI"), suggestion = CategorySuggestion(1810L, "Savings", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("KCB MPESA"), suggestion = CategorySuggestion(1810L, "Savings", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("MALI"), suggestion = CategorySuggestion(1811L, "Stocks/Shares", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("MONEY MARKET"), suggestion = CategorySuggestion(1805L, "Money Market Fund", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("INVEST"), suggestion = CategorySuggestion(1813L, "Unit Trusts/Mutual Funds", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("CHAMA"), suggestion = CategorySuggestion(1801L, "Chama Contributions", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("CRYPTO"), suggestion = CategorySuggestion(1802L, "Crypto", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("BITCOIN"), suggestion = CategorySuggestion(1802L, "Crypto", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("TREASURY"), suggestion = CategorySuggestion(1812L, "Treasury Bill/Bond", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("PENSION"), suggestion = CategorySuggestion(1807L, "Pension/Retirement", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("RETIREMENT"), suggestion = CategorySuggestion(1807L, "Pension/Retirement", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("UNIT TRUST"), suggestion = CategorySuggestion(1813L, "Unit Trusts/Mutual Funds", "Investment & Savings", CONFIDENCE_KEYWORD)),
+        KeywordRule(listOf("FIXED DEPOSIT"), suggestion = CategorySuggestion(1803L, "Fixed Deposit", "Investment & Savings", CONFIDENCE_KEYWORD)),
 
         // ── Government ──
         KeywordRule(listOf("KRA"), suggestion = CategorySuggestion(805L, "Income Tax/KRA Filing", "Government & Legal", CONFIDENCE_KEYWORD)),

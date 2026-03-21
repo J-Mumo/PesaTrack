@@ -97,9 +97,7 @@ fun ExpenseListScreen(
                             categoryName = ewc.categoryName,
                             categoryColor = ewc.categoryColor,
                             onClick = {
-                                if (!ewc.expense.isCategorized) {
-                                    onNavigateToCategorize(ewc.expense.id)
-                                }
+                                onNavigateToCategorize(ewc.expense.id)
                             },
                             onLongClick = {
                                 viewModel.toggleExcluded(

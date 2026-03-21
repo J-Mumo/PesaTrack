@@ -14,8 +14,8 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 |-----------|--------|------------|
 | **SMS Parsing (7 expense types)** | ✅ Complete | 100% |
 | **Transaction Cost Auto-Tracking** | ✅ Complete | 100% |
-| **Room Database (v3)** | ✅ Complete | 100% |
-| **Category System (17 groups)** | ✅ Complete | 100% |
+| **Room Database (v9)** | ✅ Complete | 100% |
+| **Category System (18 groups)** | ✅ Complete | 100% |
 | **Expense Management UI** | ✅ Complete | 100% |
 | **Notifications** | ✅ Complete | 100% |
 | **Runtime Permissions** | ✅ Complete | 100% |
@@ -28,6 +28,8 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~60% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
 | **Year-over-Year Analytics** | ✅ Complete | 100% |
+| **Phase 2 M6: Investment Category Deep-Dive** | ✅ Complete | 100% |
+| **Phase 2 M7: Category-Based Budgets** | ✅ Complete | 100% |
 
 ---
 
@@ -113,21 +115,26 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Room Database** | | |
-| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 7 with migrations |
+| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 9 with migrations |
 | Migration 2→3 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:34) | Moved Seed category to Faith & Giving |
 | Migration 6→7 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:469) | Added `isExcluded` column to expenses |
+| Migration 7→8 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:484) | Investment deep-dive: moved 6 sub-categories from Financial to new Investment & Savings group (18) |
+| Migration 8→9 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:776) | Category-based budgets: `budgets` table with unique index on (categoryGroupId, period) |
 | Expense Entity | [`ExpenseEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/ExpenseEntity.kt:11) | Full schema with FK to categories + isExcluded flag |
 | Category Entity | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:12) | Hierarchical categories with parent-child |
-| Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 17 groups, 80+ sub-categories |
-| Expense DAO | [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt:10) | CRUD + month queries + duplicate check |
+| Budget Entity | [`BudgetEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/BudgetEntity.kt:1) | Budget limits per category group or total, with period + isActive |
+| Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 18 groups, 90+ sub-categories |
+| Expense DAO | [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt:10) | CRUD + month queries + duplicate check + budget spending queries |
 | Category DAO | [`CategoryDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryDao.kt:11) | CRUD + search + default seeding |
+| Budget DAO | [`BudgetDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/BudgetDao.kt:1) | Budget CRUD + active budget queries + affected budget lookups |
 | **Preferences** | | |
-| AppPreferences | [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:1) | DataStore for phone number persistence |
+| AppPreferences | [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:1) | DataStore for phone number, bank preferences, budget prompt dismissal |
 | **Repositories** | | |
 | Expense Repository | [`ExpenseRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/ExpenseRepository.kt:17) | CRUD, month range, domain mapping |
 | Category Repository | [`CategoryRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRepository.kt:18) | Category management, default init |
+| Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation, spending aggregation, progress/alert calculation |
 | **Dependency Injection** | | |
-| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database, DAOs, TelephonyManager |
+| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database, DAOs (including BudgetDao), TelephonyManager |
 
 ---
 
@@ -139,6 +146,7 @@ SMS Sources ──────────────────────�
 |---------|------|-------------|
 | Expense Model | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:6) | Domain model with `isCategorized` + `isExcluded` flags |
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
+| Budget Model | [`Budget.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Budget.kt:1) | Budget, BudgetPeriod (WEEKLY/MONTHLY/YEARLY), BudgetProgress, BudgetStatus (UNDER/WARNING/EXCEEDED), BudgetAlert |
 | PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:32) | 9 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT, CASH |
 | ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, EXCEL_IMPORT, MANUAL |
 
@@ -166,7 +174,7 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 9 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 10 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:23) | 3 tabs: Home, Analytics, Expenses |
 | **Main Activity** | | |
@@ -211,10 +219,15 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets |
 | AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
+
+| **Budget Screen** | | |
+| BudgetScreen | [`BudgetScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetScreen.kt:1) | Full CRUD: budget list with progress bars, FAB to add, edit/delete via long-press, color-coded progress (green/amber/red) |
+| BudgetViewModel | [`BudgetViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetViewModel.kt:1) | Loads budgets with progress, add/edit/delete, category group loading |
+| BudgetUiState | [`BudgetUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetUiState.kt:1) | Budget progress list, category groups, dialog state for add/edit |
 
 ---
 
@@ -224,9 +237,11 @@ SMS Sources ──────────────────────�
 
 | Feature | File | Description |
 |---------|------|-------------|
-| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts |
-| Notification Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:29) | "Expense Notifications" channel (Android 8+) |
+| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts + budget alerts |
+| Expense Notification Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:29) | "Expense Notifications" channel (Android 8+) |
+| Budget Alert Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:104) | "Budget Alerts" channel — high importance when exceeded |
 | Expense Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:54) | Shows "New Expense: KES X,XXX.XX" + "To recipient" |
+| Budget Alert Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:132) | Shows "⚠️ Budget Warning" at 80% / "🚨 Budget Exceeded" at 100% with progress details |
 | Tap-to-Categorize | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:64) | PendingIntent opens categorize screen |
 | Channel Init on Launch | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:51) | Created in `onCreate()` |
 
@@ -250,30 +265,31 @@ SMS Sources ──────────────────────�
 
 #### ✅ Implemented
 
-17 category groups with hierarchical sub-categories defined in [`DefaultCategories`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57):
+18 category groups with hierarchical sub-categories defined in [`DefaultCategories`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:64):
 
 | ID | Group Name | Sub-categories |
 |----|-----------|----------------|
-| 1 | Vehicle & Fuel | Fuel, Car Service, Parking, Insurance, Toll, Car Wash |
-| 2 | Home & Utilities | Rent, Electricity, Water, Gas, Internet, House Help |
-| 3 | Food & Dining | Groceries, Restaurant, Snacks, Drinks |
-| 4 | Transport | Uber/Taxi, Matatu/Bus, Boda Boda, Train, Parking |
-| 5 | Shopping | Shopping, Clothing, Phone/Accessories, Books, Art, Shipping |
-| 6 | Personal Care | Barber, Shave, Salon |
-| 7 | Health | Medical Checkup, Pharmacy, Dental, Optical, Gym, Insurance |
-| 8 | Financial | Savings, Invest, Loan, SACCO, NSSF, Bank Charges, **Mpesa Transaction Cost** (811) |
-| 9 | Faith & Giving | Tithe, Offering, Give, Heaven's Gate, **Seed** |
-| 10 | Digital & Tech | **Airtime** (1001), Internet Bundles, Domain, Hosting, etc. |
-| 11 | Beekeeping | Hive Gear, Queen Cells, Feeds, Harvest |
-| 12 | Pets | Pet Food, Vet, Grooming |
-| 13 | Entertainment | Movies, Events, Games, Streaming |
-| 14 | Education | Tuition, Books, Online Course |
-| 15 | Government | KRA Tax, NHIF, County Fees, Stamps, Court Fees, Huduma |
-| 16 | Life Events | Wedding, Funeral, Baby Shower, Dowry, Birthday |
-| 17 | Miscellaneous | Gift, Donation, Other |
+| 1 | Beekeeping | Bee Equipment, Bee Feed, Bee Hives, Bees, Honey Harvesting, etc. |
+| 2 | Digital & Tech | **Airtime** (202), Data Bundles, AI Subs, Streaming, Domain, Hosting, VPN |
+| 3 | Education | Certifications, Conferences, Courses, School Fees, Stationery |
+| 4 | Entertainment | Events, Games, Hobbies, Movies |
+| 5 | Faith & Giving | Church Program, Give, Offering, **Seed**, Tithe |
+| 6 | Financial | Bank Charges, Loan Interest, Loan Repayment, **Mpesa Transaction Cost** (606), Pesalink/RTGS Charges |
+| 7 | Food & Dining | Groceries, Eating Out, Snacks/Drinks, Takeaway, Drinking Water |
+| 8 | Government & Legal | KRA, NTSA, SHA, County Rates, Excise Duty, Visa/Passport Fees |
+| 9 | Health | Medical Checkup, Pharmacy, Dental, Optical, Gym, Health Insurance |
+| 10 | Home & Utilities | Rent, Electricity, Water, Gas, WiFi, Security, Repairs |
+| **18** | **Investment & Savings** | **Chama, Crypto, Fixed Deposit, Insurance (Investment), MMF, NSSF, Pension, Real Estate, SACCO, Savings, Stocks/Shares, T-Bill/Bond, Unit Trusts** |
+| 11 | Life Events | Birthday, Wedding, Funeral, Baby Shower, Harambee |
+| 12 | Miscellaneous | Miscellaneous |
+| 13 | Personal Care | Haircut, Salon, Laundry/Dry Cleaning |
+| 14 | Pets | Pet Food, Vet, Grooming, Supplies |
+| 15 | Shopping | Clothing, Electronics, General Shopping, Books, Art, Shipping |
+| 16 | Transport & Travel | Uber/Bolt, Boda Boda, Fare, SGR, Flight, Accommodation |
+| 17 | Vehicle | Fuel, Car Service, Car Wash, Parking, Expressway, Insurance, Tyres |
 
 **Special auto-categorized categories:**
-- **Category 811** ("Mpesa Transaction Cost") — Transaction costs are auto-saved here with `isCategorized = true`
+- **Category 606** ("Mpesa Transaction Cost") — Transaction costs are auto-saved here with `isCategorized = true`
 
 ---
 
@@ -343,36 +359,40 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 app/src/main/java/com/pesatrack/
 ├── PesaTrackApp.kt                          ✅ Hilt Application class
 ├── di/
-│   └── AppModule.kt                         ✅ Database, DAOs, TelephonyManager
+│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao), TelephonyManager
 ├── data/
 │   ├── local/
 │   │   ├── database/
-│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v7 with migrations
+│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v9 with migrations (v8→v9: budgets table)
 │   │   │   ├── dao/
-│   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check
-│   │   │   │   └── CategoryDao.kt           ✅ CRUD + search + default seeding
+│   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check + budget spending queries
+│   │   │   │   ├── CategoryDao.kt           ✅ CRUD + search + default seeding
+│   │   │   │   └── BudgetDao.kt             ✅ Budget CRUD + active queries + affected budget lookups
 │   │   │   └── entities/
 │   │   │       ├── ExpenseEntity.kt          ✅ Full schema with FK to categories
-│   │   │       └── CategoryEntity.kt         ✅ 17 groups, 80+ categories
+│   │   │       ├── CategoryEntity.kt         ✅ 18 groups, 90+ categories
+│   │   │       └── BudgetEntity.kt           ✅ Budget limits per group/total with period + isActive
 │   │   └── preferences/
-│   │       └── AppPreferences.kt            ✅ DataStore (phone number)
+│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
-│       └── CategoryRepository.kt            ✅ Category management
+│       ├── CategoryRepository.kt            ✅ Category management
+│       └── BudgetRepository.kt              ✅ Budget CRUD, period ranges, spending aggregation, progress/alerts
 ├── domain/models/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   ├── Category.kt                          ✅ Domain model
+│   ├── Budget.kt                            ✅ Budget, BudgetPeriod, BudgetProgress, BudgetStatus, BudgetAlert
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav
 │   ├── navigation/
-│   │   ├── NavGraph.kt                      ✅ 9 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry
+│   │   ├── NavGraph.kt                      ✅ 10 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs)
 │   ├── screens/
 │   │   ├── home/
-│   │   │   ├── HomeScreen.kt                ✅ Monthly summary + mini trend chart + recent expenses
-│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + trend data + default init
-│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory + MonthlyTrend + MonthComparison
+│   │   │   ├── HomeScreen.kt                ✅ Monthly summary + mini trend chart + recent expenses + budget summary/prompt cards
+│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + trend data + budget progress + prompt logic
+│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory + MonthlyTrend + MonthComparison + budget fields
 │   │   ├── expenses/
 │   │   │   ├── ExpenseListScreen.kt          ✅ Full expense list
 │   │   │   ├── ExpensesViewModel.kt          ✅ Category mapping
@@ -390,11 +410,15 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
 │   │   │   └── ManualEntryUiState.kt      ✅ Form state model
 │   │   ├── analytics/
-│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics: Vico charts, month selector, MoM, variable-spend category trends, daily, top spenders, payment types
-│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based category trend detection
-│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + month selection + categoryTrends
+│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics + budget setup banner (when no budgets)
+│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status
+│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets
+│   │   ├── budget/
+│   │   │   ├── BudgetScreen.kt            ✅ Budget CRUD: list with progress bars, FAB, add/edit/delete dialog
+│   │   │   ├── BudgetViewModel.kt         ✅ Budget progress loading, CRUD ops, category group picker
+│   │   │   └── BudgetUiState.kt           ✅ Progress list, category groups, dialog state
 │   │   └── settings/
-│   │       ├── SettingsScreen.kt             ✅ Bank SMS tracking toggles (AI section removed)
+│   │       ├── SettingsScreen.kt             ✅ Budget management row + Bank SMS tracking toggles
 │   │       ├── SettingsViewModel.kt          ✅ Bank preferences management
 │   │       └── SettingsUiState.kt            ✅ BankToggle model
 │   ├── components/
@@ -406,12 +430,13 @@ app/src/main/java/com/pesatrack/
 │       ├── Color.kt                         ✅ getCategoryColor()
 │       └── Type.kt                          ✅ Typography
 ├── services/
-│   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver
+│   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver + budget alert check after save
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
 │   ├── ExcelImportService.kt                ✅ Excel import orchestration (match + standalone)
 │   ├── AiCategorizationService.kt           ✅ CategorizationService — on-device rules engine (replaced Gemini)
 │   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
-│   └── NotificationHelper.kt               ✅ Channel + expense alerts
+│   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save, notification dispatch
+│   └── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds)
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
     ├── Constants.kt                         ✅ formatAsCurrency()
@@ -467,7 +492,8 @@ backend/
 
 ### Implemented Features
 
-1. **Notification System** — SMS-parsed expenses trigger notification with amount + recipient; tap opens categorize screen.
+1. **Edit/Re-categorize expenses** — Removed `isCategorized` guard from ExpenseListScreen and HomeScreen; tapping any expense (categorized or not) now opens the CategorizeScreen. Title shows "Edit Category" for already-categorized expenses. The DAO/Repository/ViewModel already supported re-categorization — only the UI click handlers were blocking it.
+2. **Notification System** — SMS-parsed expenses trigger notification with amount + recipient; tap opens categorize screen.
 2. **Runtime Permissions** — MainActivity requests SMS, phone state, and notification permissions on first launch.
 3. **Category-Aware Views** — Home screen and expense list show category name and colour alongside expenses.
 4. **Phone Auto-Fill** — SIM number read via TelephonyManager, persisted in DataStore.
@@ -495,6 +521,7 @@ backend/
 | Duplicate detection | ✅ Complete | transactionId uniqueness |
 | Correct payment type labels | ✅ Complete | `fromString()` handles both formats |
 | Category-aware expense cards | ✅ Complete | Category name as title |
+| Edit/re-categorize expenses | ✅ Complete | Tap any expense to change its category |
 | Runtime permission flow | ✅ Complete | All permissions requested on launch |
 | Manual expense entry | ✅ Complete | Form with amount, recipient, payment type, date, category, notes |
 | Historical SMS import | ✅ Complete | ContentResolver-based import with date range picker |
@@ -527,7 +554,8 @@ backend/
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
 | — | Year-over-Year analytics | ✅ Complete | Tab-based Monthly/Yearly view: annual total card, YoY % change, 12-month overlay chart (this year vs last year), yearly category breakdown, top recipients by year, payment type breakdown by year |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
-| — | Category-based budgets | ⏳ Pending | Set spending limits |
+| **M6** | Investment Category Deep-Dive | ✅ Complete | New group 18 "Investment & Savings" (13 sub-categories); Financial trimmed to expense-only (6 sub-categories); DB migration v7→v8 remaps IDs; KeywordRulesEngine + ExcelCategoryMapper updated with Kenyan investment paybills |
+| **M7** | Category-Based Budgets | ✅ Complete | Group-level + total budgets (weekly/monthly/yearly); DB v8→v9; BudgetScreen CRUD with progress bars; Budget Alerts at 80%/100%; Home budget summary + data-driven prompt; Analytics setup banner; Settings entry point |
 | — | Forecasting | ⏳ Pending | "you'll likely run out by the 23rd" |
 | — | Export to CSV | ⏳ Pending | Shareable reports |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
@@ -549,8 +577,254 @@ backend/
 - [ ] Category management UI
 - [ ] First-launch onboarding flow
 
+### ~~Medium Priority — Phase 2 Milestone 6 (Investment Deep-Dive)~~ ✅ Complete
+- [x] Audit current Financial sub-categories (602, 605, 610, 611, 612) for investment coverage gaps
+- [x] Decide: promote Investment to its own top-level group (Option A — group 18)
+- [x] Add missing investment sub-categories (Stocks, Crypto, Real Estate, Chama, Pension, Fixed Deposit, Unit Trusts, Insurance)
+- [x] Add KeywordRulesEngine entries for common Kenyan investment paybills (CIC, Sanlam, Cytonn, Britam, Genghis, Old Mutual, Stima SACCO, M-Akiba, Binance, etc.)
+- [x] Opted for group-level separation instead of `isInvestment` flag (cleaner UX)
+- [x] DB migration v7→v8: remap 602→1811, 605→1805, 607→1806, 610→1809, 611→1810, 612→1812
+
+### ~~Medium Priority — Phase 2 Milestone 7 (Category-Based Budgets)~~ ✅ Complete
+- [x] Budget data model: BudgetEntity + BudgetDao + DB migration v8→v9 (budgets table with unique index)
+- [x] Budget domain model: Budget, BudgetPeriod (WEEKLY/MONTHLY/YEARLY), BudgetProgress, BudgetStatus, BudgetAlert
+- [x] BudgetRepository: CRUD, period range computation (weekly/monthly/yearly), spending aggregation, progress/alert calculation
+- [x] BudgetScreen CRUD UI: list with progress bars, FAB to add, edit/delete dialog, grouped category picker
+- [x] Budget progress on Home screen: BudgetSummaryCard (top 3 by %), BudgetPromptCard (data-driven, ≥20 categorized expenses)
+- [x] Budget alerts: BudgetService checks thresholds after SMS expense save; NotificationHelper shows 80%/100% alerts
+- [x] Analytics integration: budget setup banner when no budgets exist
+- [x] Entry points: Settings "Manage Budgets" row, Home cards navigate to Budget screen
+- [x] No rollover — fresh budget each period (as per user preference)
+- [x] Investments included in budgets (user wants to budget for them)
+
 ### Lower Priority
 - [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
 - [x] Expense charts/analytics (Vico library — monthly trend, variable-spend category trends with CV detection, daily spending, category breakdown, top spenders, payment types, MoM comparison, **YoY yearly analytics with tab-based view**)
 - [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway
+
+---
+
+## Brainstorm: Investment Category Deep-Dive (M6)
+
+### Current State
+
+The **Financial** group (ID 6) currently contains 12 sub-categories that mix true expenses with wealth-building activity:
+
+| ID | Name | Type |
+|----|------|------|
+| 601 | Bank Charges | Expense ✅ |
+| 602 | Investments | Investment 💰 |
+| 603 | Loan Interest | Expense ✅ |
+| 604 | Loan Repayment | Debt 💳 |
+| 605 | Money Market Fund | Investment 💰 |
+| 606 | Mpesa Transaction Cost | Expense ✅ |
+| 607 | NSSF | Investment 💰 (mandatory) |
+| 608 | Pesalink Charges | Expense ✅ |
+| 609 | RTGS Charges | Expense ✅ |
+| 610 | SACCO | Investment 💰 |
+| 611 | Savings | Investment 💰 |
+| 612 | Treasury Bill | Investment 💰 |
+
+**Problem:** Lumping bank charges with investments inflates perceived "spending" and hides actual wealth-building. A user transferring KES 50,000 to a money market fund shouldn't see that as the same kind of outflow as KES 500 in bank charges.
+
+### Option A: Promote Investment to a Top-Level Group
+
+Create group **18: Investment & Savings** and move investment-type sub-categories there:
+
+| New ID | Name | Notes |
+|--------|------|-------|
+| 1801 | Savings Account | General savings |
+| 1802 | Money Market Fund | e.g. CIC MMF, Sanlam, Cytonn |
+| 1803 | Treasury Bill/Bond | Government securities |
+| 1804 | SACCO Contributions | e.g. Stima, Mwalimu |
+| 1805 | NSSF/NHIF | Mandatory deductions |
+| 1806 | Stocks/Shares | NSE, global broker |
+| 1807 | Unit Trusts/Mutual Funds | Collective investment schemes |
+| 1808 | Crypto | Bitcoin, ETH, etc. |
+| 1809 | Real Estate Investment | Land, REIT, plots |
+| 1810 | Chama Contributions | Investment groups |
+| 1811 | Pension/Retirement | Voluntary pension |
+| 1812 | Fixed Deposit | Bank FDs |
+| 1813 | Insurance (Investment) | Endowment, whole life |
+
+**Pros:** Clean separation; analytics can show "Total Expenses" vs "Total Invested"
+**Cons:** DB migration; existing categorized expenses under 602/605/610–612 need remapping
+
+### Option B: Keep Under Financial, Add `isInvestment` Flag
+
+Add a boolean `isInvestment` column to `CategoryEntity`. Mark investment sub-categories. Analytics filters by this flag.
+
+**Pros:** No group restructuring; simpler migration
+**Cons:** Less visible separation in UI; still mixed in the category picker
+
+### Recommendation
+
+**Option A** — it's the right long-term move. The migration can remap old IDs, and the UI benefit is immediate. Investment tracking deserves first-class visibility.
+
+### Auto-Categorization Targets
+
+Common Kenyan investment paybills/tills to add to `KeywordRulesEngine`:
+
+| Recipient | Category |
+|-----------|----------|
+| CIC Asset Management | Money Market Fund |
+| Sanlam Investments | Money Market Fund |
+| Cytonn Investments | Money Market Fund |
+| Britam Asset Managers | Unit Trusts |
+| Genghis Capital | Stocks/Shares |
+| ICEA Lion | Unit Trusts |
+| Old Mutual | Pension/Retirement |
+| Stima SACCO | SACCO Contributions |
+| Mwalimu National SACCO | SACCO Contributions |
+| Kenya Re SACCO | SACCO Contributions |
+| Safaricom SACCO | SACCO Contributions |
+| M-Akiba | Treasury Bill/Bond |
+| Binance | Crypto |
+| Lipa Na M-PESA (specific SACCOs) | SACCO Contributions |
+
+---
+
+## Brainstorm: Category-Based Budgets (M7)
+
+### The Core Problem
+
+Users can see *what* they spent and *where*, but they can't set limits or get warned when they're overspending in a category. The analytics show history — budgets add **forward-looking control**.
+
+### How It Should Work
+
+#### 1. Data Model
+
+```
+BudgetEntity
+├── id: Long (PK)
+├── categoryId: Long (FK → categories, nullable for "Total" budget)
+├── isGroupBudget: Boolean (true = group level, false = sub-category level)
+├── amount: Double (budget limit in KES)
+├── period: BudgetPeriod (MONTHLY, WEEKLY, YEARLY)
+├── alertAt: List<Int> (e.g. [80, 100] — percentage thresholds)
+├── rolloverEnabled: Boolean (unspent amount carries to next period)
+├── isActive: Boolean
+├── createdAt: Long
+├── updatedAt: Long
+```
+
+```kotlin
+enum class BudgetPeriod { WEEKLY, MONTHLY, YEARLY }
+```
+
+#### 2. Budget Levels — Three Tiers
+
+| Level | Example | What it tracks |
+|-------|---------|----------------|
+| **Total** | "I want to spend ≤ KES 80,000/month" | Sum of ALL non-excluded expenses |
+| **Group** | "Food & Dining ≤ KES 15,000/month" | Sum of all sub-categories in group 7 |
+| **Sub-category** | "Eating Out ≤ KES 5,000/month" | Only category 702 |
+
+**Conflict resolution:** If both a group budget and sub-category budget exist, both are independently tracked. The sub-category budget is the tighter constraint (alerts fire for whichever is hit first).
+
+#### 3. Budget Setup UI
+
+**Entry point:** Settings → "Budgets" section, or a new "Budget" tab in Analytics.
+
+**Flow:**
+1. Tap "Add Budget" → pick category (grouped picker, same as categorize screen — plus a "Total Spending" option at top)
+2. Enter amount (KES input with currency formatting)
+3. Pick period (Monthly default, Weekly/Yearly available)
+4. Toggle rollover on/off (default: off)
+5. Set alert thresholds (default: 80% and 100%; customizable)
+6. Save
+
+**Edit/Delete:** Long-press or swipe on budget list item.
+
+#### 4. Budget Progress Display
+
+**Home Screen — Budget Summary Card:**
+```
+┌──────────────────────────────────────────┐
+│  📊 March Budget                         │
+│                                          │
+│  Total     ████████████░░░░  KES 62,400  │
+│            ─────────────────  / 80,000    │
+│                                   78%    │
+│                                          │
+│  ⚠️ Food    ████████████████  KES 14,800  │
+│            ─────────────────  / 15,000    │
+│                                   99%    │
+│                                          │
+│  Transport ██████░░░░░░░░░░  KES 3,200   │
+│            ─────────────────  / 8,000     │
+│                                   40%    │
+└──────────────────────────────────────────┘
+```
+
+- Green bar: < 80%
+- Amber bar: 80–99%
+- Red bar: ≥ 100%
+- Only show budgets that are active; sort by % used descending
+
+**Analytics Screen — Budget vs Actual:**
+- Category breakdown chart with budget line overlay
+- Monthly trend chart with budget ceiling line
+- "Over budget" categories highlighted in red
+
+#### 5. Alert Notifications
+
+When an expense is saved (SMS, manual, or import) and it pushes a budget past a threshold:
+
+| Threshold | Notification |
+|-----------|-------------|
+| 80% | "⚠️ Food & Dining: 80% of KES 15,000 budget used (KES 12,100 spent)" |
+| 100% | "🚨 Food & Dining: Budget exceeded! KES 15,200 / 15,000 (101%)" |
+
+**Implementation:** Check budgets in `ExpenseRepository.insertExpense()` after successful save. Use existing `NotificationHelper` with a new channel "Budget Alerts".
+
+#### 6. Rollover Logic
+
+If `rolloverEnabled = true`:
+- End of period: `remainingBudget = budgetAmount - actualSpend`
+- Next period budget = `budgetAmount + remainingBudget` (if positive) or `budgetAmount` (if overspent, no penalty carry)
+- Store rollover history in a `BudgetRolloverEntity` for audit trail
+
+**Default: Off.** Most users expect a fresh budget each month.
+
+#### 7. Excluded Expenses
+
+Expenses with `isExcluded = true` do **not** count toward any budget. This is consistent with the existing analytics behavior.
+
+#### 8. Investment Interaction (M6 → M7 Dependency)
+
+If M6 is done first and investments are separated:
+- Budgets only apply to **expense** categories (not investment)
+- "Total" budget = total expenses excluding investment outflows
+- This prevents a KES 50,000 MMF transfer from blowing the monthly budget
+
+If M6 is NOT done first:
+- User can choose to exclude Financial > Investments from the total budget manually
+- Or we add a "Budget applies to expenses only" toggle
+
+#### 9. Suggested Budgets (Nice-to-Have)
+
+Based on the last 3–6 months of data:
+- "You typically spend KES 14,200/month on Food & Dining. Set budget at KES 15,000?"
+- Uses same CV-based analysis from analytics to identify stable categories worth budgeting
+
+#### 10. Technical Implementation Plan
+
+| Step | Component | Description |
+|------|-----------|-------------|
+| 1 | `BudgetEntity` | Room entity + DAO + migration |
+| 2 | `BudgetRepository` | CRUD + budget checking logic |
+| 3 | `BudgetViewModel` | Budget setup/edit UI state |
+| 4 | `BudgetScreen` | Compose UI for budget CRUD |
+| 5 | Home integration | Budget summary card on HomeScreen |
+| 6 | Alert integration | Budget check in ExpenseRepository + NotificationHelper |
+| 7 | Analytics integration | Budget overlay on category charts |
+| 8 | Navigation | Add Budget route to NavGraph |
+
+### Open Questions
+
+1. **Should budgets be per-month or configurable period?** Monthly covers 90% of use cases. Weekly/yearly adds flexibility but also complexity.
+2. **Group vs sub-category budgets?** Supporting both is ideal but the UI needs to be clear about which level you're setting.
+3. **What happens when the user recategorizes an expense?** Both the old and new category budgets need recalculation. Use Room Flow/LiveData to make this reactive.
+4. **Should there be a "quick budget" from the category breakdown chart?** Tap a category bar → "Set budget for this category" — reduces friction.

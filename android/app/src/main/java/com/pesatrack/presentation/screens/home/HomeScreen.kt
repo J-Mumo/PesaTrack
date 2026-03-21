@@ -1,9 +1,11 @@
 package com.pesatrack.presentation.screens.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
@@ -26,6 +30,8 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.MonthComparison
+import com.pesatrack.domain.models.BudgetProgress
+import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.presentation.components.ExpenseCard
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
@@ -42,6 +48,7 @@ fun HomeScreen(
     onNavigateToBatchCategorize: () -> Unit = {},
     onNavigateToManualEntry: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToBudget: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -79,6 +86,28 @@ fun HomeScreen(
             MonthlySummaryCard(
                 total = uiState.totalThisMonth
             )
+        }
+
+        // Budget Summary Card (when user has budgets)
+        if (uiState.budgetProgressList.isNotEmpty()) {
+            item {
+                BudgetSummaryCard(
+                    progressList = uiState.budgetProgressList,
+                    onViewBudgets = onNavigateToBudget
+                )
+            }
+        }
+
+        // Budget Prompt Card (when user has no budgets but enough data)
+        if (uiState.showBudgetPrompt) {
+            item {
+                BudgetPromptCard(
+                    categoryName = uiState.budgetPromptCategoryName,
+                    amount = uiState.budgetPromptAmount,
+                    onSetBudget = onNavigateToBudget,
+                    onDismiss = { viewModel.dismissBudgetPrompt() }
+                )
+            }
         }
 
         // Spending Trend Card (mini chart)
@@ -158,9 +187,7 @@ fun HomeScreen(
                     categoryName = ewc.categoryName,
                     categoryColor = ewc.categoryColor,
                     onClick = {
-                        if (!ewc.expense.isCategorized) {
-                            onNavigateToCategorize(ewc.expense.id)
-                        }
+                        onNavigateToCategorize(ewc.expense.id)
                     }
                 )
             }
@@ -477,6 +504,182 @@ fun SpendingTrendCard(
                         .fillMaxWidth()
                         .height(80.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun BudgetSummaryCard(
+    progressList: List<BudgetProgress>,
+    onViewBudgets: () -> Unit
+) {
+    val currentMonth = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date())
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onViewBudgets() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "📊 $currentMonth Budget",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "View →",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            for (progress in progressList) {
+                BudgetMiniProgress(progress)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BudgetMiniProgress(progress: BudgetProgress) {
+    val name = progress.budget.categoryGroupName ?: "Total"
+    val barColor = when (progress.status) {
+        BudgetStatus.UNDER -> MaterialTheme.colorScheme.primary
+        BudgetStatus.WARNING -> Color(0xFFFF9800)
+        BudgetStatus.EXCEEDED -> MaterialTheme.colorScheme.error
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val categoryColor = progress.budget.categoryGroupColor?.let {
+                    try { Color(it.toColorInt()) } catch (_: Exception) { null }
+                }
+                if (categoryColor != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(categoryColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (progress.status == BudgetStatus.WARNING) {
+                    Text("⚠️ ", style = MaterialTheme.typography.labelSmall)
+                } else if (progress.status == BudgetStatus.EXCEEDED) {
+                    Text("🚨 ", style = MaterialTheme.typography.labelSmall)
+                }
+                Text(
+                    text = "${String.format("%.0f", progress.percentage)}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = barColor
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        LinearProgressIndicator(
+            progress = { (progress.percentage / 100.0).coerceIn(0.0, 1.0).toFloat() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = barColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        )
+    }
+}
+
+@Composable
+fun BudgetPromptCard(
+    categoryName: String?,
+    amount: Double?,
+    onSetBudget: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = "💡 Set a spending budget?",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Dismiss",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            if (categoryName != null && amount != null) {
+                Text(
+                    text = "You spent ${amount.formatAsCurrency()} on $categoryName last month. Set a budget to stay on track.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
+            } else {
+                Text(
+                    text = "Create budgets to track your spending and get alerts when you're close to your limits.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onSetBudget,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Text("Set Budget")
+                }
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Maybe Later")
+                }
             }
         }
     }

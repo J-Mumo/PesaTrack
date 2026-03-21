@@ -35,7 +35,12 @@ fun CategorizeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Categorize Expense") },
+                title = {
+                    Text(
+                        if (uiState.expense?.isCategorized == true) "Edit Category"
+                        else "Categorize Expense"
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.Close, contentDescription = "Close")

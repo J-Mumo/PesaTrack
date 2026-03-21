@@ -75,5 +75,10 @@ data class AnalyticsUiState(
     val yearlyTopSpenders: List<TopSpender> = emptyList(),
     val yearlyPaymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
 
+    // ==================== Budget Integration ====================
+
+    /** Whether the user has any active budgets (used to show/hide budget banner) */
+    val hasActiveBudgets: Boolean = false,
+
     val error: String? = null
 )
