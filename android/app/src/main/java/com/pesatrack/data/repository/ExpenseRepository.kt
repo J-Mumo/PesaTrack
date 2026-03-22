@@ -65,6 +65,14 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Get investment total (Investment & Savings group 18) for current month
+     */
+    fun getInvestmentTotalForCurrentMonth(): Flow<Double> {
+        val (start, end) = getCurrentMonthRange()
+        return expenseDao.getInvestmentTotalForMonth(start, end)
+    }
+
+    /**
      * Save a new expense
      */
     suspend fun saveExpense(expense: Expense): Long {

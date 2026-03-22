@@ -13,8 +13,8 @@ data class BudgetUiState(
     /** Active budgets with progress information */
     val budgetProgressList: List<BudgetProgress> = emptyList(),
 
-    /** Available category groups for the add/edit dialog */
-    val availableGroups: List<CategoryGroupOption> = emptyList(),
+    /** Available category options for the add/edit dialog (hierarchical: groups + sub-categories) */
+    val availableCategories: List<BudgetCategoryOption> = emptyList(),
 
     /** Whether the add/edit dialog is visible */
     val showAddEditDialog: Boolean = false,
@@ -23,7 +23,8 @@ data class BudgetUiState(
     val editingBudget: Budget? = null,
 
     /** Form fields for the add/edit dialog */
-    val dialogCategoryGroupId: Long? = null, // null = Total Spending
+    val dialogCategoryId: Long? = null, // null = Total Spending
+    val dialogIsGroupBudget: Boolean = true, // true = group-level, false = sub-category
     val dialogAmount: String = "",
     val dialogPeriod: BudgetPeriod = BudgetPeriod.MONTHLY,
 
@@ -36,15 +37,20 @@ data class BudgetUiState(
 )
 
 /**
- * Represents a category group option in the budget picker.
+ * Represents a category option in the budget picker.
+ * Can be a "Total Spending" sentinel, a group, or a sub-category.
  */
-data class CategoryGroupOption(
-    /** Category group ID. Null = "Total Spending". */
+data class BudgetCategoryOption(
+    /** Category ID. Null = "Total Spending". */
     val id: Long?,
     /** Display name */
     val name: String,
     /** Hex colour */
     val color: String?,
-    /** Whether a budget already exists for this group (prevents duplicates in UI) */
+    /** Whether this is a group (true) or sub-category (false). Null for "Total Spending". */
+    val isGroup: Boolean?,
+    /** Parent group ID for sub-categories. Null for groups and "Total Spending". */
+    val parentGroupId: Long?,
+    /** Whether a budget already exists for this category at the same level (prevents duplicates in UI) */
     val hasExistingBudget: Boolean
 )

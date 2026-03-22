@@ -10,6 +10,11 @@ import javax.inject.Singleton
  *
  * Called from [SmsReceiver] and ViewModels after a successful expense insert.
  * Returns a list of [BudgetAlert]s if any budget crossed the 80% or 100% threshold.
+ *
+ * Checks all three budget levels:
+ * - Total Spending budget (always checked)
+ * - Group-level budget (if expense's group has one)
+ * - Sub-category-level budget (if expense's exact category has one)
  */
 @Singleton
 class BudgetService @Inject constructor(
@@ -27,9 +32,6 @@ class BudgetService @Inject constructor(
     suspend fun checkBudgetsAfterExpense(expenseCategoryId: Long?): List<BudgetAlert> {
         if (expenseCategoryId == null) return emptyList()
 
-        // Resolve the group ID from the sub-category
-        val groupId = budgetRepository.getGroupIdForCategory(expenseCategoryId) ?: return emptyList()
-
-        return budgetRepository.checkBudgetAlerts(groupId)
+        return budgetRepository.checkBudgetAlerts(expenseCategoryId)
     }
 }

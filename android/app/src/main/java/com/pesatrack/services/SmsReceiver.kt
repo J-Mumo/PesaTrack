@@ -146,7 +146,7 @@ class SmsReceiver : BroadcastReceiver() {
                     try {
                         val alerts = budgetService.checkBudgetsAfterExpense(mainExpense.categoryId)
                         for (alert in alerts) {
-                            val categoryName = alert.budget.categoryGroupName ?: "Total Spending"
+                            val categoryName = alert.budget.categoryName ?: "Total Spending"
                             NotificationHelper.showBudgetAlertNotification(
                                 context = context,
                                 budgetId = alert.budget.id,

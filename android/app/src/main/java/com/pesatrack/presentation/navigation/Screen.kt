@@ -16,6 +16,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object ManualEntry : Screen("manual_entry")
     object Budget : Screen("budget")
+    object CategoryManagement : Screen("category_management")
 }
 
 /**

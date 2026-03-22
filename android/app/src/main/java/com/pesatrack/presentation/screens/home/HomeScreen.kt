@@ -84,7 +84,8 @@ fun HomeScreen(
         // Monthly Summary Card
         item {
             MonthlySummaryCard(
-                total = uiState.totalThisMonth
+                total = uiState.totalThisMonth,
+                investmentTotal = uiState.investmentThisMonth
             )
         }
 
@@ -197,9 +198,11 @@ fun HomeScreen(
 
 @Composable
 fun MonthlySummaryCard(
-    total: Double
+    total: Double,
+    investmentTotal: Double = 0.0
 ) {
     val currentMonth = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
+    val investmentPct = if (total > 0) (investmentTotal / total) * 100.0 else 0.0
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -228,6 +231,24 @@ fun MonthlySummaryCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
             )
+
+            // Investment breakdown — shown only when there's investment data
+            if (investmentTotal > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📈 ",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "${investmentTotal.formatAsCurrency()} (${String.format("%.0f", investmentPct)}%) invested",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    )
+                }
+            }
         }
     }
 }
@@ -554,7 +575,7 @@ fun BudgetSummaryCard(
 
 @Composable
 private fun BudgetMiniProgress(progress: BudgetProgress) {
-    val name = progress.budget.categoryGroupName ?: "Total"
+    val name = progress.budget.categoryName ?: "Total"
     val barColor = when (progress.status) {
         BudgetStatus.UNDER -> MaterialTheme.colorScheme.primary
         BudgetStatus.WARNING -> Color(0xFFFF9800)
@@ -568,7 +589,7 @@ private fun BudgetMiniProgress(progress: BudgetProgress) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val categoryColor = progress.budget.categoryGroupColor?.let {
+                val categoryColor = progress.budget.categoryColor?.let {
                     try { Color(it.toColorInt()) } catch (_: Exception) { null }
                 }
                 if (categoryColor != null) {

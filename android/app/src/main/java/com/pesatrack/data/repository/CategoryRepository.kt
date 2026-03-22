@@ -6,7 +6,6 @@ import com.pesatrack.data.local.database.entities.DefaultCategories
 import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.CategoryGroup
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -70,6 +69,13 @@ class CategoryRepository @Inject constructor(
             entities.map { it.toDomain() }
         }
     }
+
+    /**
+     * Get children of a specific parent (suspend, for one-shot queries)
+     */
+    suspend fun getSubCategoriesSync(parentId: Long): List<Category> {
+        return categoryDao.getChildCategoriesSync(parentId).map { it.toDomain() }
+    }
     
     /**
      * Get category by ID
@@ -113,21 +119,25 @@ class CategoryRepository @Inject constructor(
     }
     
     /**
-     * Add custom category
+     * Add custom sub-category under a parent group
      */
     suspend fun addCategory(
-        name: String, 
-        icon: String, 
+        name: String,
+        icon: String,
         color: String,
         parentId: Long? = null
     ): Long {
+        val nextSort = if (parentId != null) {
+            categoryDao.getMaxSortOrderForParent(parentId) + 1
+        } else 0
         val category = CategoryEntity(
             name = name,
             icon = icon,
             color = color,
             parentId = parentId,
             isGroup = false,
-            isDefault = false
+            isDefault = false,
+            sortOrder = nextSort
         )
         return categoryDao.insert(category)
     }
@@ -140,15 +150,66 @@ class CategoryRepository @Inject constructor(
         icon: String,
         color: String
     ): Long {
+        val nextSort = categoryDao.getMaxGroupSortOrder() + 1
         val group = CategoryEntity(
             name = name,
             icon = icon,
             color = color,
             parentId = null,
             isGroup = true,
-            isDefault = false
+            isDefault = false,
+            sortOrder = nextSort
         )
         return categoryDao.insert(group)
+    }
+
+    /**
+     * Update an existing category (name, icon, color).
+     * Preserves parentId, isGroup, isDefault, and sortOrder.
+     */
+    suspend fun updateCategory(
+        id: Long,
+        name: String,
+        icon: String,
+        color: String
+    ) {
+        val entity = categoryDao.getById(id) ?: return
+        categoryDao.update(entity.copy(name = name, icon = icon, color = color))
+    }
+
+    /**
+     * Delete a sub-category. Returns false if category is in use by expenses.
+     */
+    suspend fun deleteCategory(id: Long): Boolean {
+        val count = categoryDao.getExpenseCountForCategory(id)
+        if (count > 0) return false
+        categoryDao.delete(id)
+        return true
+    }
+
+    /**
+     * Delete a custom group and all its non-default children.
+     * Returns false if any sub-category under the group has expenses.
+     */
+    suspend fun deleteGroup(groupId: Long): Boolean {
+        val count = categoryDao.getExpenseCountForGroup(groupId)
+        if (count > 0) return false
+        categoryDao.deleteGroupAndChildren(groupId)
+        return true
+    }
+
+    /**
+     * Get number of expenses assigned to a specific category
+     */
+    suspend fun getExpenseCountForCategory(categoryId: Long): Int {
+        return categoryDao.getExpenseCountForCategory(categoryId)
+    }
+
+    /**
+     * Get number of expenses assigned to any sub-category in a group
+     */
+    suspend fun getExpenseCountForGroup(groupId: Long): Int {
+        return categoryDao.getExpenseCountForGroup(groupId)
     }
     
     // Extension function for mapping

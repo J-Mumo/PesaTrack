@@ -1,16 +1,21 @@
 package com.pesatrack.domain.models
 
 /**
- * Domain model for a budget — a spending limit for a category group or total spending.
+ * Domain model for a budget — a spending limit for a category group, sub-category, or total spending.
  */
 data class Budget(
     val id: Long = 0,
-    /** Category group ID. Null = "Total Spending" budget. */
-    val categoryGroupId: Long?,
-    /** Resolved category group name; null = "Total Spending". */
-    val categoryGroupName: String?,
-    /** Hex colour of the category group (for UI progress bar). */
-    val categoryGroupColor: String?,
+    /** Category ID. Null = "Total Spending" budget. Can be a group or sub-category ID. */
+    val categoryId: Long?,
+    /** Resolved category name; null = "Total Spending". */
+    val categoryName: String?,
+    /** Hex colour of the category (for UI progress bar). */
+    val categoryColor: String?,
+    /**
+     * Whether this budget tracks a whole group (true) or a single sub-category (false).
+     * Ignored when categoryId is null.
+     */
+    val isGroupBudget: Boolean = true,
     /** Budget limit in KES. */
     val amount: Double,
     /** Budget period. */

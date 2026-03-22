@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
  * Settings screen for configuring:
+ * - Category management (custom categories + auto-categorization rules)
+ * - Budget management
  * - Bank SMS tracking (master toggle + individual bank toggles)
  *
  * M-PESA tracking is always on and not shown here.
@@ -27,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBudget: () -> Unit = {},
+    onNavigateToCategoryManagement: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -64,6 +68,9 @@ fun SettingsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Section: Categories
+                CategoriesSection(onNavigateToCategoryManagement = onNavigateToCategoryManagement)
+
                 // Section: Budgets
                 BudgetsSection(onNavigateToBudget = onNavigateToBudget)
 
@@ -74,6 +81,62 @@ fun SettingsScreen(
                     onBankToggled = viewModel::setBankEnabled
                 )
             }
+        }
+    }
+}
+
+/**
+ * Categories section — navigate to category management screen.
+ */
+@Composable
+private fun CategoriesSection(
+    onNavigateToCategoryManagement: () -> Unit
+) {
+    Text(
+        text = "Categories",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+
+    Card(
+        onClick = onNavigateToCategoryManagement,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Category,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column {
+                    Text(
+                        text = "Manage Categories",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Add custom categories & auto-categorization rules",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Go to Categories",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

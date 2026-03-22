@@ -1,6 +1,10 @@
 package com.pesatrack.services
 
 import android.util.Log
+import com.pesatrack.data.local.database.entities.RuleMatchType
+import com.pesatrack.data.repository.CategoryRepository
+import com.pesatrack.data.repository.CategoryRule
+import com.pesatrack.data.repository.CategoryRuleRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,28 +52,31 @@ data class CategorizationResult(
 )
 
 /**
- * Service for on-device expense categorization using keyword/rules engine.
+ * Service for on-device expense categorization.
  *
- * Replaces the previous Gemini AI implementation with a deterministic,
- * offline rules engine. No API key or network connection required.
+ * Evaluation order:
+ * 0. **User-defined rules** (from category_rules table — highest priority)
+ * 1. Built-in KeywordRulesEngine (PaymentType → exact name → keyword → fallback)
  *
- * Takes a list of uncategorized recipient names with context (PaymentType, total amount)
- * and uses keyword matching to suggest the most appropriate category from the app's
- * 17-group, 89+ subcategory tree.
+ * User rules take precedence over built-in rules, giving users full control
+ * over how their recipients are categorized.
  */
 @Singleton
 class CategorizationService @Inject constructor(
-    private val keywordRulesEngine: KeywordRulesEngine
+    private val keywordRulesEngine: KeywordRulesEngine,
+    private val categoryRuleRepository: CategoryRuleRepository,
+    private val categoryRepository: CategoryRepository
 ) {
 
     companion object {
         private const val TAG = "CategorizationService"
+        private const val CONFIDENCE_USER_RULE = 0.99f
     }
 
     /**
-     * Suggest categories for a list of recipients using the keyword rules engine.
+     * Suggest categories for a list of recipients.
      *
-     * This is instant and works offline — no API calls, no rate limits.
+     * Checks user-defined rules first, then falls back to the built-in engine.
      *
      * @param recipients List of recipient info to categorize
      * @return CategorizationResult with suggestions or error
@@ -82,13 +89,73 @@ class CategorizationService @Inject constructor(
         }
 
         return try {
-            Log.d(TAG, "Categorizing ${recipients.size} recipients via rules engine")
-            val result = keywordRulesEngine.categorize(recipients)
-            Log.d(TAG, "Rules engine returned ${result.suggestions.size} suggestions")
-            result
+            // Load user-defined rules
+            val userRules = categoryRuleRepository.getActiveRules()
+            Log.d(TAG, "Loaded ${userRules.size} user rules, categorizing ${recipients.size} recipients")
+
+            val suggestions = mutableMapOf<String, CategorySuggestion>()
+
+            // First pass: try user rules
+            val remaining = mutableListOf<RecipientInfo>()
+            for (recipient in recipients) {
+                val userMatch = matchUserRule(recipient, userRules)
+                if (userMatch != null) {
+                    suggestions[recipient.recipientKey] = userMatch
+                } else {
+                    remaining.add(recipient)
+                }
+            }
+
+            Log.d(TAG, "User rules matched ${suggestions.size} recipients, ${remaining.size} remaining")
+
+            // Second pass: built-in engine for unmatched recipients
+            if (remaining.isNotEmpty()) {
+                val builtInResult = keywordRulesEngine.categorize(remaining)
+                suggestions.putAll(builtInResult.suggestions)
+            }
+
+            Log.d(TAG, "Total: ${suggestions.size}/${recipients.size} categorized")
+            CategorizationResult(suggestions = suggestions)
         } catch (e: Exception) {
-            Log.e(TAG, "Rules engine categorization failed", e)
+            Log.e(TAG, "Categorization failed", e)
             CategorizationResult(error = "Categorization failed: ${e.message}")
         }
+    }
+
+    /**
+     * Match a recipient against user-defined rules.
+     * Rules are already sorted by priority descending.
+     */
+    private suspend fun matchUserRule(
+        recipient: RecipientInfo,
+        rules: List<CategoryRule>
+    ): CategorySuggestion? {
+        val name = recipient.displayName.uppercase().trim()
+
+        for (rule in rules) {
+            val pattern = rule.pattern.uppercase().trim()
+            val matches = when (rule.matchType) {
+                RuleMatchType.EXACT -> name == pattern
+                RuleMatchType.CONTAINS -> name.contains(pattern)
+                RuleMatchType.STARTS_WITH -> name.startsWith(pattern)
+            }
+
+            if (matches) {
+                // Resolve category name and group name
+                val category = categoryRepository.getCategoryById(rule.categoryId)
+                val groupName = category?.parentId?.let { parentId ->
+                    categoryRepository.getCategoryById(parentId)?.name
+                } ?: "Unknown"
+
+                return CategorySuggestion(
+                    categoryId = rule.categoryId,
+                    categoryName = category?.name ?: "Unknown",
+                    groupName = groupName,
+                    confidence = CONFIDENCE_USER_RULE
+                )
+            }
+        }
+
+        return null
     }
 }

@@ -6,6 +6,7 @@ import androidx.room.Room
 import com.pesatrack.data.local.database.PesaTrackDatabase
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
+import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import dagger.Module
@@ -41,7 +42,10 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_5_6,
                 PesaTrackDatabase.MIGRATION_6_7,
                 PesaTrackDatabase.MIGRATION_7_8,
-                PesaTrackDatabase.MIGRATION_8_9
+                PesaTrackDatabase.MIGRATION_8_9,
+                PesaTrackDatabase.MIGRATION_9_10,
+                PesaTrackDatabase.MIGRATION_10_11,
+                PesaTrackDatabase.MIGRATION_11_12
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -69,6 +73,12 @@ object AppModule {
     @Singleton
     fun provideBudgetDao(database: PesaTrackDatabase): BudgetDao {
         return database.budgetDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCategoryRuleDao(database: PesaTrackDatabase): CategoryRuleDao {
+        return database.categoryRuleDao()
     }
 
     // ==================== System Services ====================

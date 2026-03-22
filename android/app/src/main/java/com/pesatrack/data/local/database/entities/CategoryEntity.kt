@@ -58,47 +58,34 @@ data class CategoryEntity(
  *      Group 7 (Food & Dining) → 701, 702, ...
  *
  * Version history:
- * - v1: Initial 17 groups, 89 subcategories
+ * - v1: Initial 17 groups, 89 subcategories (included Beekeeping)
  * - v2 (migration 5→6): Alphabetical groups, merges, renames, additions
+ *
+ * Note: Beekeeping was removed from defaults in v11. It remains for existing users
+ *       as a custom (non-default) category that can be edited/deleted.
  */
 object DefaultCategories {
     
     // ==================== Category Groups (Alphabetical) ====================
 
     private val groups = listOf(
-        CategoryEntity(id = 1, name = "Beekeeping", icon = "hive", color = "#FFC107", isGroup = true, isDefault = true, sortOrder = 1),
-        CategoryEntity(id = 2, name = "Digital & Tech", icon = "devices", color = "#607D8B", isGroup = true, isDefault = true, sortOrder = 2),
-        CategoryEntity(id = 3, name = "Education", icon = "school", color = "#3F51B5", isGroup = true, isDefault = true, sortOrder = 3),
-        CategoryEntity(id = 4, name = "Entertainment", icon = "movie", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 4),
-        CategoryEntity(id = 5, name = "Faith & Giving", icon = "volunteer_activism", color = "#673AB7", isGroup = true, isDefault = true, sortOrder = 5),
-        CategoryEntity(id = 6, name = "Financial", icon = "account_balance", color = "#795548", isGroup = true, isDefault = true, sortOrder = 6),
-        CategoryEntity(id = 7, name = "Food & Dining", icon = "restaurant", color = "#FF5722", isGroup = true, isDefault = true, sortOrder = 7),
-        CategoryEntity(id = 8, name = "Government & Legal", icon = "gavel", color = "#455A64", isGroup = true, isDefault = true, sortOrder = 8),
-        CategoryEntity(id = 9, name = "Health", icon = "local_hospital", color = "#F44336", isGroup = true, isDefault = true, sortOrder = 9),
-        CategoryEntity(id = 10, name = "Home & Utilities", icon = "home", color = "#4CAF50", isGroup = true, isDefault = true, sortOrder = 10),
-        CategoryEntity(id = 18, name = "Investment & Savings", icon = "trending_up", color = "#006064", isGroup = true, isDefault = true, sortOrder = 11),
-        CategoryEntity(id = 11, name = "Life Events", icon = "cake", color = "#FF9800", isGroup = true, isDefault = true, sortOrder = 12),
-        CategoryEntity(id = 12, name = "Miscellaneous", icon = "more_horiz", color = "#9E9E9E", isGroup = true, isDefault = true, sortOrder = 13),
-        CategoryEntity(id = 13, name = "Personal Care", icon = "face", color = "#00BCD4", isGroup = true, isDefault = true, sortOrder = 14),
-        CategoryEntity(id = 14, name = "Pets", icon = "pets", color = "#8BC34A", isGroup = true, isDefault = true, sortOrder = 15),
-        CategoryEntity(id = 15, name = "Shopping", icon = "shopping_bag", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 16),
-        CategoryEntity(id = 16, name = "Transport & Travel", icon = "commute", color = "#9C27B0", isGroup = true, isDefault = true, sortOrder = 17),
-        CategoryEntity(id = 17, name = "Vehicle", icon = "directions_car", color = "#2196F3", isGroup = true, isDefault = true, sortOrder = 18),
-    )
-
-    // ==================== Group 1: Beekeeping ====================
-
-    private val beekeepingCategories = listOf(
-        CategoryEntity(id = 101, name = "Bee Equipment", icon = "construction", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 1),
-        CategoryEntity(id = 102, name = "Bee Feed", icon = "restaurant", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 2),
-        CategoryEntity(id = 103, name = "Bee Hive Tables", icon = "table_bar", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 3),
-        CategoryEntity(id = 104, name = "Bee Hives", icon = "hive", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 4),
-        CategoryEntity(id = 105, name = "Bee Medicine", icon = "medication", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 5),
-        CategoryEntity(id = 106, name = "Bee Swarmer", icon = "scatter_plot", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 6),
-        CategoryEntity(id = 107, name = "Bee Wax", icon = "hexagon", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 7),
-        CategoryEntity(id = 108, name = "Bees", icon = "emoji_nature", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 8),
-        CategoryEntity(id = 109, name = "Honey Harvesting", icon = "agriculture", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 9),
-        CategoryEntity(id = 110, name = "Honey Packaging", icon = "inventory_2", color = "#FFC107", parentId = 1, isDefault = true, sortOrder = 10),
+        CategoryEntity(id = 2, name = "Digital & Tech", icon = "devices", color = "#607D8B", isGroup = true, isDefault = true, sortOrder = 1),
+        CategoryEntity(id = 3, name = "Education", icon = "school", color = "#3F51B5", isGroup = true, isDefault = true, sortOrder = 2),
+        CategoryEntity(id = 4, name = "Entertainment", icon = "movie", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 3),
+        CategoryEntity(id = 5, name = "Faith & Giving", icon = "volunteer_activism", color = "#673AB7", isGroup = true, isDefault = true, sortOrder = 4),
+        CategoryEntity(id = 6, name = "Financial", icon = "account_balance", color = "#795548", isGroup = true, isDefault = true, sortOrder = 5),
+        CategoryEntity(id = 7, name = "Food & Dining", icon = "restaurant", color = "#FF5722", isGroup = true, isDefault = true, sortOrder = 6),
+        CategoryEntity(id = 8, name = "Government & Legal", icon = "gavel", color = "#455A64", isGroup = true, isDefault = true, sortOrder = 7),
+        CategoryEntity(id = 9, name = "Health", icon = "local_hospital", color = "#F44336", isGroup = true, isDefault = true, sortOrder = 8),
+        CategoryEntity(id = 10, name = "Home & Utilities", icon = "home", color = "#4CAF50", isGroup = true, isDefault = true, sortOrder = 9),
+        CategoryEntity(id = 18, name = "Investment & Savings", icon = "trending_up", color = "#006064", isGroup = true, isDefault = true, sortOrder = 10),
+        CategoryEntity(id = 11, name = "Life Events", icon = "cake", color = "#FF9800", isGroup = true, isDefault = true, sortOrder = 11),
+        CategoryEntity(id = 12, name = "Miscellaneous", icon = "more_horiz", color = "#9E9E9E", isGroup = true, isDefault = true, sortOrder = 12),
+        CategoryEntity(id = 13, name = "Personal Care", icon = "face", color = "#00BCD4", isGroup = true, isDefault = true, sortOrder = 13),
+        CategoryEntity(id = 14, name = "Pets", icon = "pets", color = "#8BC34A", isGroup = true, isDefault = true, sortOrder = 14),
+        CategoryEntity(id = 15, name = "Shopping", icon = "shopping_bag", color = "#E91E63", isGroup = true, isDefault = true, sortOrder = 15),
+        CategoryEntity(id = 16, name = "Transport & Travel", icon = "commute", color = "#9C27B0", isGroup = true, isDefault = true, sortOrder = 16),
+        CategoryEntity(id = 17, name = "Vehicle", icon = "directions_car", color = "#2196F3", isGroup = true, isDefault = true, sortOrder = 17),
     )
 
     // ==================== Group 2: Digital & Tech ====================
@@ -318,7 +305,6 @@ object DefaultCategories {
      * Get all categories (groups + children)
      */
     val categories: List<CategoryEntity> = groups +
-        beekeepingCategories +
         digitalCategories +
         educationCategories +
         entertainmentCategories +

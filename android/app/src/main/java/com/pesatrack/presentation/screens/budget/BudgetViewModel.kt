@@ -25,7 +25,7 @@ class BudgetViewModel @Inject constructor(
 
     init {
         loadBudgets()
-        loadCategoryGroups()
+        loadCategoryOptions()
     }
 
     /**
@@ -43,8 +43,8 @@ class BudgetViewModel @Inject constructor(
                         error = null
                     )
                 }
-                // Update available groups (mark which ones have budgets)
-                updateAvailableGroups()
+                // Update available categories (mark which ones have budgets)
+                updateAvailableCategories()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, error = "Failed to load budgets")
@@ -54,52 +54,73 @@ class BudgetViewModel @Inject constructor(
     }
 
     /**
-     * Load category groups for the add/edit picker.
+     * Load category groups and their sub-categories for the add/edit picker.
      */
-    private fun loadCategoryGroups() {
+    private fun loadCategoryOptions() {
         viewModelScope.launch {
             categoryRepository.getGroups().collect { groups ->
-                updateAvailableGroups()
+                updateAvailableCategories()
             }
         }
     }
 
     /**
-     * Update available groups, marking which ones already have budgets.
+     * Update available categories, marking which ones already have budgets.
+     * Builds a hierarchical list: Total → Group1 → Sub1a, Sub1b, ... → Group2 → ...
      */
-    private fun updateAvailableGroups() {
+    private fun updateAvailableCategories() {
         viewModelScope.launch {
             try {
                 categoryRepository.getGroups().collect { groups ->
-                    val existingBudgetGroupIds = _uiState.value.budgetProgressList
-                        .map { it.budget.categoryGroupId }
+                    val existingBudgets = _uiState.value.budgetProgressList
+                        .map { Pair(it.budget.categoryId, it.budget.isGroupBudget) }
                         .toSet()
 
-                    val options = mutableListOf<CategoryGroupOption>()
+                    val options = mutableListOf<BudgetCategoryOption>()
 
                     // "Total Spending" option first
                     options.add(
-                        CategoryGroupOption(
+                        BudgetCategoryOption(
                             id = null,
                             name = "Total Spending",
                             color = null,
-                            hasExistingBudget = null in existingBudgetGroupIds
+                            isGroup = null,
+                            parentGroupId = null,
+                            hasExistingBudget = Pair(null, true) in existingBudgets
                         )
                     )
 
-                    // Category groups
+                    // Category groups + their sub-categories
                     for (group in groups) {
+                        // Add group-level option
                         options.add(
-                            CategoryGroupOption(
+                            BudgetCategoryOption(
                                 id = group.id,
                                 name = group.name,
                                 color = group.color,
-                                hasExistingBudget = group.id in existingBudgetGroupIds
+                                isGroup = true,
+                                parentGroupId = null,
+                                hasExistingBudget = Pair(group.id, true) in existingBudgets
                             )
                         )
+
+                        // Add sub-category options under this group
+                        val subCategories = categoryRepository.getSubCategoriesSync(group.id)
+                        for (sub in subCategories) {
+                            options.add(
+                                BudgetCategoryOption(
+                                    id = sub.id,
+                                    name = sub.name,
+                                    color = sub.color,
+                                    isGroup = false,
+                                    parentGroupId = group.id,
+                                    hasExistingBudget = Pair(sub.id, false) in existingBudgets
+                                )
+                            )
+                        }
                     }
 
-                    _uiState.update { it.copy(availableGroups = options) }
+                    _uiState.update { it.copy(availableCategories = options) }
                 }
             } catch (_: Exception) {
                 // Non-critical
@@ -111,14 +132,15 @@ class BudgetViewModel @Inject constructor(
 
     /**
      * Show the add budget dialog.
-     * Optionally pre-select a category group (for smart prompt).
+     * Optionally pre-select a category (for smart prompt).
      */
-    fun showAddDialog(preSelectedGroupId: Long? = null) {
+    fun showAddDialog(preSelectedCategoryId: Long? = null, isGroupBudget: Boolean = true) {
         _uiState.update {
             it.copy(
                 showAddEditDialog = true,
                 editingBudget = null,
-                dialogCategoryGroupId = preSelectedGroupId,
+                dialogCategoryId = preSelectedCategoryId,
+                dialogIsGroupBudget = isGroupBudget,
                 dialogAmount = "",
                 dialogPeriod = BudgetPeriod.MONTHLY,
                 saveSuccess = false
@@ -134,7 +156,8 @@ class BudgetViewModel @Inject constructor(
             it.copy(
                 showAddEditDialog = true,
                 editingBudget = budget,
-                dialogCategoryGroupId = budget.categoryGroupId,
+                dialogCategoryId = budget.categoryId,
+                dialogIsGroupBudget = budget.isGroupBudget,
                 dialogAmount = budget.amount.toLong().toString(),
                 dialogPeriod = budget.period,
                 saveSuccess = false
@@ -159,8 +182,8 @@ class BudgetViewModel @Inject constructor(
     /**
      * Update form fields.
      */
-    fun updateDialogCategoryGroupId(id: Long?) {
-        _uiState.update { it.copy(dialogCategoryGroupId = id) }
+    fun updateDialogCategory(id: Long?, isGroup: Boolean) {
+        _uiState.update { it.copy(dialogCategoryId = id, dialogIsGroupBudget = isGroup) }
     }
 
     fun updateDialogAmount(amount: String) {
@@ -200,9 +223,10 @@ class BudgetViewModel @Inject constructor(
                     // Create new budget
                     budgetRepository.saveBudget(
                         Budget(
-                            categoryGroupId = state.dialogCategoryGroupId,
-                            categoryGroupName = null, // will be resolved on reload
-                            categoryGroupColor = null,
+                            categoryId = state.dialogCategoryId,
+                            categoryName = null, // will be resolved on reload
+                            categoryColor = null,
+                            isGroupBudget = state.dialogIsGroupBudget,
                             amount = amount,
                             period = state.dialogPeriod
                         )

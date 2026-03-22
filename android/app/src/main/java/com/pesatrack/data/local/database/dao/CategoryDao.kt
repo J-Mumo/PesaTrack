@@ -34,6 +34,12 @@ interface CategoryDao {
      */
     @Query("DELETE FROM categories WHERE id = :id AND isDefault = 0")
     suspend fun delete(id: Long)
+
+    /**
+     * Delete a group and all its children (only non-default)
+     */
+    @Query("DELETE FROM categories WHERE (id = :groupId OR parentId = :groupId) AND isDefault = 0")
+    suspend fun deleteGroupAndChildren(groupId: Long)
     
     /**
      * Get category by ID
@@ -100,6 +106,30 @@ interface CategoryDao {
      */
     @Query("SELECT * FROM categories WHERE id = (SELECT parentId FROM categories WHERE id = :childId)")
     suspend fun getParentCategory(childId: Long): CategoryEntity?
+
+    /**
+     * Count expenses using a specific category
+     */
+    @Query("SELECT COUNT(*) FROM expenses WHERE categoryId = :categoryId")
+    suspend fun getExpenseCountForCategory(categoryId: Long): Int
+
+    /**
+     * Count expenses using any sub-category under a group
+     */
+    @Query("SELECT COUNT(*) FROM expenses WHERE categoryId IN (SELECT id FROM categories WHERE parentId = :groupId)")
+    suspend fun getExpenseCountForGroup(groupId: Long): Int
+
+    /**
+     * Get the max sortOrder for children of a parent group
+     */
+    @Query("SELECT COALESCE(MAX(sortOrder), 0) FROM categories WHERE parentId = :parentId")
+    suspend fun getMaxSortOrderForParent(parentId: Long): Int
+
+    /**
+     * Get the max sortOrder among groups
+     */
+    @Query("SELECT COALESCE(MAX(sortOrder), 0) FROM categories WHERE isGroup = 1")
+    suspend fun getMaxGroupSortOrder(): Int
     
     /**
      * Clear all categories

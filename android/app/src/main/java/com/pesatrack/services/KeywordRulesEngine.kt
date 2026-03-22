@@ -578,11 +578,6 @@ class KeywordRulesEngine @Inject constructor() {
         KeywordRule(listOf("ELECTRONICS"), suggestion = CategorySuggestion(1504L, "Electronics", "Shopping", CONFIDENCE_KEYWORD)),
         KeywordRule(listOf("PHONE"), paymentTypes = setOf("BUY_GOODS"), suggestion = CategorySuggestion(1508L, "Phone / Accessories", "Shopping", CONFIDENCE_KEYWORD)),
 
-        // ── Beekeeping ──
-        KeywordRule(listOf("BEE"), suggestion = CategorySuggestion(108L, "Bees", "Beekeeping", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("HIVE"), suggestion = CategorySuggestion(104L, "Bee Hives", "Beekeeping", CONFIDENCE_KEYWORD)),
-        KeywordRule(listOf("HONEY"), suggestion = CategorySuggestion(109L, "Honey Harvesting", "Beekeeping", CONFIDENCE_KEYWORD)),
-
         // ── Withdrawal (from agent) mapped to Financial: Bank Charges ──
         KeywordRule(listOf("AGENT"), paymentTypes = setOf("WITHDRAW"), suggestion = CategorySuggestion(601L, "Bank Charges", "Financial", CONFIDENCE_KEYWORD)),
     )

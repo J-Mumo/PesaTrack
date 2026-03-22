@@ -6,10 +6,12 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
+import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.CategoryEntity
+import com.pesatrack.data.local.database.entities.CategoryRuleEntity
 import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
 
@@ -28,15 +30,22 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
  *           to new Investment & Savings group (18). Remapped IDs 602→1811, 605→1805,
  *           607→1806, 610→1809, 611→1810, 612→1812.
  * - v8→v9: Added budgets table for category-based budget tracking (M7).
+ * - v9→v10: Added category_rules table for user-defined auto-categorization rules.
+ * - v10→v11: Converted Beekeeping group + sub-categories from default to custom
+ *            (isDefault = false). Beekeeping is no longer shipped as a built-in category;
+ * - v11→v12: Sub-category budgets — renamed budgets.categoryGroupId → categoryId,
+ *            added isGroupBudget column (default true for existing rows), rebuilt indices.
+ *            existing users keep theirs as an editable/deletable custom category.
  */
 @Database(
     entities = [
         ExpenseEntity::class,
         CategoryEntity::class,
         RecipientCategoryMappingEntity::class,
-        BudgetEntity::class
+        BudgetEntity::class,
+        CategoryRuleEntity::class
     ],
-    version = 9,
+    version = 12,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -45,6 +54,7 @@ abstract class PesaTrackDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun recipientCategoryMappingDao(): RecipientCategoryMappingDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun categoryRuleDao(): CategoryRuleDao
 
     companion object {
         /**
@@ -788,6 +798,92 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                     )
                 """)
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_budgets_categoryGroupId ON budgets(categoryGroupId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_budgets_isActive ON budgets(isActive)")
+            }
+        }
+
+        /**
+         * Migration from version 9 to 10:
+         * Add category_rules table for user-defined auto-categorization rules.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS category_rules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        pattern TEXT NOT NULL,
+                        matchType TEXT NOT NULL,
+                        categoryId INTEGER NOT NULL,
+                        priority INTEGER NOT NULL DEFAULT 0,
+                        isActive INTEGER NOT NULL DEFAULT 1,
+                        createdAt INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE CASCADE
+                    )
+                """)
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_category_rules_categoryId ON category_rules(categoryId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_category_rules_pattern ON category_rules(pattern)")
+            }
+        }
+
+        /**
+         * Migration from version 10 to 11:
+         * Convert Beekeeping group (id=1) and its sub-categories (id=101-110)
+         * from default to custom categories (isDefault = 0).
+         * Beekeeping is no longer a built-in category; existing users keep theirs
+         * as editable/deletable custom categories.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Convert Beekeeping group to custom
+                database.execSQL("UPDATE categories SET isDefault = 0 WHERE id = 1")
+                // Convert all Beekeeping sub-categories to custom
+                database.execSQL("UPDATE categories SET isDefault = 0 WHERE parentId = 1")
+            }
+        }
+
+        /**
+         * Migration from version 11 to 12:
+         * Sub-category budgets support.
+         * - Rename budgets.categoryGroupId → categoryId
+         * - Add isGroupBudget column (default 1 = true for existing group-level rows)
+         * - Rebuild indices for the new column name
+         *
+         * SQLite doesn't support ALTER TABLE RENAME COLUMN before 3.25.0 (API 30),
+         * so we recreate the table for broad compatibility.
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Step 1: Create the new budgets table with the updated schema
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS budgets_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        categoryId INTEGER DEFAULT NULL,
+                        isGroupBudget INTEGER NOT NULL DEFAULT 1,
+                        amount REAL NOT NULL,
+                        period TEXT NOT NULL,
+                        isActive INTEGER NOT NULL DEFAULT 1,
+                        createdAt INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE CASCADE
+                    )
+                """)
+
+                // Step 2: Copy data from old table, mapping categoryGroupId → categoryId
+                // All existing budgets are group-level, so isGroupBudget = 1
+                database.execSQL("""
+                    INSERT INTO budgets_new (id, categoryId, isGroupBudget, amount, period, isActive, createdAt, updatedAt)
+                    SELECT id, categoryGroupId, 1, amount, period, isActive, createdAt, updatedAt
+                    FROM budgets
+                """)
+
+                // Step 3: Drop old table
+                database.execSQL("DROP TABLE budgets")
+
+                // Step 4: Rename new table
+                database.execSQL("ALTER TABLE budgets_new RENAME TO budgets")
+
+                // Step 5: Recreate indices
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_budgets_categoryId ON budgets(categoryId)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_budgets_isActive ON budgets(isActive)")
             }
         }

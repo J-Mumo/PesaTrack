@@ -488,6 +488,24 @@ interface ExpenseDao {
         endOfYear: Long
     ): List<PaymentTypeTotal>
 
+    // ==================== Investment Queries ====================
+
+    /**
+     * Get total investment spending for a month.
+     * Sums expenses categorized under Investment & Savings group (ID 18)
+     * by joining categories where parentId = 18 or id = 18.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(e.amount), 0.0)
+        FROM expenses e
+        INNER JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+        AND e.timestamp >= :startOfMonth AND e.timestamp < :endOfMonth
+        AND (c.parentId = 18 OR c.id = 18)
+    """)
+    fun getInvestmentTotalForMonth(startOfMonth: Long, endOfMonth: Long): Flow<Double>
+
     // ==================== Budget Queries ====================
 
     /**
@@ -515,6 +533,18 @@ interface ExpenseDao {
         AND (c.parentId = :groupId OR c.id = :groupId)
     """)
     suspend fun getGroupSpendingInRange(groupId: Long, startMs: Long, endMs: Long): Double
+
+    /**
+     * Get spending for a specific sub-category in a date range.
+     * Only counts expenses with exactly this categoryId (not the whole group).
+     */
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0.0) FROM expenses
+        WHERE isExcluded = 0
+        AND categoryId = :categoryId
+        AND timestamp >= :startMs AND timestamp < :endMs
+    """)
+    suspend fun getSubcategorySpendingInRange(categoryId: Long, startMs: Long, endMs: Long): Double
 
     /**
      * Get count of categorized (non-excluded) expenses.

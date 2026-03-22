@@ -6,11 +6,12 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Budget entity representing a spending limit for a category group or total spending.
+ * Budget entity representing a spending limit for a category group, sub-category, or total spending.
  *
  * Budget levels:
- * - categoryGroupId = null → "Total Spending" budget
- * - categoryGroupId = group ID (1-18) → Group-level budget
+ * - categoryId = null → "Total Spending" budget
+ * - categoryId = group ID (1-18) + isGroupBudget = true → Group-level budget (tracks all sub-categories)
+ * - categoryId = sub-category ID + isGroupBudget = false → Sub-category-level budget (tracks one sub-category)
  *
  * Supported periods: WEEKLY, MONTHLY, YEARLY
  * No rollover — each period starts fresh.
@@ -22,12 +23,12 @@ import androidx.room.PrimaryKey
         ForeignKey(
             entity = CategoryEntity::class,
             parentColumns = ["id"],
-            childColumns = ["categoryGroupId"],
+            childColumns = ["categoryId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["categoryGroupId"]),
+        Index(value = ["categoryId"]),
         Index(value = ["isActive"])
     ]
 )
@@ -35,8 +36,16 @@ data class BudgetEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 
-    /** Category group ID (FK → categories). Null = "Total Spending" budget. */
-    val categoryGroupId: Long? = null,
+    /** Category ID (FK → categories). Null = "Total Spending" budget. Can be a group or sub-category. */
+    val categoryId: Long? = null,
+
+    /**
+     * Whether this budget tracks a whole group (true) or a single sub-category (false).
+     * - true: categoryId is a group ID; spending = sum of all sub-categories in that group.
+     * - false: categoryId is a sub-category ID; spending = only that sub-category.
+     * - Ignored when categoryId is null (Total Spending).
+     */
+    val isGroupBudget: Boolean = true,
 
     /** Budget limit in KES */
     val amount: Double,

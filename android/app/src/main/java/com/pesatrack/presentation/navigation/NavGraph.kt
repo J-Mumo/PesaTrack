@@ -15,6 +15,7 @@ import com.pesatrack.presentation.screens.home.HomeScreen
 import com.pesatrack.presentation.screens.excel_import.ExcelImportScreen
 import com.pesatrack.presentation.screens.import_history.ImportScreen
 import com.pesatrack.presentation.screens.budget.BudgetScreen
+import com.pesatrack.presentation.screens.category_management.CategoryManagementScreen
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 
@@ -148,6 +149,9 @@ fun NavGraph(
                 },
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
+                },
+                onNavigateToCategoryManagement = {
+                    navController.navigate(Screen.CategoryManagement.route)
                 }
             )
         }
@@ -164,6 +168,15 @@ fun NavGraph(
         // Budget Screen
         composable(route = Screen.Budget.route) {
             BudgetScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Category Management Screen
+        composable(route = Screen.CategoryManagement.route) {
+            CategoryManagementScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

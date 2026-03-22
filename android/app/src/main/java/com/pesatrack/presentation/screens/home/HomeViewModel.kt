@@ -63,6 +63,13 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(totalThisMonth = total) }
             }
         }
+
+        // Load investment total for current month
+        viewModelScope.launch {
+            expenseRepository.getInvestmentTotalForCurrentMonth().collect { investmentTotal ->
+                _uiState.update { it.copy(investmentThisMonth = investmentTotal) }
+            }
+        }
         
         // Load recent expenses with category info
         viewModelScope.launch {

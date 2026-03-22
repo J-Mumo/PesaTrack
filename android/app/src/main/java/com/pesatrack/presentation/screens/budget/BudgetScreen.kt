@@ -103,7 +103,7 @@ fun BudgetScreen(
                 uiState = uiState,
                 onDismiss = { viewModel.dismissDialog() },
                 onSave = { viewModel.saveBudget() },
-                onCategoryGroupChanged = { viewModel.updateDialogCategoryGroupId(it) },
+                onCategoryChanged = { id, isGroup -> viewModel.updateDialogCategory(id, isGroup) },
                 onAmountChanged = { viewModel.updateDialogAmount(it) },
                 onPeriodChanged = { viewModel.updateDialogPeriod(it) }
             )
@@ -112,11 +112,12 @@ fun BudgetScreen(
         // Delete Confirmation Dialog
         if (uiState.showDeleteConfirmation && uiState.budgetToDelete != null) {
             val budget = uiState.budgetToDelete!!
-            val name = budget.categoryGroupName ?: "Total Spending"
+            val name = budget.categoryName ?: "Total Spending"
+            val levelLabel = if (budget.categoryId != null && budget.isGroupBudget) " (group)" else ""
             AlertDialog(
                 onDismissRequest = { viewModel.dismissDeleteConfirmation() },
                 title = { Text("Delete Budget") },
-                text = { Text("Remove the $name budget? This cannot be undone.") },
+                text = { Text("Remove the $name$levelLabel budget? This cannot be undone.") },
                 confirmButton = {
                     TextButton(
                         onClick = { viewModel.confirmDelete() },
@@ -162,7 +163,7 @@ fun EmptyBudgetContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Set spending limits for your categories to stay on track.",
+            text = "Set spending limits for categories or sub-categories to stay on track.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             textAlign = TextAlign.Center
@@ -183,8 +184,10 @@ fun BudgetProgressCard(
     onDelete: () -> Unit
 ) {
     val budget = progress.budget
-    val categoryName = budget.categoryGroupName ?: "Total Spending"
+    val categoryName = budget.categoryName ?: "Total Spending"
     val periodLabel = budget.period.displayName()
+    // Show "(group)" tag for group-level budgets to distinguish from sub-category budgets
+    val levelTag = if (budget.categoryId != null && budget.isGroupBudget) " (group)" else ""
 
     val barColor = when (progress.status) {
         BudgetStatus.UNDER -> MaterialTheme.colorScheme.primary
@@ -192,7 +195,7 @@ fun BudgetProgressCard(
         BudgetStatus.EXCEEDED -> MaterialTheme.colorScheme.error
     }
 
-    val categoryColor = budget.categoryGroupColor?.let {
+    val categoryColor = budget.categoryColor?.let {
         try { Color(it.toColorInt()) } catch (_: Exception) { null }
     }
 
@@ -207,7 +210,10 @@ fun BudgetProgressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     // Category color dot
                     if (categoryColor != null) {
                         Box(
@@ -219,7 +225,7 @@ fun BudgetProgressCard(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(
-                        text = categoryName,
+                        text = "$categoryName$levelTag",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -298,7 +304,7 @@ fun AddEditBudgetDialog(
     uiState: BudgetUiState,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
-    onCategoryGroupChanged: (Long?) -> Unit,
+    onCategoryChanged: (Long?, Boolean) -> Unit,
     onAmountChanged: (String) -> Unit,
     onPeriodChanged: (BudgetPeriod) -> Unit
 ) {
@@ -310,16 +316,31 @@ fun AddEditBudgetDialog(
         title = { Text(if (isEditing) "Edit Budget" else "Add Budget") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Category Group Picker
+                // Category Picker (hierarchical: Total → Groups → Sub-categories)
                 ExposedDropdownMenuBox(
                     expanded = expanded,
                     onExpandedChange = { if (!isEditing) expanded = it }
                 ) {
-                    val selectedName = if (uiState.dialogCategoryGroupId == null) {
+                    val selectedName = if (uiState.dialogCategoryId == null) {
                         "Total Spending"
                     } else {
-                        uiState.availableGroups.find { it.id == uiState.dialogCategoryGroupId }?.name
-                            ?: "Select category"
+                        val option = uiState.availableCategories.find {
+                            it.id == uiState.dialogCategoryId &&
+                                (it.isGroup == true) == uiState.dialogIsGroupBudget
+                        }
+                        if (option != null) {
+                            if (option.isGroup == false) {
+                                // Show "Group > Sub" format for sub-categories
+                                val parentName = uiState.availableCategories
+                                    .find { it.id == option.parentGroupId && it.isGroup == true }
+                                    ?.name
+                                if (parentName != null) "$parentName > ${option.name}" else option.name
+                            } else {
+                                "${option.name} (group)"
+                            }
+                        } else {
+                            "Select category"
+                        }
                     }
 
                     OutlinedTextField(
@@ -342,29 +363,57 @@ fun AddEditBudgetDialog(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
-                        uiState.availableGroups
-                            .filter { !it.hasExistingBudget || it.id == uiState.dialogCategoryGroupId }
-                            .forEach { group ->
+                        uiState.availableCategories
+                            .filter { option ->
+                                // Show options that don't already have a budget,
+                                // OR the currently selected option (for editing context)
+                                !option.hasExistingBudget ||
+                                    (option.id == uiState.dialogCategoryId &&
+                                        (option.isGroup ?: true) == uiState.dialogIsGroupBudget)
+                            }
+                            .forEach { option ->
+                                val isSubCategory = option.isGroup == false
+                                val indent = if (isSubCategory) 24.dp else 0.dp
+                                val textStyle = if (isSubCategory) {
+                                    MaterialTheme.typography.bodyMedium
+                                } else {
+                                    MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                }
+                                val label = when {
+                                    option.id == null -> option.name // "Total Spending"
+                                    option.isGroup == true -> "${option.name} (group)"
+                                    else -> option.name
+                                }
+
                                 DropdownMenuItem(
                                     text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (group.color != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = indent)
+                                        ) {
+                                            if (option.color != null) {
                                                 Box(
                                                     modifier = Modifier
                                                         .size(10.dp)
                                                         .clip(RoundedCornerShape(5.dp))
                                                         .background(
-                                                            try { Color(group.color.toColorInt()) }
+                                                            try { Color(option.color.toColorInt()) }
                                                             catch (_: Exception) { Color.Gray }
                                                         )
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                             }
-                                            Text(group.name)
+                                            Text(
+                                                text = label,
+                                                style = textStyle
+                                            )
                                         }
                                     },
                                     onClick = {
-                                        onCategoryGroupChanged(group.id)
+                                        onCategoryChanged(
+                                            option.id,
+                                            option.isGroup ?: true
+                                        )
                                         expanded = false
                                     }
                                 )

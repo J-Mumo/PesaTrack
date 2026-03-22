@@ -20,6 +20,11 @@ import javax.inject.Singleton
  *
  * Handles CRUD, period date range computation, spending aggregation,
  * and budget progress/alert calculation.
+ *
+ * Supports three budget levels:
+ * - Total Spending (categoryId = null)
+ * - Group-level (categoryId = group ID, isGroupBudget = true)
+ * - Sub-category-level (categoryId = sub-category ID, isGroupBudget = false)
  */
 @Singleton
 class BudgetRepository @Inject constructor(
@@ -53,12 +58,12 @@ class BudgetRepository @Inject constructor(
 
     /**
      * Get all active budgets as a Flow (reacts to changes).
-     * Each budget is enriched with category group name/color.
+     * Each budget is enriched with category name/color.
      */
     fun getActiveBudgets(): Flow<List<Budget>> {
         return budgetDao.getActiveBudgets().map { entities ->
-            val groupMap = buildGroupMap()
-            entities.map { it.toDomain(groupMap) }
+            val categoryMap = buildCategoryMap()
+            entities.map { it.toDomain(categoryMap) }
         }
     }
 
@@ -67,8 +72,8 @@ class BudgetRepository @Inject constructor(
      */
     suspend fun getBudgetById(id: Long): Budget? {
         val entity = budgetDao.getById(id) ?: return null
-        val groupMap = buildGroupMap()
-        return entity.toDomain(groupMap)
+        val categoryMap = buildCategoryMap()
+        return entity.toDomain(categoryMap)
     }
 
     /**
@@ -137,15 +142,27 @@ class BudgetRepository @Inject constructor(
 
     /**
      * Get actual spending for a budget in its current period.
+     *
+     * Three paths:
+     * 1. Total spending (categoryId = null) → sum all non-excluded expenses
+     * 2. Group-level (isGroupBudget = true) → sum all sub-categories in the group
+     * 3. Sub-category-level (isGroupBudget = false) → sum only that sub-category
      */
     suspend fun getSpendingForBudget(budget: Budget): Double {
         val (start, end) = getCurrentPeriodRange(budget.period)
-        return if (budget.categoryGroupId == null) {
-            // Total spending budget
-            expenseDao.getTotalSpendingInRange(start, end)
-        } else {
-            // Group-level budget
-            expenseDao.getGroupSpendingInRange(budget.categoryGroupId, start, end)
+        return when {
+            budget.categoryId == null -> {
+                // Total spending budget
+                expenseDao.getTotalSpendingInRange(start, end)
+            }
+            budget.isGroupBudget -> {
+                // Group-level budget — sum all sub-categories in the group
+                expenseDao.getGroupSpendingInRange(budget.categoryId, start, end)
+            }
+            else -> {
+                // Sub-category-level budget — sum only that specific sub-category
+                expenseDao.getSubcategorySpendingInRange(budget.categoryId, start, end)
+            }
         }
     }
 
@@ -156,10 +173,10 @@ class BudgetRepository @Inject constructor(
      * Used by the UI to render progress bars.
      */
     suspend fun getBudgetProgressList(): List<BudgetProgress> {
-        val groupMap = buildGroupMap()
+        val categoryMap = buildCategoryMap()
         val entities = budgetDao.getActiveBudgetsList()
         return entities.map { entity ->
-            val budget = entity.toDomain(groupMap)
+            val budget = entity.toDomain(categoryMap)
             val spent = getSpendingForBudget(budget)
             val percentage = if (budget.amount > 0) (spent / budget.amount) * 100.0 else 0.0
             BudgetProgress(
@@ -175,21 +192,24 @@ class BudgetRepository @Inject constructor(
 
     /**
      * Check which budgets have crossed alert thresholds (80% or 100%)
-     * after an expense was saved in the given category group.
+     * after an expense was saved.
      *
-     * @param groupId The category group ID of the saved expense.
-     *                Pass null if the expense is uncategorized (no alerts will fire).
+     * @param expenseCategoryId The sub-category ID of the saved expense.
+     *                          Pass null if the expense is uncategorized (no alerts will fire).
      * @return List of alerts for budgets that are at or above a threshold.
      */
-    suspend fun checkBudgetAlerts(groupId: Long?): List<BudgetAlert> {
-        if (groupId == null) return emptyList()
+    suspend fun checkBudgetAlerts(expenseCategoryId: Long?): List<BudgetAlert> {
+        if (expenseCategoryId == null) return emptyList()
 
-        val groupMap = buildGroupMap()
-        val affectedEntities = budgetDao.getBudgetsAffectedByGroup(groupId)
+        // Resolve the group ID from the sub-category
+        val groupId = getGroupIdForCategory(expenseCategoryId) ?: return emptyList()
+
+        val categoryMap = buildCategoryMap()
+        val affectedEntities = budgetDao.getBudgetsAffectedByCategory(groupId, expenseCategoryId)
         val alerts = mutableListOf<BudgetAlert>()
 
         for (entity in affectedEntities) {
-            val budget = entity.toDomain(groupMap)
+            val budget = entity.toDomain(categoryMap)
             val spent = getSpendingForBudget(budget)
             val percentage = if (budget.amount > 0) (spent / budget.amount) * 100.0 else 0.0
 
@@ -225,7 +245,7 @@ class BudgetRepository @Inject constructor(
 
     /**
      * Get top spending category group from last month (for smart prompt).
-     * Returns Pair(groupId, totalSpent) or null if no data.
+     * Returns Triple(groupId, groupName, totalSpent) or null if no data.
      */
     suspend fun getTopSpendingGroupLastMonth(): Triple<Long, String, Double>? {
         val cal = Calendar.getInstance()
@@ -244,7 +264,7 @@ class BudgetRepository @Inject constructor(
 
         // Aggregate by parent group
         val groupTotals = mutableMapOf<Long, Double>()
-        val groupMap = buildGroupMap()
+        val categoryMap = buildCategoryMap()
 
         for (ct in categoryTotals) {
             val catId = ct.categoryId ?: continue
@@ -253,27 +273,32 @@ class BudgetRepository @Inject constructor(
         }
 
         val topEntry = groupTotals.maxByOrNull { it.value } ?: return null
-        val groupName = groupMap[topEntry.key]?.first ?: "Unknown"
+        val groupName = categoryMap[topEntry.key]?.first ?: "Unknown"
         return Triple(topEntry.key, groupName, topEntry.value)
     }
 
     // ==================== Mapping Helpers ====================
 
     /**
-     * Build a map of group ID → (name, color) for enriching budget domain objects.
+     * Build a map of category ID → (name, color) for enriching budget domain objects.
+     * Includes both groups and sub-categories.
      */
-    private suspend fun buildGroupMap(): Map<Long, Pair<String, String?>> {
-        val groups = categoryDao.getGroupCategoriesSync()
-        return groups.associate { it.id to Pair(it.name, it.color) }
+    private suspend fun buildCategoryMap(): Map<Long, Pair<String, String?>> {
+        val allCategories = categoryDao.getGroupCategoriesSync() +
+            categoryDao.getGroupCategoriesSync().flatMap { group ->
+                categoryDao.getChildCategoriesSync(group.id)
+            }
+        return allCategories.associate { it.id to Pair(it.name, it.color) }
     }
 
-    private fun BudgetEntity.toDomain(groupMap: Map<Long, Pair<String, String?>>): Budget {
-        val groupInfo = categoryGroupId?.let { groupMap[it] }
+    private fun BudgetEntity.toDomain(categoryMap: Map<Long, Pair<String, String?>>): Budget {
+        val categoryInfo = categoryId?.let { categoryMap[it] }
         return Budget(
             id = id,
-            categoryGroupId = categoryGroupId,
-            categoryGroupName = groupInfo?.first,
-            categoryGroupColor = groupInfo?.second,
+            categoryId = categoryId,
+            categoryName = categoryInfo?.first,
+            categoryColor = categoryInfo?.second,
+            isGroupBudget = isGroupBudget,
             amount = amount,
             period = BudgetPeriod.fromString(period),
             isActive = isActive,
@@ -285,7 +310,8 @@ class BudgetRepository @Inject constructor(
     private fun Budget.toEntity(): BudgetEntity {
         return BudgetEntity(
             id = id,
-            categoryGroupId = categoryGroupId,
+            categoryId = categoryId,
+            isGroupBudget = isGroupBudget,
             amount = amount,
             period = period.name,
             isActive = isActive,
