@@ -6,11 +6,20 @@ package com.pesatrack.presentation.screens.settings
  * @property bankTrackingEnabled Master toggle for bank SMS tracking
  * @property availableBanks List of bank parsers with their enabled state
  * @property isLoading Whether preferences are still loading
+ * @property pinEnabled Whether the app is locked with a PIN
+ * @property biometricEnabled Whether biometric unlock is enabled
+ * @property biometricAvailable Whether the device supports biometric authentication
+ * @property lockTimeoutSeconds Seconds before app re-locks after backgrounding
  */
 data class SettingsUiState(
     val bankTrackingEnabled: Boolean = false,
     val availableBanks: List<BankToggle> = emptyList(),
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    // Security
+    val pinEnabled: Boolean = false,
+    val biometricEnabled: Boolean = false,
+    val biometricAvailable: Boolean = false,
+    val lockTimeoutSeconds: Int = 30
 )
 
 /**

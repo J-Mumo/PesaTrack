@@ -78,9 +78,21 @@ class NcbaBankParser : SmsParserStrategy {
         Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
-    // Paybill payment: "Mpesa Paybill transfer of KES 1000 to AFRICAN INLAND CHURCH KINOO 87 account number Offering BANK REF. ... MPESA REF. ..."
-    private val paybillPattern = Pattern.compile(
+    // Paybill payment — two known NCBA formats:
+    // Format A: "Mpesa Paybill transfer of KES 1000 to AFRICAN INLAND CHURCH KINOO 87 account number Offering BANK REF. ... MPESA REF. ..."
+    //   → recipientName = "AFRICAN INLAND CHURCH KINOO", paybillNumber = "87", accountNumber = "Offering"
+    // Format B: "Mpesa Paybill transfer of KES 3150 to Lipa na KCB account number 7575077 BANK REF. ... MPESA REF. UCMSG9YPUB was successful..."
+    //   → recipientName = "Lipa na KCB", paybillNumber = N/A, accountNumber = "7575077"
+
+    // Format A: business name followed by a standalone paybill number (digits) before "account"
+    private val paybillPatternA = Pattern.compile(
         "Mpesa Paybill transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(.+?)\\s+(\\d+)\\s+account\\s+(?:number\\s+)?(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
+        Pattern.CASE_INSENSITIVE or Pattern.DOTALL
+    )
+
+    // Format B: business name directly followed by "account number" (no separate paybill number)
+    private val paybillPatternB = Pattern.compile(
+        "Mpesa Paybill transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(.+?)\\s+account\\s+(?:number\\s+)?(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
         Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
@@ -155,8 +167,8 @@ class NcbaBankParser : SmsParserStrategy {
                 }
             }
 
-            // 2. Paybill payment
-            paybillPattern.matcher(body).let { m ->
+            // 2a. Paybill payment — Format A (with explicit paybill number before "account")
+            paybillPatternA.matcher(body).let { m ->
                 if (m.find()) {
                     val amount = parseAmount(m.group(1))
                     val recipientName = m.group(2)?.trim()
@@ -175,6 +187,34 @@ class NcbaBankParser : SmsParserStrategy {
                                 paymentType = PaymentType.PAY_BILL,
                                 source = expenseSource,
                                 notes = "Paybill: $paybillNumber, Account: $accountNumber",
+                                timestamp = smsDate,
+                                isCategorized = false
+                            ),
+                            transactionCost = null
+                        )
+                    }
+                }
+            }
+
+            // 2b. Paybill payment — Format B (business name directly before "account number")
+            paybillPatternB.matcher(body).let { m ->
+                if (m.find()) {
+                    val amount = parseAmount(m.group(1))
+                    val recipientName = m.group(2)?.trim()
+                    val accountNumber = m.group(3)?.trim()
+                    val bankRef = m.group(4)?.trim()
+                    val mpesaRef = m.group(5)?.trim()
+
+                    if (amount != null) {
+                        return SmsParser.ParsedTransaction(
+                            expense = Expense(
+                                transactionId = mpesaRef ?: bankRef,
+                                amount = amount,
+                                recipient = accountNumber ?: "",
+                                recipientName = recipientName,
+                                paymentType = PaymentType.PAY_BILL,
+                                source = expenseSource,
+                                notes = "Account: $accountNumber",
                                 timestamp = smsDate,
                                 isCategorized = false
                             ),

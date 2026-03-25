@@ -1,9 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Load local.properties for signing credentials
+val localProperties = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localProperties.load(localPropsFile.inputStream())
 }
 
 android {
@@ -24,8 +33,22 @@ android {
 
     }
 
+    signingConfigs {
+        create("release") {
+            // Upload key for Google Play App Signing
+            // Google re-signs with their app signing key before delivery to users
+            storeFile = file("../pesatrack-upload.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+                ?: localProperties.getProperty("KEYSTORE_PASSWORD") ?: ""
+            keyAlias = "pesatrack-upload"
+            keyPassword = System.getenv("KEY_PASSWORD")
+                ?: localProperties.getProperty("KEY_PASSWORD") ?: ""
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -101,6 +124,12 @@ dependencies {
 
     // Vico charting library (Compose + Material 3)
     implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.3")
+
+    // Biometric authentication (fingerprint / face unlock)
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+
+    // ProcessLifecycleOwner for app background/foreground detection
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

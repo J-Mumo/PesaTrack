@@ -1,7 +1,6 @@
 package com.pesatrack.di
 
 import android.content.Context
-import android.telephony.TelephonyManager
 import androidx.room.Room
 import com.pesatrack.data.local.database.PesaTrackDatabase
 import com.pesatrack.data.local.database.dao.BudgetDao
@@ -79,15 +78,5 @@ object AppModule {
     @Singleton
     fun provideCategoryRuleDao(database: PesaTrackDatabase): CategoryRuleDao {
         return database.categoryRuleDao()
-    }
-
-    // ==================== System Services ====================
-
-    @Provides
-    @Singleton
-    fun provideTelephonyManager(
-        @ApplicationContext context: Context
-    ): TelephonyManager {
-        return context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
     }
 }

@@ -25,6 +25,10 @@ import javax.inject.Inject
  * - Review mode: expand recipient → see individual transactions → override per-transaction
  * - Auto mode: request rules engine suggestions → show confidence chips → confirm/override
  *
+ * Additionally supports a multi-select mode:
+ * - Long-press a group to enter selection mode
+ * - Select multiple groups → apply one category to all of them at once
+ *
  * Saves recipient→category mappings for future auto-categorization.
  * Multi-category mappings are supported: one recipient can map to multiple categories.
  */
@@ -485,6 +489,176 @@ class BatchCategorizeViewModel @Inject constructor(
      */
     fun dismissAutoSuggestError() {
         _uiState.update { it.copy(autoSuggestError = null) }
+    }
+
+    // ==================== Multi-Select Mode ====================
+
+    /**
+     * Enter selection mode with the first long-pressed group selected.
+     * If already in selection mode, this acts as a toggle for that group.
+     */
+    fun enterSelectionMode(recipientKey: String) {
+        _uiState.update {
+            it.copy(
+                isSelectionMode = true,
+                selectedGroupKeys = it.selectedGroupKeys + recipientKey,
+                // Collapse any expanded group when entering selection mode
+                expandedGroupKey = null,
+                expandedGroupExpenses = emptyList()
+            )
+        }
+    }
+
+    /**
+     * Exit selection mode and clear all selections.
+     */
+    fun exitSelectionMode() {
+        _uiState.update {
+            it.copy(
+                isSelectionMode = false,
+                selectedGroupKeys = emptySet(),
+                showBulkCategoryPicker = false
+            )
+        }
+    }
+
+    /**
+     * Toggle a group's selection state within selection mode.
+     */
+    fun toggleGroupSelection(recipientKey: String) {
+        _uiState.update {
+            val newKeys = if (recipientKey in it.selectedGroupKeys) {
+                it.selectedGroupKeys - recipientKey
+            } else {
+                it.selectedGroupKeys + recipientKey
+            }
+            // If no selections remain, exit selection mode
+            if (newKeys.isEmpty()) {
+                it.copy(
+                    isSelectionMode = false,
+                    selectedGroupKeys = emptySet()
+                )
+            } else {
+                it.copy(selectedGroupKeys = newKeys)
+            }
+        }
+    }
+
+    /**
+     * Select all currently visible recipient groups.
+     */
+    fun selectAllGroups() {
+        _uiState.update {
+            it.copy(
+                selectedGroupKeys = it.recipientGroups.map { g -> g.recipientKey }.toSet()
+            )
+        }
+    }
+
+    /**
+     * Deselect all groups (but stay in selection mode).
+     */
+    fun deselectAllGroups() {
+        _uiState.update {
+            it.copy(selectedGroupKeys = emptySet())
+        }
+    }
+
+    /**
+     * Open the bulk category picker for all selected groups.
+     */
+    fun showBulkCategoryPicker() {
+        if (_uiState.value.selectedGroupKeys.isEmpty()) return
+        _uiState.update { it.copy(showBulkCategoryPicker = true) }
+    }
+
+    /**
+     * Dismiss the bulk category picker.
+     */
+    fun dismissBulkCategoryPicker() {
+        _uiState.update { it.copy(showBulkCategoryPicker = false) }
+    }
+
+    /**
+     * Apply a category to ALL expenses from ALL selected recipient groups.
+     * Saves recipient→category mappings for each unique recipient.
+     * Reuses the same logic as [applyCategory] but loops through all selected groups.
+     */
+    fun applyBulkCategory(category: Category) {
+        val selectedKeys = _uiState.value.selectedGroupKeys
+        if (selectedKeys.isEmpty()) return
+
+        val groups = _uiState.value.recipientGroups.filter { it.recipientKey in selectedKeys }
+        if (groups.isEmpty()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, showBulkCategoryPicker = false) }
+
+            try {
+                var appliedCount = 0
+
+                for (group in groups) {
+                    // 1. Bulk update expenses by recipient
+                    val recipientName = group.recipientName
+                    val recipient = group.recipient
+
+                    if (!recipientName.isNullOrBlank()) {
+                        expenseRepository.updateCategoryByRecipientName(
+                            recipientName, category.id
+                        )
+                    }
+                    if (recipient.isNotBlank()) {
+                        expenseRepository.updateCategoryByRecipient(
+                            recipient, category.id
+                        )
+                    }
+
+                    // 2. Save recipient→category mapping (multi-category aware)
+                    val mappingKey = recipientName ?: recipient
+                    recipientMappingRepository.saveMapping(
+                        recipientKey = mappingKey,
+                        categoryId = category.id,
+                        displayName = recipientName
+                    )
+
+                    // Also save the alternate key if both exist
+                    if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = recipient,
+                            categoryId = category.id,
+                            displayName = recipientName
+                        )
+                    }
+
+                    appliedCount++
+                }
+
+                // 3. Refresh the list and remove applied suggestions
+                val remainingGroups = expenseRepository.getUncategorizedGroupedByRecipient()
+                val updatedSuggestions = _uiState.value.autoSuggestions.toMutableMap()
+                selectedKeys.forEach { key -> updatedSuggestions.remove(key) }
+
+                _uiState.update {
+                    it.copy(
+                        recipientGroups = remainingGroups,
+                        isSaving = false,
+                        categorizedCount = it.categorizedCount + appliedCount,
+                        autoSuggestions = updatedSuggestions,
+                        // Exit selection mode after bulk apply
+                        isSelectionMode = false,
+                        selectedGroupKeys = emptySet(),
+                        showBulkCategoryPicker = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        error = e.message ?: "Failed to apply bulk category"
+                    )
+                }
+            }
+        }
     }
 
     // ==================== Ignore/Exclude ====================

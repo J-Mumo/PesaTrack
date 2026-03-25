@@ -7,34 +7,48 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.pesatrack.presentation.navigation.BottomNavItem
 import com.pesatrack.presentation.navigation.NavGraph
+import com.pesatrack.presentation.screens.pin.PinLockScreen
+import com.pesatrack.presentation.screens.pin.PinMode
+import com.pesatrack.presentation.screens.pin.PinViewModel
 import com.pesatrack.presentation.theme.PesaTrackTheme
+import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
+import java.util.concurrent.Executor
+import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
-    
+class MainActivity : FragmentActivity() {
+
+    @Inject
+    lateinit var appLockLifecycleObserver: AppLockLifecycleObserver
+
     /**
      * Launcher for requesting multiple permissions at once.
-     * Handles SMS, phone state, and notification permissions.
+     * Handles SMS and notification permissions.
      */
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -44,62 +58,148 @@ class MainActivity : ComponentActivity() {
             android.util.Log.d("MainActivity", "$permission: ${if (granted) "GRANTED" else "DENIED"}")
         }
     }
-    
+
+    private lateinit var biometricPrompt: BiometricPrompt
+    private lateinit var promptInfo: BiometricPrompt.PromptInfo
+    private lateinit var executor: Executor
+
+    /** Whether this device supports biometric authentication. */
+    private var biometricAvailable = false
+
+    /** Callback to invoke when biometric succeeds — set by the Compose layer. */
+    private var onBiometricSuccess: (() -> Unit)? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Create notification channel (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
-        
+
         // Request all necessary permissions
         requestAppPermissions()
-        
+
+        // Set up biometric prompt
+        setupBiometric()
+
         setContent {
             PesaTrackTheme {
-                MainScreen()
+                AppWithLockOverlay()
             }
         }
     }
-    
+
+    /**
+     * Root composable that shows either the PIN lock screen or the main app.
+     */
+    @Composable
+    private fun AppWithLockOverlay() {
+        val isLocked by appLockLifecycleObserver.isLocked.collectAsState()
+
+        if (isLocked) {
+            val pinViewModel: PinViewModel = hiltViewModel()
+
+            // Initialize unlock mode
+            LaunchedEffect(Unit) {
+                pinViewModel.initialize(PinMode.UNLOCK)
+                pinViewModel.setBiometricAvailable(biometricAvailable)
+            }
+
+            val uiState by pinViewModel.uiState.collectAsState()
+
+            // Auto-launch biometric on first show
+            LaunchedEffect(uiState.showBiometricButton) {
+                if (uiState.showBiometricButton) {
+                    launchBiometric { pinViewModel.onBiometricSuccess() }
+                }
+            }
+
+            PinLockScreen(
+                uiState = uiState,
+                onDigitEntered = pinViewModel::onDigitEntered,
+                onBackspace = pinViewModel::onBackspace,
+                onBiometricRequest = {
+                    launchBiometric { pinViewModel.onBiometricSuccess() }
+                }
+            )
+        } else {
+            MainScreen()
+        }
+    }
+
+    /**
+     * Initialize BiometricPrompt and check device capability.
+     */
+    private fun setupBiometric() {
+        executor = ContextCompat.getMainExecutor(this)
+
+        val callback = object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                onBiometricSuccess?.invoke()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                // User cancelled or hardware error — fall back to PIN (already shown)
+            }
+
+            override fun onAuthenticationFailed() {
+                super.onAuthenticationFailed()
+                // Wrong fingerprint — system will show its own message, user can retry
+            }
+        }
+
+        biometricPrompt = BiometricPrompt(this, executor, callback)
+
+        promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock PesaTrack")
+            .setSubtitle("Use your fingerprint or face to unlock")
+            .setNegativeButtonText("Use PIN")
+            .build()
+
+        // Check if device supports biometric
+        val biometricManager = BiometricManager.from(this)
+        biometricAvailable = biometricManager.canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+        ) == BiometricManager.BIOMETRIC_SUCCESS
+    }
+
+    /**
+     * Launch the biometric prompt.
+     */
+    private fun launchBiometric(onSuccess: () -> Unit) {
+        if (!biometricAvailable) return
+        onBiometricSuccess = onSuccess
+        biometricPrompt.authenticate(promptInfo)
+    }
+
     /**
      * Request all permissions needed by the app:
-     * - READ_SMS + RECEIVE_SMS: for parsing M-PESA confirmation messages
-     * - READ_PHONE_STATE + READ_PHONE_NUMBERS: for auto-detecting user's phone number
-     * - POST_NOTIFICATIONS (Android 13+): for showing expense categorization prompts
+     * - READ_SMS + RECEIVE_SMS: for parsing M-PESA/Bank confirmation messages
+     * - POST_NOTIFICATIONS (Android 13+): for showing expense & budget alerts
      */
     private fun requestAppPermissions() {
         val permissionsNeeded = mutableListOf<String>()
-        
-        // SMS permissions - for M-PESA SMS parsing
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) 
+
+        // SMS permissions - for M-PESA/Bank SMS parsing
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.READ_SMS)
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.RECEIVE_SMS)
         }
-        
-        // Phone number permissions - for auto-fill
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) 
-            != PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS) 
-                != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.READ_PHONE_NUMBERS)
-            }
-        }
-        
+
         // Notification permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) 
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
                 permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
-        
+
         if (permissionsNeeded.isNotEmpty()) {
             permissionLauncher.launch(permissionsNeeded.toTypedArray())
         }
@@ -112,14 +212,14 @@ fun MainScreen() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    
+
     // Define bottom nav items with icons
     val items = listOf(
         Triple(BottomNavItem.HOME, Icons.Filled.Home, "Home"),
         Triple(BottomNavItem.ANALYTICS, Icons.Filled.BarChart, "Analytics"),
-        Triple(BottomNavItem.EXPENSES, Icons.Filled.ReceiptLong, "Expenses")
+        Triple(BottomNavItem.EXPENSES, Icons.AutoMirrored.Filled.ReceiptLong, "Expenses")
     )
-    
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {

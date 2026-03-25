@@ -25,12 +25,13 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M3: Smart Categorization (Rules Engine)** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
-| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~75% |
+| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~80% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
 | **Year-over-Year Analytics** | ✅ Complete | 100% |
 | **Phase 2 M6: Investment Category Deep-Dive** | ✅ Complete | 100% |
 | **Phase 2 M7: Category & Sub-Category Budgets** | ✅ Complete | 100% |
 | **Phase 2 M8: Custom Categories & Auto-Rules** | ✅ Complete | 100% |
+| **PIN Lock + Biometric Unlock** | ✅ Complete | 100% |
 
 ---
 
@@ -98,7 +99,7 @@ SMS Sources ──────────────────────�
 | Fuliza | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:78) | Pattern: `"Fuliza M-PESA amount sent to"` |
 | NCBA Send Money | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:63) | Pattern: `"MPESA transfer of KES to NAME (PHONE)"` |
 | NCBA Till Payment | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:76) | Pattern: `"Mpesa Till transfer of KES to TILL"` |
-| NCBA Paybill | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:82) | Pattern: `"Mpesa Paybill transfer of KES to"` |
+| NCBA Paybill (2 formats) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:88) | Format A: `"...to NAME PAYBILL account..."`, Format B: `"...to NAME account number ACCT..."` |
 | Transaction cost extraction | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:48) | Regex: `"Transaction cost,? Ksh..."` |
 | Non-expense filtering | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:56) | Skips Receive Money, Deposit, Reversal |
 | NCBA self-transfer skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:70) | Skips bank→own M-PESA transfers |
@@ -141,7 +142,7 @@ SMS Sources ──────────────────────�
 | Category Rule Repository | [`CategoryRuleRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRuleRepository.kt:1) | Rule CRUD, active rules loading for categorization pipeline |
 | Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation, spending aggregation (total/group/sub-category), progress/alert calculation |
 | **Dependency Injection** | | |
-| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v12 with all migrations), DAOs (including BudgetDao, CategoryRuleDao), TelephonyManager |
+| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v12 with all migrations), DAOs (including BudgetDao, CategoryRuleDao) |
 
 ---
 
@@ -199,6 +200,10 @@ SMS Sources ──────────────────────�
 | CategorizeScreen | [`CategorizeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/categorize/CategorizeScreen.kt:1) | Category assignment with grouped picker |
 | CategorizeViewModel | [`CategorizeViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/categorize/CategorizeViewModel.kt:1) | State management |
 | CategorizeUiState | [`CategorizeUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/categorize/CategorizeUiState.kt:1) | UI state model |
+| **Batch Categorize Screen** | | |
+| BatchCategorizeScreen | [`BatchCategorizeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/batch_categorize/BatchCategorizeScreen.kt:44) | Batch categorize by recipient + multi-select mode for cross-recipient bulk categorization |
+| BatchCategorizeViewModel | [`BatchCategorizeViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/batch_categorize/BatchCategorizeViewModel.kt:32) | Recipient group CRUD, auto-suggest, multi-select bulk apply |
+| BatchCategorizeUiState | [`BatchCategorizeUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/batch_categorize/BatchCategorizeUiState.kt:1) | Recipient groups, selection mode state, category picker state |
 | **Components** | | |
 | ExpenseCard | [`ExpenseCard.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/ExpenseCard.kt:31) | Category name as title, payment type icons, colour-coded, long-press exclude toggle |
 | CategoryChip | [`CategoryChip.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/CategoryChip.kt:1) | Category selection chip |
@@ -208,10 +213,17 @@ SMS Sources ──────────────────────�
 | Colors | [`Color.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Color.kt:1) | Colour palette with `getCategoryColor()` |
 | Typography | [`Type.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Type.kt:1) | Typography definitions |
 
+| **PIN Lock Screen** | | |
+| PinLockScreen | [`PinLockScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/pin/PinLockScreen.kt:1) | 4-dot indicator, number pad, biometric button, shake animation, cooldown timer |
+| PinSetupScreen | [`PinSetupScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/pin/PinSetupScreen.kt:1) | PIN setup/change/disable flow with enter → confirm steps |
+| PinViewModel | [`PinViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/pin/PinViewModel.kt:1) | PIN verification, setup/change/disable flows, brute force protection (5 attempts → 30s cooldown) |
+| PinUiState | [`PinUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/pin/PinUiState.kt:1) | PinMode (7 modes), digit entry, error/cooldown state, biometric flags |
+| PinManager | [`PinManager.kt`](../android/app/src/main/java/com/pesatrack/services/PinManager.kt:1) | SHA-256 + salt PIN hashing, verification, timeout logic |
+| AppLockLifecycleObserver | [`AppLockLifecycleObserver.kt`](../android/app/src/main/java/com/pesatrack/services/AppLockLifecycleObserver.kt:1) | ProcessLifecycleOwner observer — background timestamp, lock state management |
 | **Settings Screen** | | |
-| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Category management + Budget management + Bank SMS tracking toggles |
-| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences management |
-| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle model |
+| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Security (PIN toggle, change PIN, biometric, timeout) + Category management + Budget management + Bank SMS tracking toggles |
+| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences + PIN/biometric preferences management |
+| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + PIN/biometric/timeout state |
 | **Category Management Screen** | | |
 | CategoryManagementScreen | [`CategoryManagementScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementScreen.kt:1) | Tab-based CRUD: Categories tab (add/edit/delete groups + sub-categories with icon/color pickers) + Auto-Rules tab (CRUD for user-defined categorization rules) |
 | CategoryManagementViewModel | [`CategoryManagementViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementViewModel.kt:1) | Category + rule CRUD, dialog state management, expense count validation |
@@ -265,7 +277,6 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | Constants | [`Constants.kt`](../android/app/src/main/java/com/pesatrack/utils/Constants.kt:6) | `formatAsCurrency()` extension |
-| Phone Number Helper | [`PhoneNumberHelper.kt`](../android/app/src/main/java/com/pesatrack/utils/PhoneNumberHelper.kt:1) | SIM number reading, Kenyan phone normalization |
 | **Excel Utilities** | | |
 | ExcelParser | [`ExcelParser.kt`](../android/app/src/main/java/com/pesatrack/utils/excel/ExcelParser.kt:20) | Apache POI .xlsx parser with dual date format support |
 | ExcelCategoryMapper | [`ExcelCategoryMapper.kt`](../android/app/src/main/java/com/pesatrack/utils/excel/ExcelCategoryMapper.kt:12) | 55+ hardcoded Excel label → PesaTrack category ID mappings |
@@ -310,26 +321,26 @@ SMS Sources ──────────────────────�
 
 | Feature | File | Description |
 |---------|------|-------------|
-| Manifest | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:1) | All permissions declared |
-| SMS Permissions | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:10) | `READ_SMS`, `RECEIVE_SMS` |
-| Phone Permissions | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:14) | `READ_PHONE_STATE`, `READ_PHONE_NUMBERS` |
-| Contact Permission | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:18) | `READ_CONTACTS` |
-| Notification Permission | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:21) | `POST_NOTIFICATIONS` (Android 13+) |
-| SMS BroadcastReceiver | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:47) | Priority 999, `BROADCAST_SMS` permission |
-| Runtime Permissions | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:69) | Requests all permissions on startup |
-| Gradle Build | [`build.gradle.kts`](../android/app/build.gradle.kts:1) | compileSdk 34, minSdk 26, Kotlin 17 |
-| Build Config | [`build.gradle.kts`](../android/app/build.gradle.kts:26) | Release minify + shrink enabled |
-| ProGuard Rules | [`proguard-rules.pro`](../android/app/proguard-rules.pro:1) | Code obfuscation rules |
+| Manifest | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:1) | SMS + notification permissions only |
+| SMS Permissions | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:5) | `READ_SMS`, `RECEIVE_SMS` |
+| Notification Permission | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:9) | `POST_NOTIFICATIONS` (Android 13+) |
+| SMS BroadcastReceiver | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:34) | Priority 999, `BROADCAST_SMS` permission |
+| Runtime Permissions | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:64) | Requests SMS + notification permissions on startup |
+| Gradle Build | [`build.gradle.kts`](../android/app/build.gradle.kts:1) | compileSdk 35, minSdk 26, targetSdk 35, Kotlin 17 |
+| Build Config | [`build.gradle.kts`](../android/app/build.gradle.kts:29) | Release signing config + minify + shrink enabled |
+| ProGuard Rules | [`proguard-rules.pro`](../android/app/proguard-rules.pro:1) | Room + Apache POI keep rules |
 
 **Dependencies:**
-- Jetpack Compose (BOM 2024.02.00) + Material 3
-- Navigation Compose 2.7.6
-- Hilt 2.50 (DI)
+- Jetpack Compose (BOM 2024.10.01) + Material 3
+- Navigation Compose 2.8.4
+- Hilt 2.53 (DI)
 - Room 2.6.1 (database)
-- DataStore 1.0.0 (preferences)
-- Coroutines 1.7.3
+- DataStore 1.1.1 (preferences)
+- Coroutines 1.9.0
 - Apache POI 5.2.5 (Excel .xlsx parsing)
-- Vico 2.0.1 (Compose charting library — analytics charts)
+- Vico 2.0.0-beta.3 (Compose charting library — analytics charts)
+- Biometric 1.2.0-alpha05 (fingerprint / face unlock for PIN lock)
+- Lifecycle Process 2.8.7 (ProcessLifecycleOwner for app background detection)
 
 ---
 
@@ -359,6 +370,15 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 | `PaymentType.RECEIVE_MONEY` | `Expense.kt` | Not an expense |
 | `PaymentType.DEPOSIT` | `Expense.kt` | Not an expense |
 | `PaymentType.REVERSAL` | `Expense.kt` | Not an expense |
+| `PhoneNumberHelper.kt` | `utils/` | Dead code — never called after STK Push removal |
+| `provideTelephonyManager()` | `AppModule.kt` | Only injected into PhoneNumberHelper |
+| `READ_PHONE_STATE` permission | `AndroidManifest.xml` | Unused — phone auto-fill feature was never wired up |
+| `READ_PHONE_NUMBERS` permission | `AndroidManifest.xml` | Unused — same reason |
+| `READ_CONTACTS` permission | `AndroidManifest.xml` | Unused — contact picker removed with STK Push |
+| `INTERNET` permission | `AndroidManifest.xml` | App is fully offline — no network calls |
+| `ACCESS_NETWORK_STATE` permission | `AndroidManifest.xml` | App is fully offline |
+| `usesCleartextTraffic="true"` | `AndroidManifest.xml` | No network traffic at all |
+| Retrofit/OkHttp/Gson ProGuard rules | `proguard-rules.pro` | Libraries not in dependencies |
 
 ---
 
@@ -368,9 +388,9 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 
 ```
 app/src/main/java/com/pesatrack/
-├── PesaTrackApp.kt                          ✅ Hilt Application class
+├── PesaTrackApp.kt                          ✅ Hilt Application class + ProcessLifecycleOwner (PIN lock)
 ├── di/
-│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao), TelephonyManager
+│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao)
 ├── data/
 │   ├── local/
 │   │   ├── database/
@@ -386,7 +406,7 @@ app/src/main/java/com/pesatrack/
 │   │   │       ├── CategoryRuleEntity.kt     ✅ User-defined auto-categorization rules (pattern, matchType, priority)
 │   │   │       └── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
 │   │   └── preferences/
-│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt)
+│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
@@ -398,10 +418,10 @@ app/src/main/java/com/pesatrack/
 │   ├── Budget.kt                            ✅ Budget, BudgetPeriod, BudgetProgress, BudgetStatus, BudgetAlert
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
-│   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav
+│   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav + PIN lock overlay + BiometricPrompt
 │   ├── navigation/
-│   │   ├── NavGraph.kt                      ✅ 11 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement
-│   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs)
+│   │   ├── NavGraph.kt                      ✅ 12 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, PinSetup
+│   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs) + PinSetup route
 │   ├── screens/
 │   │   ├── home/
 │   │   │   ├── HomeScreen.kt                ✅ Monthly summary (with investment % breakdown) + mini trend chart + recent expenses + budget summary/prompt cards
@@ -415,6 +435,10 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── CategorizeScreen.kt           ✅ Category assignment
 │   │   │   ├── CategorizeViewModel.kt        ✅ State management
 │   │   │   └── CategorizeUiState.kt          ✅ UI state
+│   │   ├── batch_categorize/
+│   │   │   ├── BatchCategorizeScreen.kt    ✅ Batch categorize by recipient + multi-select cross-recipient mode
+│   │   │   ├── BatchCategorizeUiState.kt   ✅ Recipient groups, selection mode, suggestions
+│   │   │   └── BatchCategorizeViewModel.kt ✅ Group CRUD, auto-suggest, multi-select bulk apply
 │   │   ├── excel_import/
 │   │   │   ├── ExcelImportScreen.kt          ✅ File picker + progress + results
 │   │   │   ├── ExcelImportViewModel.kt       ✅ Multi-file import orchestration
@@ -435,10 +459,15 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── CategoryManagementScreen.kt  ✅ Tab-based CRUD: Categories + Auto-Rules, icon/color pickers, dialogs
 │   │   │   ├── CategoryManagementViewModel.kt ✅ Category + rule CRUD, dialog state, expense count validation
 │   │   │   └── CategoryManagementUiState.kt ✅ CategoryDialogState (7 variants), form models
+│   │   ├── pin/
+│   │   │   ├── PinLockScreen.kt             ✅ 4-dot indicator, number pad, biometric button, shake animation
+│   │   │   ├── PinSetupScreen.kt            ✅ PIN setup/change/disable flow
+│   │   │   ├── PinViewModel.kt              ✅ PIN verification, brute force protection (5 attempts → 30s cooldown)
+│   │   │   └── PinUiState.kt               ✅ PinMode (7 modes), digit entry, error/cooldown state
 │   │   └── settings/
-│   │       ├── SettingsScreen.kt             ✅ Category management + Budget management + Bank SMS tracking toggles
-│   │       ├── SettingsViewModel.kt          ✅ Bank preferences management
-│   │       └── SettingsUiState.kt            ✅ BankToggle model
+│   │       ├── SettingsScreen.kt             ✅ Security (PIN, biometric, timeout) + Category mgmt + Budget mgmt + Bank SMS toggles
+│   │       ├── SettingsViewModel.kt          ✅ Bank + PIN/biometric preferences management
+│   │       └── SettingsUiState.kt            ✅ BankToggle + PIN/biometric/timeout state
 │   ├── components/
 │   │   ├── ExpenseCard.kt                   ✅ Payment type icons, category title
 │   │   ├── CategoryChip.kt                  ✅ Selection chip
@@ -454,11 +483,12 @@ app/src/main/java/com/pesatrack/
 │   ├── AiCategorizationService.kt           ✅ CategorizationService — two-pass: user rules first, then built-in engine
 │   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
 │   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save, notification dispatch
-│   └── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds)
+│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds)
+│   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
+│   └── AppLockLifecycleObserver.kt          ✅ ProcessLifecycleOwner observer — background/foreground lock management
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
     ├── Constants.kt                         ✅ formatAsCurrency()
-    ├── PhoneNumberHelper.kt                 ✅ SIM number reading
     ├── excel/
     │   ├── ExcelParser.kt                   ✅ Apache POI .xlsx parser (dual date formats)
     │   └── ExcelCategoryMapper.kt           ✅ 55+ label→category ID mappings
@@ -507,12 +537,13 @@ backend/
 5. **Non-expense filtering** — Added skip logic for Receive Money, Deposit, and Reversal SMS (not expenses).
 6. **Transaction cost tracking** — Auto-extracted from SMS and saved as separate expense under category 811 with `isCategorized = true`.
 7. **Icons.AutoMirrored.Filled.Send** — Not available in compose icons version; fixed with `@Suppress("DEPRECATION") Icons.Filled.Send`.
+8. **NCBA Paybill regex (Format B)** — Original regex expected a standalone paybill number (digits) before "account" (e.g. `"to CHURCH 87 account number Offering"`). Failed on NCBA SMS where the business name directly precedes "account number" with no separate paybill number (e.g. `"to Lipa na KCB account number 7575077"`). Fixed by splitting into `paybillPatternA` (with paybill number) and `paybillPatternB` (without), tried in order of specificity.
 
 ### Implemented Features
 
 1. **Edit/Re-categorize expenses** — Removed `isCategorized` guard from ExpenseListScreen and HomeScreen; tapping any expense (categorized or not) now opens the CategorizeScreen. Title shows "Edit Category" for already-categorized expenses. The DAO/Repository/ViewModel already supported re-categorization — only the UI click handlers were blocking it.
 2. **Notification System** — SMS-parsed expenses trigger notification with amount + recipient; tap opens categorize screen.
-2. **Runtime Permissions** — MainActivity requests SMS, phone state, and notification permissions on first launch.
+2. **Runtime Permissions** — MainActivity requests SMS and notification permissions on first launch. (Phone state permissions removed — were unused dead code from STK Push era.)
 3. **Category-Aware Views** — Home screen and expense list show category name and colour alongside expenses.
 4. **Phone Auto-Fill** — SIM number read via TelephonyManager, persisted in DataStore.
 5. **Multi-part SMS** — SmsReceiver concatenates multi-part messages before parsing.
@@ -522,6 +553,8 @@ backend/
 9. **Investment % on Home Screen** — MonthlySummaryCard now shows a muted secondary line with the investment total and percentage (e.g. "📈 KES 50,000 (42%) invested") when any expenses are categorized under Investment & Savings (group 18). Uses a dedicated DAO query joining expenses with categories where `parentId = 18`. Displayed at `alpha = 0.5` to keep focus on the main expense total.
 10. **Custom Categories & Auto-Rules (M8)** — Full category management UI: add/edit/delete custom groups and sub-categories with icon/color pickers; user-defined auto-categorization rules (EXACT/CONTAINS/STARTS_WITH match types) checked before built-in KeywordRulesEngine; DB migration v9→v10 adds `category_rules` table; Settings entry point "Manage Categories" with tab-based screen (Categories + Auto-Rules); default categories protected from deletion; categories with expenses cannot be deleted.
 11. **Sub-category Budgets (M7 enhancement)** — Extended budgets from group-level to sub-category-level. Three tiers: Total Spending, Group (e.g. "Food & Dining ≤ 15K"), Sub-category (e.g. "Eating Out ≤ 5K"). DB migration v11→v12 renames `categoryGroupId`→`categoryId` and adds `isGroupBudget` column. Both group and sub-category budgets are tracked independently — an eating-out expense counts toward both "Food & Dining" and "Eating Out" budgets. Hierarchical category picker in add/edit dialog shows groups (bold) and indented sub-categories. Budget alerts fire for whichever threshold is reached first.
+12. **Multi-Select Batch Categorize** — Long-press any recipient group on BatchCategorizeScreen to enter selection mode. Checkboxes appear on all cards; tap to select multiple groups across different recipients. "Select All" / "Deselect All" toggle in the top bar. Bottom "Categorize Selected (N)" button opens the category picker — applies the chosen category to ALL expenses from ALL selected groups in one action. Saves recipient→category mappings for future auto-categorization. Back press exits selection mode. Coexists with existing single-group, review, and auto-suggest modes.
+13. **PIN Lock + Biometric Unlock** — App-level security with 4-digit PIN. PIN stored as SHA-256 + random salt in DataStore (never plaintext). Compose overlay in MainActivity blocks access when locked. Optional biometric (fingerprint/face) via `BiometricPrompt` — auto-launches on unlock screen, falls back to PIN. Lock triggers on cold start and after configurable background timeout (immediate/30s/1min/5min). Brute force protection: 5 wrong attempts → 30-second cooldown. Settings section: PIN enable/disable (verify current PIN first), change PIN (verify → enter → confirm), biometric toggle (only shown when device supports it), timeout picker. `ProcessLifecycleOwner` tracks background/foreground transitions via `AppLockLifecycleObserver`. No PIN recovery by design (clear app data to reset).
 
 ---
 
@@ -590,7 +623,9 @@ backend/
 ### High Priority
 - [x] Test on a real Android device with actual M-PESA + NCBA SMS messages
 - [x] Fix any parsing bugs discovered from real-world SMS formats
-- [ ] Generate signed APK for distribution
+- [x] Pre-release cleanup (removed unused permissions, dead code, configured signing) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
+- [ ] Generate signed AAB for Play Store distribution
+- [ ] Submit to Google Play Store (SMS Permission Declaration required) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
 
 ### Medium Priority — Phase 2 Milestone 5
 - [ ] About section (app version, credits)

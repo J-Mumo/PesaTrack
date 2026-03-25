@@ -55,6 +55,17 @@ data class BatchCategorizeUiState(
     /** Error message */
     val error: String? = null,
 
+    // ==================== Multi-Select Mode ====================
+
+    /** Whether multi-select mode is active (entered via long-press on a group card) */
+    val isSelectionMode: Boolean = false,
+
+    /** Set of recipientKey values for currently selected groups */
+    val selectedGroupKeys: Set<String> = emptySet(),
+
+    /** Show category picker dialog for bulk action on selected groups */
+    val showBulkCategoryPicker: Boolean = false,
+
     // ==================== Auto-Categorization (Rules Engine) ====================
 
     /** Rules engine suggestion results — Map<recipientKey, CategorySuggestion> */

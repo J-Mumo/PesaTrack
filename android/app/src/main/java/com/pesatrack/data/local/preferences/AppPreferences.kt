@@ -5,6 +5,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.pesatrack.utils.parsers.SmsParserRegistry
@@ -22,8 +25,9 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * DataStore-based preferences for persisting user settings.
  *
  * Stores:
- * - User phone number (payment auto-fill)
  * - Enabled bank SMS parsers (M-PESA always on, banks toggleable)
+ * - Budget prompt dismissal state
+ * - PIN lock settings (hash, enabled, biometric, timeout)
  */
 @Singleton
 class AppPreferences @Inject constructor(
@@ -48,6 +52,23 @@ class AppPreferences @Inject constructor(
          * Once dismissed, the prompt does not reappear.
          */
         private val KEY_BUDGET_PROMPT_DISMISSED = booleanPreferencesKey("budget_prompt_dismissed")
+
+        // ── PIN Lock ──
+
+        /** SHA-256 hash of the PIN in format "salt:hash", or null if no PIN set. */
+        private val KEY_PIN_HASH = stringPreferencesKey("pin_hash")
+
+        /** Whether PIN lock is active. */
+        private val KEY_PIN_ENABLED = booleanPreferencesKey("pin_enabled")
+
+        /** Whether biometric unlock is enabled (requires PIN to also be enabled). */
+        private val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+
+        /** Seconds the app must be backgrounded before re-locking. Default 30. */
+        private val KEY_LOCK_TIMEOUT_SECONDS = intPreferencesKey("lock_timeout_seconds")
+
+        /** Timestamp (epoch millis) when the app last went to background. */
+        private val KEY_LAST_BACKGROUND_TIMESTAMP = longPreferencesKey("last_background_timestamp")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -143,6 +164,86 @@ class AppPreferences @Inject constructor(
     suspend fun dismissBudgetPrompt() {
         context.dataStore.edit { preferences ->
             preferences[KEY_BUDGET_PROMPT_DISMISSED] = true
+        }
+    }
+
+    // ==================== PIN Lock ====================
+
+    /** Whether PIN lock is enabled. */
+    val pinEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_PIN_ENABLED] ?: false }
+
+    /** The stored PIN hash ("salt:hash") or null. */
+    val pinHash: Flow<String?> = context.dataStore.data.map { it[KEY_PIN_HASH] }
+
+    /** Whether biometric unlock is enabled. */
+    val biometricEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_BIOMETRIC_ENABLED] ?: false }
+
+    /** Lock timeout in seconds (0 = immediate). */
+    val lockTimeoutSeconds: Flow<Int> = context.dataStore.data.map { it[KEY_LOCK_TIMEOUT_SECONDS] ?: 30 }
+
+    /** Last background timestamp (epoch millis). */
+    val lastBackgroundTimestamp: Flow<Long> = context.dataStore.data.map { it[KEY_LAST_BACKGROUND_TIMESTAMP] ?: 0L }
+
+    /** Snapshot: is PIN enabled? */
+    suspend fun isPinEnabled(): Boolean {
+        return context.dataStore.data.first()[KEY_PIN_ENABLED] ?: false
+    }
+
+    /** Snapshot: get PIN hash. */
+    suspend fun getPinHash(): String? {
+        return context.dataStore.data.first()[KEY_PIN_HASH]
+    }
+
+    /** Snapshot: is biometric enabled? */
+    suspend fun isBiometricEnabled(): Boolean {
+        return context.dataStore.data.first()[KEY_BIOMETRIC_ENABLED] ?: false
+    }
+
+    /** Snapshot: lock timeout in seconds. */
+    suspend fun getLockTimeoutSeconds(): Int {
+        return context.dataStore.data.first()[KEY_LOCK_TIMEOUT_SECONDS] ?: 30
+    }
+
+    /** Snapshot: last background timestamp. */
+    suspend fun getLastBackgroundTimestamp(): Long {
+        return context.dataStore.data.first()[KEY_LAST_BACKGROUND_TIMESTAMP] ?: 0L
+    }
+
+    /** Save PIN hash and enable PIN lock. */
+    suspend fun setPinHash(hash: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PIN_HASH] = hash
+            prefs[KEY_PIN_ENABLED] = true
+        }
+    }
+
+    /** Clear PIN hash and disable PIN lock + biometric. */
+    suspend fun clearPin() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_PIN_HASH)
+            prefs[KEY_PIN_ENABLED] = false
+            prefs[KEY_BIOMETRIC_ENABLED] = false
+        }
+    }
+
+    /** Toggle biometric unlock. */
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_BIOMETRIC_ENABLED] = enabled
+        }
+    }
+
+    /** Set lock timeout in seconds. */
+    suspend fun setLockTimeoutSeconds(seconds: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LOCK_TIMEOUT_SECONDS] = seconds
+        }
+    }
+
+    /** Record when the app went to background. */
+    suspend fun setLastBackgroundTimestamp(timestamp: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_BACKGROUND_TIMESTAMP] = timestamp
         }
     }
 

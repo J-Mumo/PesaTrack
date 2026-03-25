@@ -17,6 +17,9 @@ sealed class Screen(val route: String) {
     object ManualEntry : Screen("manual_entry")
     object Budget : Screen("budget")
     object CategoryManagement : Screen("category_management")
+    object PinSetup : Screen("pin_setup/{mode}") {
+        fun createRoute(mode: String) = "pin_setup/$mode"
+    }
 }
 
 /**

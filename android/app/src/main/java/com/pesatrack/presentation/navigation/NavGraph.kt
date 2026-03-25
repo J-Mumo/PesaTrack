@@ -17,6 +17,7 @@ import com.pesatrack.presentation.screens.import_history.ImportScreen
 import com.pesatrack.presentation.screens.budget.BudgetScreen
 import com.pesatrack.presentation.screens.category_management.CategoryManagementScreen
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
+import com.pesatrack.presentation.screens.pin.PinSetupScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 
 /**
@@ -152,6 +153,9 @@ fun NavGraph(
                 },
                 onNavigateToCategoryManagement = {
                     navController.navigate(Screen.CategoryManagement.route)
+                },
+                onNavigateToPinSetup = { mode ->
+                    navController.navigate(Screen.PinSetup.createRoute(mode))
                 }
             )
         }
@@ -178,6 +182,28 @@ fun NavGraph(
         composable(route = Screen.CategoryManagement.route) {
             CategoryManagementScreen(
                 onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // PIN Setup Screen (setup / change / disable)
+        composable(
+            route = Screen.PinSetup.route,
+            arguments = listOf(
+                navArgument("mode") {
+                    type = NavType.StringType
+                }
+            )
+        ) { backStackEntry ->
+            val mode = backStackEntry.arguments?.getString("mode") ?: "setup"
+            PinSetupScreen(
+                isChangeMode = mode == "change",
+                isDisableMode = mode == "disable",
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onSetupComplete = {
                     navController.popBackStack()
                 }
             )
