@@ -172,7 +172,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "© 2026 Joel Mumo",
+                text = "© 2026 JMumo Technologies",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -260,4 +260,4 @@ private fun LinkRow(
 // Constants — update these when privacy policy is live
 private const val PRIVACY_POLICY_URL = "https://j-mumo.github.io/PesaTrack/privacy-policy.html"
 private const val GITHUB_URL = "https://github.com/J-Mumo/PesaTrack"
-private const val CONTACT_EMAIL = "pesatrack.app@gmail.com"
+private const val CONTACT_EMAIL = "joelmumo.jm@gmail.com"
