@@ -25,7 +25,8 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M3: Smart Categorization (Rules Engine)** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
-| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~80% |
+| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~90% |
+| **About Screen + Privacy Policy** | ✅ Complete | 100% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
 | **Year-over-Year Analytics** | ✅ Complete | 100% |
 | **Phase 2 M6: Investment Category Deep-Dive** | ✅ Complete | 100% |
@@ -604,7 +605,7 @@ backend/
 | **M3** | Smart Categorization (Rules Engine) | ✅ Complete | On-device KeywordRulesEngine (replaced Gemini AI) — 100+ business names, keyword rules, PaymentType heuristics; zero cost, offline, always-on |
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
-| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles done (M2); AI config removed (M3 → rules engine); Category management done (M8); About, data mgmt, onboarding pending |
+| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles done (M2); AI config removed (M3 → rules engine); Category management done (M8); About screen ✅; Privacy policy (GitHub Pages) ✅; data mgmt, onboarding pending |
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
 | — | Year-over-Year analytics | ✅ Complete | Tab-based Monthly/Yearly view: annual total card, YoY % change, 12-month overlay chart (this year vs last year), yearly category breakdown, top recipients by year, payment type breakdown by year |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
@@ -628,7 +629,8 @@ backend/
 - [ ] Submit to Google Play Store (SMS Permission Declaration required) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
 
 ### Medium Priority — Phase 2 Milestone 5
-- [ ] About section (app version, credits)
+- [x] About section (app version, privacy policy link, contact, data practices summary)
+- [x] Privacy policy page (GitHub Pages: `docs/privacy-policy.html`)
 - [ ] Data management (clear data, reset categories, export/backup)
 - [ ] Notification preferences
 - [x] Category management UI (M8 — custom categories + auto-rules)

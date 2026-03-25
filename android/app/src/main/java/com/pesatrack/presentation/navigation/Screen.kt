@@ -20,6 +20,7 @@ sealed class Screen(val route: String) {
     object PinSetup : Screen("pin_setup/{mode}") {
         fun createRoute(mode: String) = "pin_setup/$mode"
     }
+    object About : Screen("about")
 }
 
 /**

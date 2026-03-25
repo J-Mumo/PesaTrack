@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
@@ -39,6 +40,7 @@ fun SettingsScreen(
     onNavigateToBudget: () -> Unit = {},
     onNavigateToCategoryManagement: () -> Unit = {},
     onNavigateToPinSetup: (String) -> Unit = {},
+    onNavigateToAbout: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -118,6 +120,9 @@ fun SettingsScreen(
                     onBankTrackingToggled = viewModel::setBankTrackingEnabled,
                     onBankToggled = viewModel::setBankEnabled
                 )
+
+                // Section: About
+                AboutSection(onNavigateToAbout = onNavigateToAbout)
             }
         }
     }
@@ -587,6 +592,62 @@ private fun SmsSourcesSection(
                     modifier = Modifier.padding(start = 32.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * About section — navigate to the About screen.
+ */
+@Composable
+private fun AboutSection(
+    onNavigateToAbout: () -> Unit
+) {
+    Text(
+        text = "About",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+
+    Card(
+        onClick = onNavigateToAbout,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column {
+                    Text(
+                        text = "About PesaTrack",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Version info, privacy policy & contact",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Go to About",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

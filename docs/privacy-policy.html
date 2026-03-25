@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PesaTrack — Privacy Policy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.7;
+            color: #1a1a1a;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        h1 {
+            color: #1b5e20;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+        h2 {
+            color: #2e7d32;
+            margin-top: 28px;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+        p, li {
+            margin-bottom: 12px;
+            color: #333;
+        }
+        ul {
+            padding-left: 24px;
+        }
+        .highlight {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 16px 20px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .highlight strong {
+            color: #1b5e20;
+        }
+        .contact {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 24px;
+        }
+        .footer {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 PesaTrack Privacy Policy</h1>
+        <p class="subtitle">Last updated: March 25, 2026</p>
+
+        <div class="highlight">
+            <strong>Key point:</strong> PesaTrack stores all your data locally on your device.
+            No data is transmitted to any server, cloud service, or third party. Ever.
+        </div>
+
+        <h2>1. What PesaTrack Does</h2>
+        <p>PesaTrack is a passive expense tracker for Android. It reads incoming M-PESA and bank
+        SMS messages, parses transaction details (amount, recipient, date, transaction code),
+        and saves them locally on your device for categorization, budgeting, and review.</p>
+
+        <h2>2. SMS Data We Access</h2>
+        <p>PesaTrack requests the following Android permissions:</p>
+        <ul>
+            <li><strong>RECEIVE_SMS</strong> — To detect incoming M-PESA and supported bank SMS messages in real time</li>
+            <li><strong>READ_SMS</strong> — To import historical transaction SMS from your message inbox (user-initiated only)</li>
+        </ul>
+        <p>PesaTrack <strong>only reads SMS from specific senders</strong>:</p>
+        <ul>
+            <li>M-PESA (sender: "MPESA")</li>
+            <li>NCBA Bank (sender: "NCBA")</li>
+        </ul>
+        <p>Personal SMS messages from contacts, promotional messages, and SMS from unsupported
+        senders are <strong>never read, accessed, or stored</strong>.</p>
+
+        <h2>3. What Data Is Stored</h2>
+        <p>From each qualifying transaction SMS, PesaTrack extracts and stores:</p>
+        <ul>
+            <li>Transaction amount (KES)</li>
+            <li>Recipient name and number/till/paybill</li>
+            <li>Transaction date and time</li>
+            <li>M-PESA transaction code (e.g., "ABC123XYZ")</li>
+            <li>Transaction cost (if present in the SMS)</li>
+            <li>Payment type (Send Money, Buy Goods, Pay Bill, etc.)</li>
+        </ul>
+        <p>Additionally, you may manually enter expenses or import from Excel spreadsheets.
+        Category assignments, budgets, and settings are also stored locally.</p>
+
+        <h2>4. Where Data Is Stored</h2>
+        <div class="highlight">
+            <strong>100% on-device.</strong> All data is stored in a local Room database and
+            DataStore preferences on your Android device. PesaTrack has no backend server,
+            no cloud sync, no analytics SDK, and no internet permission.
+        </div>
+        <p>The app does not contain the <code>INTERNET</code> permission and is physically
+        incapable of transmitting data off your device.</p>
+
+        <h2>5. Data Sharing</h2>
+        <p><strong>PesaTrack does not share your data with anyone.</strong></p>
+        <ul>
+            <li>No data is sent to any server or cloud service</li>
+            <li>No data is shared with third-party SDKs, analytics, or advertising networks</li>
+            <li>No data is sold, rented, or licensed to any party</li>
+            <li>No crash reporting or usage analytics are collected</li>
+        </ul>
+
+        <h2>6. Data Security</h2>
+        <p>PesaTrack offers an optional PIN lock with biometric unlock (fingerprint/face) to
+        prevent unauthorized access to the app. The PIN is stored as a salted SHA-256 hash —
+        the raw PIN is never stored.</p>
+        <p>Your data inherits the security of your Android device (device encryption, screen lock).
+        PesaTrack does not implement additional database encryption, as the app's threat model
+        is casual-access prevention, not forensic-level protection.</p>
+
+        <h2>7. Your Rights & Data Deletion</h2>
+        <p>You have full control over your data:</p>
+        <ul>
+            <li><strong>View:</strong> All your expense data is visible in the app at all times</li>
+            <li><strong>Edit:</strong> You can re-categorize, exclude, or modify any expense</li>
+            <li><strong>Delete:</strong> Clear all app data via Android Settings → Apps → PesaTrack → Clear Data</li>
+            <li><strong>Uninstall:</strong> Removing the app deletes all stored data permanently</li>
+        </ul>
+        <p>Since no data leaves your device, there is no server-side data to request deletion of.</p>
+
+        <h2>8. Children's Privacy</h2>
+        <p>PesaTrack is not directed at children under 13. The app requires access to financial
+        SMS messages, which is inherently an adult use case.</p>
+
+        <h2>9. Changes to This Policy</h2>
+        <p>If we update this privacy policy, the updated version will be posted at this URL and
+        the "Last updated" date will be revised. Material changes affecting data handling will
+        be communicated through an app update.</p>
+
+        <h2>10. Contact</h2>
+        <div class="contact">
+            <p>If you have questions about this privacy policy or PesaTrack's data practices:</p>
+            <p>📧 Email: <a href="mailto:pesatrack.app@gmail.com">pesatrack.app@gmail.com</a></p>
+            <p>🐙 GitHub: <a href="https://github.com/J-Mumo/PesaTrack">github.com/J-Mumo/PesaTrack</a></p>
+        </div>
+
+        <div class="footer">
+            <p>PesaTrack — Passive M-PESA & Bank Expense Tracker</p>
+            <p>© 2026 Joel Mumo. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

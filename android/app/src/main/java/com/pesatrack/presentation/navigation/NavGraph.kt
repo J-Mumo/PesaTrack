@@ -17,6 +17,7 @@ import com.pesatrack.presentation.screens.import_history.ImportScreen
 import com.pesatrack.presentation.screens.budget.BudgetScreen
 import com.pesatrack.presentation.screens.category_management.CategoryManagementScreen
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
+import com.pesatrack.presentation.screens.about.AboutScreen
 import com.pesatrack.presentation.screens.pin.PinSetupScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 
@@ -156,6 +157,9 @@ fun NavGraph(
                 },
                 onNavigateToPinSetup = { mode ->
                     navController.navigate(Screen.PinSetup.createRoute(mode))
+                },
+                onNavigateToAbout = {
+                    navController.navigate(Screen.About.route)
                 }
             )
         }
@@ -204,6 +208,15 @@ fun NavGraph(
                     navController.popBackStack()
                 },
                 onSetupComplete = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // About Screen
+        composable(route = Screen.About.route) {
+            AboutScreen(
+                onNavigateBack = {
                     navController.popBackStack()
                 }
             )
