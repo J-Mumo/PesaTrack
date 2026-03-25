@@ -552,6 +552,34 @@ interface ExpenseDao {
      */
     @Query("SELECT COUNT(*) FROM expenses WHERE isCategorized = 1 AND isExcluded = 0")
     suspend fun getCategorizedExpenseCount(): Int
+
+    // ==================== Export Queries ====================
+
+    /**
+     * Get all expenses joined with category name for CSV export.
+     * Returns all expenses ordered by date descending.
+     */
+    @Query("""
+        SELECT
+            e.id,
+            e.transactionId,
+            e.amount,
+            e.recipient,
+            e.recipientName,
+            COALESCE(c.name, 'Uncategorized') AS categoryName,
+            COALESCE(pc.name, '') AS groupName,
+            e.paymentType,
+            e.source,
+            e.notes,
+            e.timestamp,
+            e.isCategorized,
+            e.isExcluded
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        LEFT JOIN categories pc ON c.parentId = pc.id
+        ORDER BY e.timestamp DESC
+    """)
+    suspend fun getAllExpensesForExport(): List<ExportExpense>
 }
 
 /**
@@ -641,4 +669,23 @@ data class CategoryMonthlyTotal(
 data class YearMonthTotal(
     val monthNumber: Int,
     val total: Double
+)
+
+/**
+ * Expense row joined with category/group names for CSV export.
+ */
+data class ExportExpense(
+    val id: Long,
+    val transactionId: String?,
+    val amount: Double,
+    val recipient: String,
+    val recipientName: String?,
+    val categoryName: String,
+    val groupName: String,
+    val paymentType: String,
+    val source: String,
+    val notes: String?,
+    val timestamp: Long,
+    val isCategorized: Boolean,
+    val isExcluded: Boolean
 )

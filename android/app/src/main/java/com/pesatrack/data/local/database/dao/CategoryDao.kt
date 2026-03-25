@@ -36,6 +36,13 @@ interface CategoryDao {
     suspend fun delete(id: Long)
 
     /**
+     * Delete all custom (non-default) categories and their children.
+     * Used by "Reset Categories to Default" feature.
+     */
+    @Query("DELETE FROM categories WHERE isDefault = 0")
+    suspend fun deleteAllCustom()
+
+    /**
      * Delete a group and all its children (only non-default)
      */
     @Query("DELETE FROM categories WHERE (id = :groupId OR parentId = :groupId) AND isDefault = 0")

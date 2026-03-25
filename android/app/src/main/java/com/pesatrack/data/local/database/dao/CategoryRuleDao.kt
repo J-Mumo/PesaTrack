@@ -51,4 +51,10 @@ interface CategoryRuleDao {
      */
     @Query("DELETE FROM category_rules WHERE categoryId = :categoryId")
     suspend fun deleteRulesForCategory(categoryId: Long)
+
+    /**
+     * Delete all rules
+     */
+    @Query("DELETE FROM category_rules")
+    suspend fun deleteAll()
 }

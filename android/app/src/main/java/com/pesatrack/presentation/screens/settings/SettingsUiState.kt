@@ -19,7 +19,11 @@ data class SettingsUiState(
     val pinEnabled: Boolean = false,
     val biometricEnabled: Boolean = false,
     val biometricAvailable: Boolean = false,
-    val lockTimeoutSeconds: Int = 30
+    val lockTimeoutSeconds: Int = 30,
+    // Data Management
+    val isExporting: Boolean = false,
+    val isResettingCategories: Boolean = false,
+    val dataManagementMessage: String? = null
 )
 
 /**
