@@ -67,6 +67,11 @@ class AppPreferences @Inject constructor(
         /** Seconds the app must be backgrounded before re-locking. Default 30. */
         private val KEY_LOCK_TIMEOUT_SECONDS = intPreferencesKey("lock_timeout_seconds")
 
+        // ── Onboarding ──
+
+        /** Whether the first-launch onboarding flow has been completed. */
+        private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+
         /** Timestamp (epoch millis) when the app last went to background. */
         private val KEY_LAST_BACKGROUND_TIMESTAMP = longPreferencesKey("last_background_timestamp")
     }
@@ -244,6 +249,25 @@ class AppPreferences @Inject constructor(
     suspend fun setLastBackgroundTimestamp(timestamp: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_BACKGROUND_TIMESTAMP] = timestamp
+        }
+    }
+
+    // ==================== Onboarding ====================
+
+    /**
+     * Whether the onboarding flow has been completed.
+     * Default: false — onboarding shows on first launch.
+     */
+    val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ONBOARDING_COMPLETED] ?: false
+    }
+
+    /**
+     * Mark onboarding as completed (called when user finishes or skips onboarding).
+     */
+    suspend fun setOnboardingCompleted() {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_ONBOARDING_COMPLETED] = true
         }
     }
 

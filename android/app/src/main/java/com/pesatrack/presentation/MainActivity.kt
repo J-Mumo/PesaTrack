@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -28,8 +29,11 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.presentation.navigation.BottomNavItem
 import com.pesatrack.presentation.navigation.NavGraph
+import com.pesatrack.presentation.navigation.Screen
+import com.pesatrack.presentation.screens.onboarding.OnboardingScreen
 import com.pesatrack.presentation.screens.pin.PinLockScreen
 import com.pesatrack.presentation.screens.pin.PinMode
 import com.pesatrack.presentation.screens.pin.PinViewModel
@@ -37,6 +41,7 @@ import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import javax.inject.Inject
 
@@ -45,6 +50,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var appLockLifecycleObserver: AppLockLifecycleObserver
+
+    @Inject
+    lateinit var appPreferences: AppPreferences
 
     /**
      * Launcher for requesting multiple permissions at once.
@@ -75,17 +83,50 @@ class MainActivity : FragmentActivity() {
         // Create notification channel (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
 
-        // Request all necessary permissions
-        requestAppPermissions()
-
         // Set up biometric prompt
         setupBiometric()
 
         setContent {
             PesaTrackTheme {
-                AppWithLockOverlay()
+                AppEntryPoint()
             }
         }
+    }
+
+    /**
+     * Root entry point that checks onboarding → PIN lock → main app.
+     *
+     * Priority:
+     * 1. If onboarding not completed → show OnboardingScreen
+     * 2. If app is locked → show PinLockScreen
+     * 3. Otherwise → show MainScreen
+     */
+    @Composable
+    private fun AppEntryPoint() {
+        val onboardingCompleted by appPreferences.onboardingCompleted.collectAsState(initial = true)
+        val coroutineScope = rememberCoroutineScope()
+
+        if (!onboardingCompleted) {
+            OnboardingScreen(
+                onComplete = {
+                    coroutineScope.launch {
+                        appPreferences.setOnboardingCompleted()
+                    }
+                    // Request remaining permissions (notifications) after onboarding
+                    requestNotificationPermission()
+                },
+                onRequestSmsPermission = {
+                    // SMS permission is handled inside OnboardingScreen via ActivityResult
+                },
+                onImportHistory = {
+                    // Navigate to import screen after onboarding completes
+                    // The import will happen from the Import screen
+                }
+            )
+            return
+        }
+
+        AppWithLockOverlay()
     }
 
     /**
@@ -175,14 +216,25 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Request all permissions needed by the app:
-     * - READ_SMS + RECEIVE_SMS: for parsing M-PESA/Bank confirmation messages
-     * - POST_NOTIFICATIONS (Android 13+): for showing expense & budget alerts
+     * Request notification permission (Android 13+).
+     * SMS permissions are now handled in the onboarding flow.
      */
-    private fun requestAppPermissions() {
-        val permissionsNeeded = mutableListOf<String>()
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
+        }
+    }
 
-        // SMS permissions - for M-PESA/Bank SMS parsing
+    /**
+     * Request SMS permissions for returning users (who already completed onboarding
+     * but may have revoked permissions).
+     * Called after onboarding is already completed.
+     */
+    private fun requestSmsPermissionsIfNeeded() {
+        val permissionsNeeded = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
             != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.READ_SMS)
@@ -191,15 +243,6 @@ class MainActivity : FragmentActivity() {
             != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.RECEIVE_SMS)
         }
-
-        // Notification permission (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-
         if (permissionsNeeded.isNotEmpty()) {
             permissionLauncher.launch(permissionsNeeded.toTypedArray())
         }

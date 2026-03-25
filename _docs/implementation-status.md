@@ -25,7 +25,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M3: Smart Categorization (Rules Engine)** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
-| **Phase 2 M5: Settings & Configuration** | 🟡 Partial | ~95% |
+| **Phase 2 M5: Settings & Configuration** | ✅ Complete | 100% |
 | **About Screen + Privacy Policy** | ✅ Complete | 100% |
 | **Data Management (Export + Reset)** | ✅ Complete | 100% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
@@ -184,12 +184,12 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 11 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 12 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, About |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:23) | 3 tabs: Home, Analytics, Expenses |
 | **Main Activity** | | |
-| MainActivity | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:32) | Runtime permissions, notification channel, bottom nav scaffold |
-| MainScreen | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:108) | Scaffold with NavigationBar + NavGraph |
+| MainActivity | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:48) | Onboarding overlay → PIN lock overlay → main app; biometric setup; notification channel |
+| MainScreen | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:252) | Scaffold with NavigationBar + NavGraph |
 | **Home Screen** | | |
 | HomeScreen | [`HomeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeScreen.kt:24) | Monthly summary with investment % breakdown, recent expenses, uncategorized alert |
 | HomeViewModel | [`HomeViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeViewModel.kt:15) | Category-aware state management, default category init, investment total loading |
@@ -214,6 +214,9 @@ SMS Sources ──────────────────────�
 | Theme | [`Theme.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Theme.kt:1) | Material 3 theming |
 | Colors | [`Color.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Color.kt:1) | Colour palette with `getCategoryColor()` |
 | Typography | [`Type.kt`](../android/app/src/main/java/com/pesatrack/presentation/theme/Type.kt:1) | Typography definitions |
+
+| **Onboarding Screen** | | |
+| OnboardingScreen | [`OnboardingScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/onboarding/OnboardingScreen.kt:37) | 4-page HorizontalPager: Welcome, How It Works, SMS Permission (grant button), Import History (import now/later); dot indicators + Skip/Back/Next/Get Started |
 
 | **PIN Lock Screen** | | |
 | PinLockScreen | [`PinLockScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/pin/PinLockScreen.kt:1) | 4-dot indicator, number pad, biometric button, shake animation, cooldown timer |
@@ -327,7 +330,7 @@ SMS Sources ──────────────────────�
 | SMS Permissions | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:5) | `READ_SMS`, `RECEIVE_SMS` |
 | Notification Permission | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:9) | `POST_NOTIFICATIONS` (Android 13+) |
 | SMS BroadcastReceiver | [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml:34) | Priority 999, `BROADCAST_SMS` permission |
-| Runtime Permissions | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:64) | Requests SMS + notification permissions on startup |
+| Runtime Permissions | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:61) | SMS permissions via onboarding flow; notification permission after onboarding |
 | Gradle Build | [`build.gradle.kts`](../android/app/build.gradle.kts:1) | compileSdk 35, minSdk 26, targetSdk 35, Kotlin 17 |
 | Build Config | [`build.gradle.kts`](../android/app/build.gradle.kts:29) | Release signing config + minify + shrink enabled |
 | ProGuard Rules | [`proguard-rules.pro`](../android/app/proguard-rules.pro:1) | Room + Apache POI keep rules |
@@ -420,7 +423,7 @@ app/src/main/java/com/pesatrack/
 │   ├── Budget.kt                            ✅ Budget, BudgetPeriod, BudgetProgress, BudgetStatus, BudgetAlert
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
-│   ├── MainActivity.kt                      ✅ Permissions + Scaffold + 3-tab bottom nav + PIN lock overlay + BiometricPrompt
+│   ├── MainActivity.kt                      ✅ Onboarding → PIN lock → main app; BiometricPrompt; 3-tab bottom nav
 │   ├── navigation/
 │   │   ├── NavGraph.kt                      ✅ 12 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, PinSetup
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs) + PinSetup route
@@ -461,6 +464,8 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── CategoryManagementScreen.kt  ✅ Tab-based CRUD: Categories + Auto-Rules, icon/color pickers, dialogs
 │   │   │   ├── CategoryManagementViewModel.kt ✅ Category + rule CRUD, dialog state, expense count validation
 │   │   │   └── CategoryManagementUiState.kt ✅ CategoryDialogState (7 variants), form models
+│   │   ├── onboarding/
+│   │   │   └── OnboardingScreen.kt          ✅ 4-page HorizontalPager: Welcome, How It Works, SMS Permission, Import History
 │   │   ├── pin/
 │   │   │   ├── PinLockScreen.kt             ✅ 4-dot indicator, number pad, biometric button, shake animation
 │   │   │   ├── PinSetupScreen.kt            ✅ PIN setup/change/disable flow
@@ -557,6 +562,7 @@ backend/
 11. **Sub-category Budgets (M7 enhancement)** — Extended budgets from group-level to sub-category-level. Three tiers: Total Spending, Group (e.g. "Food & Dining ≤ 15K"), Sub-category (e.g. "Eating Out ≤ 5K"). DB migration v11→v12 renames `categoryGroupId`→`categoryId` and adds `isGroupBudget` column. Both group and sub-category budgets are tracked independently — an eating-out expense counts toward both "Food & Dining" and "Eating Out" budgets. Hierarchical category picker in add/edit dialog shows groups (bold) and indented sub-categories. Budget alerts fire for whichever threshold is reached first.
 12. **Multi-Select Batch Categorize** — Long-press any recipient group on BatchCategorizeScreen to enter selection mode. Checkboxes appear on all cards; tap to select multiple groups across different recipients. "Select All" / "Deselect All" toggle in the top bar. Bottom "Categorize Selected (N)" button opens the category picker — applies the chosen category to ALL expenses from ALL selected groups in one action. Saves recipient→category mappings for future auto-categorization. Back press exits selection mode. Coexists with existing single-group, review, and auto-suggest modes.
 13. **PIN Lock + Biometric Unlock** — App-level security with 4-digit PIN. PIN stored as SHA-256 + random salt in DataStore (never plaintext). Compose overlay in MainActivity blocks access when locked. Optional biometric (fingerprint/face) via `BiometricPrompt` — auto-launches on unlock screen, falls back to PIN. Lock triggers on cold start and after configurable background timeout (immediate/30s/1min/5min). Brute force protection: 5 wrong attempts → 30-second cooldown. Settings section: PIN enable/disable (verify current PIN first), change PIN (verify → enter → confirm), biometric toggle (only shown when device supports it), timeout picker. `ProcessLifecycleOwner` tracks background/foreground transitions via `AppLockLifecycleObserver`. No PIN recovery by design (clear app data to reset).
+14. **First-Launch Onboarding Flow** — 4-page HorizontalPager shown once on first install (tracked via `KEY_ONBOARDING_COMPLETED` in DataStore). Pages: (1) Welcome — what the app does, (2) How It Works — SMS parsing explained, (3) SMS Permission — contextual permission grant with ✅ confirmation, (4) Import History — offer to import past M-PESA SMS. Dot indicators, Back/Next/Skip buttons, "Get Started" on final page. SMS permission requested in-context via `ActivityResultContracts.RequestMultiplePermissions()`. Notification permission requested on completion. Onboarding overlay in `MainActivity.AppEntryPoint()` — same pattern as PIN lock (full-screen, no bypass). Existing users see onboarding once (DataStore default is `false`).
 
 ---
 
@@ -578,7 +584,7 @@ backend/
 | Correct payment type labels | ✅ Complete | `fromString()` handles both formats |
 | Category-aware expense cards | ✅ Complete | Category name as title |
 | Edit/re-categorize expenses | ✅ Complete | Tap any expense to change its category |
-| Runtime permission flow | ✅ Complete | All permissions requested on launch |
+| Runtime permission flow | ✅ Complete | SMS via onboarding; notifications after onboarding |
 | Manual expense entry | ✅ Complete | Form with amount, recipient, payment type, date, category, notes |
 | Historical SMS import | ✅ Complete | ContentResolver-based import with date range picker |
 | Excel spreadsheet import | ✅ Complete | Match to SMS + import unmatched + multi-file |
@@ -606,7 +612,7 @@ backend/
 | **M3** | Smart Categorization (Rules Engine) | ✅ Complete | On-device KeywordRulesEngine (replaced Gemini AI) — 100+ business names, keyword rules, PaymentType heuristics; zero cost, offline, always-on |
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
-| **M5** | Settings & Configuration | 🟡 Partial | Bank toggles done (M2); AI config removed (M3 → rules engine); Category management done (M8); About screen ✅; Privacy policy (GitHub Pages) ✅; Data management (export CSV + reset categories) ✅; onboarding pending |
+| **M5** | Settings & Configuration | ✅ Complete | Bank toggles (M2); Category management (M8); About screen; Privacy policy (GitHub Pages); Data management (export CSV + reset categories); First-launch onboarding flow |
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
 | — | Year-over-Year analytics | ✅ Complete | Tab-based Monthly/Yearly view: annual total card, YoY % change, 12-month overlay chart (this year vs last year), yearly category breakdown, top recipients by year, payment type breakdown by year |
 | — | Monthly/weekly summaries | ✅ Complete | Month selector + daily/monthly aggregation in analytics |
@@ -633,9 +639,9 @@ backend/
 - [x] About section (app version, privacy policy link, contact, data practices summary)
 - [x] Privacy policy page (GitHub Pages: `docs/privacy-policy.html`)
 - [x] Data management — Export all expenses as CSV (via share sheet) + Reset categories to defaults (removes custom categories & rules)
-- [ ] Notification preferences
+- [x] First-launch onboarding flow (4-page HorizontalPager: Welcome, How It Works, SMS Permission, Import History)
+- [ ] Notification preferences (deferred — low priority)
 - [x] Category management UI (M8 — custom categories + auto-rules)
-- [ ] First-launch onboarding flow
 
 ### ~~Medium Priority — Phase 2 Milestone 6 (Investment Deep-Dive)~~ ✅ Complete
 - [x] Audit current Financial sub-categories (602, 605, 610, 611, 612) for investment coverage gaps
