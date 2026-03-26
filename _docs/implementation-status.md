@@ -119,7 +119,7 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Room Database** | | |
-| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 12 with migrations |
+| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 13 with migrations |
 | Migration 2→3 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:34) | Moved Seed category to Faith & Giving |
 | Migration 6→7 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:469) | Added `isExcluded` column to expenses |
 | Migration 7→8 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:484) | Investment deep-dive: moved 6 sub-categories from Financial to new Investment & Savings group (18) |
@@ -127,24 +127,27 @@ SMS Sources ──────────────────────�
 | Migration 9→10 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:798) | User-defined auto-categorization rules: `category_rules` table |
 | Migration 10→11 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:834) | Beekeeping group converted from default to custom |
 | Migration 11→12 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:845) | Sub-category budgets: renamed `categoryGroupId` → `categoryId`, added `isGroupBudget` column |
+| Migration 12→13 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:895) | Added `income` table for manual monthly income tracking |
 | Expense Entity | [`ExpenseEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/ExpenseEntity.kt:11) | Full schema with FK to categories + isExcluded flag |
 | Category Entity | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:12) | Hierarchical categories with parent-child |
 | Category Rule Entity | [`CategoryRuleEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryRuleEntity.kt:1) | User-defined auto-categorization rules (pattern, matchType, categoryId, priority) |
 | Budget Entity | [`BudgetEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/BudgetEntity.kt:1) | Budget limits per category group, sub-category, or total, with period + isActive + isGroupBudget |
+| Income Entity | [`IncomeEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/IncomeEntity.kt:1) | Monthly income records (amount, yearMonth unique, note) for budget allocation checking |
 | Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 18 groups, 90+ sub-categories |
 | Expense DAO | [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt:10) | CRUD + month queries + duplicate check + budget spending queries (total, group, sub-category) |
 | Category DAO | [`CategoryDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryDao.kt:11) | CRUD + search + default seeding + expense count queries + group management |
 | Category Rule DAO | [`CategoryRuleDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryRuleDao.kt:1) | Rule CRUD + active rules query |
 | Budget DAO | [`BudgetDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/BudgetDao.kt:1) | Budget CRUD + active budget queries + affected budget lookups (group + sub-category) |
+| Income DAO | [`IncomeDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/IncomeDao.kt:1) | Income upsert + getByYearMonth + observe as Flow |
 | **Preferences** | | |
 | AppPreferences | [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:1) | DataStore for phone number, bank preferences, budget prompt dismissal |
 | **Repositories** | | |
 | Expense Repository | [`ExpenseRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/ExpenseRepository.kt:17) | CRUD, month range, domain mapping |
 | Category Repository | [`CategoryRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRepository.kt:18) | Category CRUD (add/edit/delete groups + sub-categories), default init, expense count checks |
 | Category Rule Repository | [`CategoryRuleRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRuleRepository.kt:1) | Rule CRUD, active rules loading for categorization pipeline |
-| Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation, spending aggregation (total/group/sub-category), progress/alert calculation |
+| Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation, spending aggregation (total/group/sub-category), progress/alert calculation, monthly income get/set, total budgeted computation |
 | **Dependency Injection** | | |
-| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v12 with all migrations), DAOs (including BudgetDao, CategoryRuleDao) |
+| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v13 with all migrations), DAOs (including BudgetDao, CategoryRuleDao, IncomeDao) |
 
 ---
 
@@ -253,9 +256,9 @@ SMS Sources ──────────────────────�
 | AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 | **Budget Screen** | | |
-| BudgetScreen | [`BudgetScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetScreen.kt:1) | Full CRUD: budget list with progress bars, FAB to add, edit/delete, color-coded progress (green/amber/red), hierarchical category picker (group + sub-category) |
-| BudgetViewModel | [`BudgetViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetViewModel.kt:1) | Loads budgets with progress, add/edit/delete, hierarchical category loading (groups + sub-categories) |
-| BudgetUiState | [`BudgetUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetUiState.kt:1) | Budget progress list, hierarchical category options (BudgetCategoryOption), dialog state for add/edit |
+| BudgetScreen | [`BudgetScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetScreen.kt:1) | **Period-first flow**: PeriodSelector (Weekly/Monthly/Yearly tabs + ◀ ▶ navigation), always-visible IncomeAllocationCard, budget list filtered by period, FAB to add, edit/delete, color-coded progress, **searchable** hierarchical category picker (no "Total Spending") |
+| BudgetViewModel | [`BudgetViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetViewModel.kt:1) | Period navigation (`setPeriodType`, `navigatePeriod`), loads budgets filtered by period type, income per period key, add/edit inherits period, hierarchical category loading |
+| BudgetUiState | [`BudgetUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/budget/BudgetUiState.kt:1) | `selectedPeriodType` + `selectedPeriodLabel` + `selectedPeriodKey`, budget progress list, BudgetCategoryOption (no Total Spending), income & allocation state, dialog state (no dialogPeriod) |
 
 ---
 
@@ -395,28 +398,30 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 app/src/main/java/com/pesatrack/
 ├── PesaTrackApp.kt                          ✅ Hilt Application class + ProcessLifecycleOwner (PIN lock)
 ├── di/
-│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao)
+│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao, IncomeDao)
 ├── data/
 │   ├── local/
 │   │   ├── database/
-│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v12 with migrations (v11→v12: sub-category budgets)
+│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v13 with migrations (v12→v13: income table)
 │   │   │   ├── dao/
 │   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check + budget spending queries
 │   │   │   │   ├── CategoryDao.kt           ✅ CRUD + search + default seeding + expense count queries + group mgmt
 │   │   │   │   ├── CategoryRuleDao.kt       ✅ Rule CRUD + active rules query for categorization pipeline
-│   │   │   │   └── BudgetDao.kt             ✅ Budget CRUD + active queries + affected budget lookups
+│   │   │   │   ├── BudgetDao.kt             ✅ Budget CRUD + active queries + affected budget lookups
+│   │   │   │   └── IncomeDao.kt             ✅ Income upsert + getByYearMonth + observe as Flow
 │   │   │   └── entities/
 │   │   │       ├── ExpenseEntity.kt          ✅ Full schema with FK to categories
 │   │   │       ├── CategoryEntity.kt         ✅ 18 groups, 90+ categories
 │   │   │       ├── CategoryRuleEntity.kt     ✅ User-defined auto-categorization rules (pattern, matchType, priority)
-│   │   │       └── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
+│   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
+│   │   │       └── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
 │   │   └── preferences/
 │   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
 │       ├── CategoryRuleRepository.kt        ✅ Rule CRUD, active rules for categorization pipeline
-│       └── BudgetRepository.kt              ✅ Budget CRUD, period ranges, spending aggregation (total/group/sub-category), progress/alerts
+│       └── BudgetRepository.kt              ✅ Budget CRUD, period ranges, spending aggregation (total/group/sub-category), progress/alerts, monthly income get/set
 ├── domain/models/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   ├── Category.kt                          ✅ Domain model
@@ -457,9 +462,9 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status
 │   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets
 │   │   ├── budget/
-│   │   │   ├── BudgetScreen.kt            ✅ Budget CRUD: list with progress bars, FAB, add/edit/delete, hierarchical category picker
-│   │   │   ├── BudgetViewModel.kt         ✅ Budget progress loading, CRUD ops, hierarchical category picker (groups + sub-categories)
-│   │   │   └── BudgetUiState.kt           ✅ Progress list, BudgetCategoryOption (hierarchical), dialog state
+│   │   │   ├── BudgetScreen.kt            ✅ Period-first flow: PeriodSelector (tabs + nav), always-visible IncomeCard, filtered budget list, searchable category picker (no Total Spending)
+│   │   │   ├── BudgetViewModel.kt         ✅ Period navigation, period-filtered loading, income per period key, CRUD inherits period
+│   │   │   └── BudgetUiState.kt           ✅ Period state (type/label/key), progress list, BudgetCategoryOption, income & allocation, dialog (no dialogPeriod)
 │   │   ├── category_management/
 │   │   │   ├── CategoryManagementScreen.kt  ✅ Tab-based CRUD: Categories + Auto-Rules, icon/color pickers, dialogs
 │   │   │   ├── CategoryManagementViewModel.kt ✅ Category + rule CRUD, dialog state, expense count validation
@@ -563,6 +568,9 @@ backend/
 12. **Multi-Select Batch Categorize** — Long-press any recipient group on BatchCategorizeScreen to enter selection mode. Checkboxes appear on all cards; tap to select multiple groups across different recipients. "Select All" / "Deselect All" toggle in the top bar. Bottom "Categorize Selected (N)" button opens the category picker — applies the chosen category to ALL expenses from ALL selected groups in one action. Saves recipient→category mappings for future auto-categorization. Back press exits selection mode. Coexists with existing single-group, review, and auto-suggest modes.
 13. **PIN Lock + Biometric Unlock** — App-level security with 4-digit PIN. PIN stored as SHA-256 + random salt in DataStore (never plaintext). Compose overlay in MainActivity blocks access when locked. Optional biometric (fingerprint/face) via `BiometricPrompt` — auto-launches on unlock screen, falls back to PIN. Lock triggers on cold start and after configurable background timeout (immediate/30s/1min/5min). Brute force protection: 5 wrong attempts → 30-second cooldown. Settings section: PIN enable/disable (verify current PIN first), change PIN (verify → enter → confirm), biometric toggle (only shown when device supports it), timeout picker. `ProcessLifecycleOwner` tracks background/foreground transitions via `AppLockLifecycleObserver`. No PIN recovery by design (clear app data to reset).
 14. **First-Launch Onboarding Flow** — 4-page HorizontalPager shown once on first install (tracked via `KEY_ONBOARDING_COMPLETED` in DataStore). Pages: (1) Welcome — what the app does, (2) How It Works — SMS parsing explained, (3) SMS Permission — contextual permission grant with ✅ confirmation, (4) Import History — offer to import past M-PESA SMS. Dot indicators, Back/Next/Skip buttons, "Get Started" on final page. SMS permission requested in-context via `ActivityResultContracts.RequestMultiplePermissions()`. Notification permission requested on completion. Onboarding overlay in `MainActivity.AppEntryPoint()` — same pattern as PIN lock (full-screen, no bypass). Existing users see onboarding once (DataStore default is `false`).
+15. **Searchable Budget Category Picker** — Replaced the `ExposedDropdownMenu` in `AddEditBudgetDialog` with a full searchable dialog (`BudgetCategoryPickerDialog`). Features: search bar filters groups and sub-categories by name, expandable/collapsible group headers, auto-expand groups when search matches children, "Total Spending" sentinel at top, "Group" button on each group header for group-level budgets, categories with existing budgets hidden, color-coded dots and checkmarks for selected items. Eliminates excessive scrolling through 100+ categories.
+16. **Monthly Income & Budget Allocation** — Manual per-month income entry on the Budget screen. New `IncomeEntity` table (DB migration v12→v13) stores income per `yearMonth`. Budget screen shows an allocation summary card at the top: income vs sum of all category budgets, with progress bar and status (✅ unallocated buffer / ⚠️ over-allocated warning). Tap the card to set or update income. Total budgeted recalculates live when budgets are added/edited/deleted. No SMS parsing changes — income is manual only for now.
+17. **Period-First Budget Redesign** — Redesigned Budget screen from a flat list to a period-organized flow. PeriodSelector at the top with Weekly/Monthly/Yearly tabs and ◀ ▶ navigation (e.g. "March 2026"). Income card always visible below the selector (works for any period type, not just monthly). Budgets are filtered by selected period type. "Add Budget" inherits the period from the selector (no period picker in the dialog). "Total Spending" option removed from the category picker. New DAO query `getActiveBudgetsByPeriod`. New repository methods: `getBudgetProgressListForPeriod`, `getTotalBudgetedForPeriod`, `getPeriodKey`, `getPeriodLabel`, `navigateCalendar`. BudgetUiState uses `selectedPeriodType`/`selectedPeriodLabel`/`selectedPeriodKey` instead of `currentYearMonth`. No DB schema changes — fully backward compatible with BudgetService alerts and HomeScreen summary.
 
 ---
 

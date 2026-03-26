@@ -91,6 +91,27 @@ interface BudgetDao {
     suspend fun getBudgetsAffectedByCategory(groupId: Long, subcategoryId: Long): List<BudgetEntity>
 
     /**
+     * Get all active budgets filtered by period type string (e.g. "MONTHLY", "WEEKLY", "YEARLY").
+     * Used by the Budget screen to show only budgets for the selected period type.
+     */
+    @Query("SELECT * FROM budgets WHERE isActive = 1 AND period = :period ORDER BY categoryId ASC")
+    suspend fun getActiveBudgetsByPeriod(period: String): List<BudgetEntity>
+
+    /**
+     * Get all active CUSTOM budgets that overlap with a given date range.
+     * A custom budget overlaps if its range intersects [rangeStart, rangeEnd].
+     */
+    @Query("""
+        SELECT * FROM budgets
+        WHERE isActive = 1
+        AND period = 'CUSTOM'
+        AND customStartDate IS NOT NULL
+        AND customEndDate IS NOT NULL
+        ORDER BY customStartDate ASC
+    """)
+    suspend fun getActiveCustomBudgets(): List<BudgetEntity>
+
+    /**
      * Check if any active budgets exist (used for prompt logic).
      */
     @Query("SELECT EXISTS(SELECT 1 FROM budgets WHERE isActive = 1)")

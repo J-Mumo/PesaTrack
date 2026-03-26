@@ -7,6 +7,7 @@ import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.IncomeDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import dagger.Module
 import dagger.Provides
@@ -44,7 +45,9 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_8_9,
                 PesaTrackDatabase.MIGRATION_9_10,
                 PesaTrackDatabase.MIGRATION_10_11,
-                PesaTrackDatabase.MIGRATION_11_12
+                PesaTrackDatabase.MIGRATION_11_12,
+                PesaTrackDatabase.MIGRATION_12_13,
+                PesaTrackDatabase.MIGRATION_13_14
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -78,5 +81,11 @@ object AppModule {
     @Singleton
     fun provideCategoryRuleDao(database: PesaTrackDatabase): CategoryRuleDao {
         return database.categoryRuleDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideIncomeDao(database: PesaTrackDatabase): IncomeDao {
+        return database.incomeDao()
     }
 }

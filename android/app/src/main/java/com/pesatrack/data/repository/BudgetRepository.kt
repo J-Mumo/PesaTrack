@@ -3,7 +3,9 @@ package com.pesatrack.data.repository
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.IncomeDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
+import com.pesatrack.data.local.database.entities.IncomeEntity
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetAlert
 import com.pesatrack.domain.models.BudgetPeriod
@@ -11,7 +13,9 @@ import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,16 +25,20 @@ import javax.inject.Singleton
  * Handles CRUD, period date range computation, spending aggregation,
  * and budget progress/alert calculation.
  *
- * Supports three budget levels:
- * - Total Spending (categoryId = null)
+ * Supports budget levels:
  * - Group-level (categoryId = group ID, isGroupBudget = true)
  * - Sub-category-level (categoryId = sub-category ID, isGroupBudget = false)
+ *
+ * Supports period types:
+ * - WEEKLY / MONTHLY / YEARLY — calendar-aligned, navigable via periodCalendar
+ * - CUSTOM — user-defined date range stored on the budget entity
  */
 @Singleton
 class BudgetRepository @Inject constructor(
     private val budgetDao: BudgetDao,
     private val expenseDao: ExpenseDao,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val incomeDao: IncomeDao
 ) {
 
     // ==================== CRUD ====================
@@ -83,94 +91,134 @@ class BudgetRepository @Inject constructor(
         return budgetDao.hasActiveBudgets()
     }
 
+    /**
+     * Get the most recent custom budget's date range from the database.
+     * Used to restore the custom date selection when re-entering the Budget screen.
+     * Returns Pair(startDate, endDate) or null if no custom budgets exist.
+     */
+    suspend fun getMostRecentCustomDateRange(): Pair<Long, Long>? {
+        val customBudgets = budgetDao.getActiveCustomBudgets()
+        if (customBudgets.isEmpty()) return null
+        // Use the most recently created custom budget's dates
+        val mostRecent = customBudgets.maxByOrNull { it.createdAt }
+        val start = mostRecent?.customStartDate ?: return null
+        val end = mostRecent?.customEndDate ?: return null
+        return Pair(start, end)
+    }
+
     // ==================== Period Range Helpers ====================
 
     /**
-     * Get the start and end timestamps (millis) for the current period.
+     * Get the start and end timestamps (millis) for a given period type and calendar position.
      *
-     * - WEEKLY: Monday 00:00:00 → next Monday 00:00:00 (ISO week)
-     * - MONTHLY: 1st of month 00:00:00 → 1st of next month 00:00:00
-     * - YEARLY: Jan 1 00:00:00 → Jan 1 next year 00:00:00
+     * For standard periods (WEEKLY/MONTHLY/YEARLY), the calendar determines which
+     * period to compute (e.g. April 2026 vs March 2026).
+     *
+     * For CUSTOM periods, this is not used — the range comes from the budget entity itself.
+     *
+     * @param period The period type.
+     * @param calendar The calendar positioned at the desired period.
      */
-    fun getCurrentPeriodRange(period: BudgetPeriod): Pair<Long, Long> {
-        val calendar = Calendar.getInstance()
+    fun getPeriodRange(period: BudgetPeriod, calendar: Calendar = Calendar.getInstance()): Pair<Long, Long> {
+        val cal = calendar.clone() as Calendar
         return when (period) {
             BudgetPeriod.WEEKLY -> {
-                // Set to Monday of current week
-                calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                // If today is Sunday and firstDayOfWeek is Sunday, we may be in the wrong week
-                // Adjust: if the computed Monday is in the future, go back one week
-                if (calendar.timeInMillis > System.currentTimeMillis()) {
-                    calendar.add(Calendar.WEEK_OF_YEAR, -1)
+                // Set to Monday of the week
+                cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                // If the computed Monday is in the future (e.g. Sunday + firstDayOfWeek issue),
+                // go back one week
+                if (cal.timeInMillis > calendar.timeInMillis) {
+                    cal.add(Calendar.WEEK_OF_YEAR, -1)
                 }
-                val start = calendar.timeInMillis
-                calendar.add(Calendar.WEEK_OF_YEAR, 1)
-                val end = calendar.timeInMillis
+                val start = cal.timeInMillis
+                cal.add(Calendar.WEEK_OF_YEAR, 1)
+                val end = cal.timeInMillis
                 Pair(start, end)
             }
             BudgetPeriod.MONTHLY -> {
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val start = calendar.timeInMillis
-                calendar.add(Calendar.MONTH, 1)
-                val end = calendar.timeInMillis
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                cal.add(Calendar.MONTH, 1)
+                val end = cal.timeInMillis
                 Pair(start, end)
             }
             BudgetPeriod.YEARLY -> {
-                calendar.set(Calendar.MONTH, Calendar.JANUARY)
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                calendar.set(Calendar.MILLISECOND, 0)
-                val start = calendar.timeInMillis
-                calendar.add(Calendar.YEAR, 1)
-                val end = calendar.timeInMillis
+                cal.set(Calendar.MONTH, Calendar.JANUARY)
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                cal.add(Calendar.YEAR, 1)
+                val end = cal.timeInMillis
                 Pair(start, end)
             }
+            BudgetPeriod.CUSTOM -> {
+                // For CUSTOM, the range is on the budget itself, not from a calendar.
+                // Return "now" as a fallback (callers should use budget.customStartDate/customEndDate).
+                val now = System.currentTimeMillis()
+                Pair(now, now)
+            }
         }
+    }
+
+    /**
+     * Legacy alias — uses Calendar.getInstance() (i.e. "current" period).
+     * Used by HomeViewModel and BudgetService which always want the current period.
+     */
+    fun getCurrentPeriodRange(period: BudgetPeriod): Pair<Long, Long> {
+        return getPeriodRange(period, Calendar.getInstance())
     }
 
     // ==================== Spending Queries ====================
 
     /**
-     * Get actual spending for a budget in its current period.
+     * Get actual spending for a budget within a specific date range.
      *
-     * Three paths:
-     * 1. Total spending (categoryId = null) → sum all non-excluded expenses
-     * 2. Group-level (isGroupBudget = true) → sum all sub-categories in the group
-     * 3. Sub-category-level (isGroupBudget = false) → sum only that sub-category
+     * For standard periods, the caller provides start/end from getPeriodRange().
+     * For CUSTOM periods, the caller uses the budget's own customStartDate/customEndDate.
      */
-    suspend fun getSpendingForBudget(budget: Budget): Double {
-        val (start, end) = getCurrentPeriodRange(budget.period)
+    suspend fun getSpendingForBudgetInRange(budget: Budget, start: Long, end: Long): Double {
         return when {
             budget.categoryId == null -> {
-                // Total spending budget
                 expenseDao.getTotalSpendingInRange(start, end)
             }
             budget.isGroupBudget -> {
-                // Group-level budget — sum all sub-categories in the group
                 expenseDao.getGroupSpendingInRange(budget.categoryId, start, end)
             }
             else -> {
-                // Sub-category-level budget — sum only that specific sub-category
                 expenseDao.getSubcategorySpendingInRange(budget.categoryId, start, end)
             }
         }
     }
 
+    /**
+     * Get actual spending for a budget using the current period (legacy — for HomeViewModel/BudgetService).
+     * Uses Calendar.getInstance() to determine the period range.
+     */
+    suspend fun getSpendingForBudget(budget: Budget): Double {
+        val (start, end) = if (budget.period == BudgetPeriod.CUSTOM) {
+            Pair(budget.customStartDate ?: 0L, budget.customEndDate ?: 0L)
+        } else {
+            getCurrentPeriodRange(budget.period)
+        }
+        return getSpendingForBudgetInRange(budget, start, end)
+    }
+
     // ==================== Progress Computation ====================
 
     /**
-     * Compute BudgetProgress for all active budgets.
-     * Used by the UI to render progress bars.
+     * Compute BudgetProgress for all active budgets (all periods, current date).
+     * Used by HomeViewModel to render progress bars and by BudgetService for alerts.
      */
     suspend fun getBudgetProgressList(): List<BudgetProgress> {
         val categoryMap = buildCategoryMap()
@@ -186,6 +234,184 @@ class BudgetRepository @Inject constructor(
                 status = BudgetStatus.fromPercentage(percentage)
             )
         }
+    }
+
+    /**
+     * Compute BudgetProgress for active budgets filtered by period type,
+     * using a specific calendar position for date range computation.
+     *
+     * This is the **period-aware** version used by the Budget screen.
+     * It ensures that when the user navigates to April, only April expenses count.
+     *
+     * @param period The period type (WEEKLY/MONTHLY/YEARLY).
+     * @param calendar The calendar positioned at the selected period.
+     */
+    suspend fun getBudgetProgressListForPeriod(
+        period: BudgetPeriod,
+        calendar: Calendar = Calendar.getInstance()
+    ): List<BudgetProgress> {
+        val categoryMap = buildCategoryMap()
+
+        if (period == BudgetPeriod.CUSTOM) {
+            // For CUSTOM, load all custom budgets
+            val entities = budgetDao.getActiveCustomBudgets()
+            return entities.map { entity ->
+                val budget = entity.toDomain(categoryMap)
+                val start = budget.customStartDate ?: 0L
+                val end = budget.customEndDate ?: 0L
+                val spent = getSpendingForBudgetInRange(budget, start, end)
+                val percentage = if (budget.amount > 0) (spent / budget.amount) * 100.0 else 0.0
+                BudgetProgress(
+                    budget = budget,
+                    spent = spent,
+                    percentage = percentage,
+                    status = BudgetStatus.fromPercentage(percentage)
+                )
+            }
+        }
+
+        // Standard periods: use the calendar to compute the correct date range
+        val (start, end) = getPeriodRange(period, calendar)
+        val entities = budgetDao.getActiveBudgetsByPeriod(period.name)
+        return entities.map { entity ->
+            val budget = entity.toDomain(categoryMap)
+            val spent = getSpendingForBudgetInRange(budget, start, end)
+            val percentage = if (budget.amount > 0) (spent / budget.amount) * 100.0 else 0.0
+            BudgetProgress(
+                budget = budget,
+                spent = spent,
+                percentage = percentage,
+                status = BudgetStatus.fromPercentage(percentage)
+            )
+        }
+    }
+
+    /**
+     * Get total budgeted amount for a specific period type only.
+     * Used by the income allocation card on the Budget screen.
+     */
+    suspend fun getTotalBudgetedForPeriod(period: BudgetPeriod): Double {
+        if (period == BudgetPeriod.CUSTOM) {
+            val entities = budgetDao.getActiveCustomBudgets()
+            return entities.sumOf { it.amount }
+        }
+        val entities = budgetDao.getActiveBudgetsByPeriod(period.name)
+        val categoryBudgets = entities.filter { it.categoryId != null }
+        return if (categoryBudgets.isNotEmpty()) {
+            categoryBudgets.sumOf { it.amount }
+        } else {
+            entities.sumOf { it.amount }
+        }
+    }
+
+    // ==================== Period Key / Label / Navigation ====================
+
+    /**
+     * Get a period key string for income lookup, based on period type and a Calendar reference.
+     *
+     * - MONTHLY → "2026-03"
+     * - WEEKLY  → "2026-W13"
+     * - YEARLY  → "2026"
+     * - CUSTOM  → "custom-{startMs}-{endMs}" (unique key per custom range)
+     */
+    fun getPeriodKey(
+        period: BudgetPeriod,
+        calendar: Calendar = Calendar.getInstance(),
+        customStart: Long? = null,
+        customEnd: Long? = null
+    ): String {
+        return when (period) {
+            BudgetPeriod.MONTHLY -> {
+                val year = calendar.get(Calendar.YEAR)
+                val month = calendar.get(Calendar.MONTH) + 1
+                String.format("%04d-%02d", year, month)
+            }
+            BudgetPeriod.WEEKLY -> {
+                val year = calendar.get(Calendar.YEAR)
+                val week = calendar.get(Calendar.WEEK_OF_YEAR)
+                String.format("%04d-W%02d", year, week)
+            }
+            BudgetPeriod.YEARLY -> {
+                val year = calendar.get(Calendar.YEAR)
+                String.format("%04d", year)
+            }
+            BudgetPeriod.CUSTOM -> {
+                "custom-${customStart ?: 0}-${customEnd ?: 0}"
+            }
+        }
+    }
+
+    /**
+     * Get a human-readable label for a period, based on period type and a Calendar reference.
+     *
+     * - MONTHLY → "March 2026"
+     * - WEEKLY  → "Mar 24 – Mar 30, 2026"
+     * - YEARLY  → "2026"
+     * - CUSTOM  → "Mar 25 – Apr 25, 2026"
+     */
+    fun getPeriodLabel(
+        period: BudgetPeriod,
+        calendar: Calendar = Calendar.getInstance(),
+        customStart: Long? = null,
+        customEnd: Long? = null
+    ): String {
+        val monthNames = arrayOf(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
+        val shortMonthNames = arrayOf(
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        )
+        return when (period) {
+            BudgetPeriod.MONTHLY -> {
+                val year = calendar.get(Calendar.YEAR)
+                val month = calendar.get(Calendar.MONTH)
+                "${monthNames[month]} $year"
+            }
+            BudgetPeriod.WEEKLY -> {
+                // Compute the Monday of the week
+                val weekCal = calendar.clone() as Calendar
+                weekCal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                if (weekCal.timeInMillis > calendar.timeInMillis) {
+                    weekCal.add(Calendar.WEEK_OF_YEAR, -1)
+                }
+                val startMonth = shortMonthNames[weekCal.get(Calendar.MONTH)]
+                val startDay = weekCal.get(Calendar.DAY_OF_MONTH)
+                weekCal.add(Calendar.DAY_OF_MONTH, 6)
+                val endMonth = shortMonthNames[weekCal.get(Calendar.MONTH)]
+                val endDay = weekCal.get(Calendar.DAY_OF_MONTH)
+                val year = weekCal.get(Calendar.YEAR)
+                "$startMonth $startDay – $endMonth $endDay, $year"
+            }
+            BudgetPeriod.YEARLY -> {
+                "${calendar.get(Calendar.YEAR)}"
+            }
+            BudgetPeriod.CUSTOM -> {
+                if (customStart != null && customEnd != null) {
+                    val fmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                    "${fmt.format(customStart)} – ${fmt.format(customEnd)}"
+                } else {
+                    "Custom Period"
+                }
+            }
+        }
+    }
+
+    /**
+     * Navigate the calendar by a delta for the given period type.
+     * Returns a new Calendar positioned at the new period.
+     * Not applicable for CUSTOM (returns same calendar).
+     */
+    fun navigateCalendar(period: BudgetPeriod, current: Calendar, delta: Int): Calendar {
+        val newCal = current.clone() as Calendar
+        when (period) {
+            BudgetPeriod.WEEKLY -> newCal.add(Calendar.WEEK_OF_YEAR, delta)
+            BudgetPeriod.MONTHLY -> newCal.add(Calendar.MONTH, delta)
+            BudgetPeriod.YEARLY -> newCal.add(Calendar.YEAR, delta)
+            BudgetPeriod.CUSTOM -> { /* no navigation for custom */ }
+        }
+        return newCal
     }
 
     // ==================== Alert Checking ====================
@@ -277,6 +503,57 @@ class BudgetRepository @Inject constructor(
         return Triple(topEntry.key, groupName, topEntry.value)
     }
 
+    // ==================== Income ====================
+
+    /**
+     * Get income for a specific period key (e.g. "2026-03", "2026-W13", "custom-xxx-yyy").
+     * Returns the amount, or null if no income set for that period.
+     */
+    suspend fun getMonthlyIncome(yearMonth: String): Double? {
+        return incomeDao.getByYearMonth(yearMonth)?.amount
+    }
+
+    /**
+     * Set (upsert) income for a specific period key.
+     * If income already exists for that period, it's replaced.
+     */
+    suspend fun setMonthlyIncome(yearMonth: String, amount: Double, note: String? = null) {
+        val existing = incomeDao.getByYearMonth(yearMonth)
+        incomeDao.upsert(
+            IncomeEntity(
+                id = existing?.id ?: 0,
+                amount = amount,
+                yearMonth = yearMonth,
+                note = note,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    /**
+     * Get the current year-month string (e.g. "2026-03").
+     */
+    fun getCurrentYearMonth(): String {
+        val cal = Calendar.getInstance()
+        val year = cal.get(Calendar.YEAR)
+        val month = cal.get(Calendar.MONTH) + 1 // Calendar.MONTH is 0-based
+        return String.format("%04d-%02d", year, month)
+    }
+
+    /**
+     * Compute the sum of all active budget amounts (for allocation comparison).
+     * Only counts category budgets to avoid double counting with Total budgets.
+     */
+    suspend fun getTotalBudgetedAmount(): Double {
+        val entities = budgetDao.getActiveBudgetsList()
+        val categoryBudgets = entities.filter { it.categoryId != null }
+        return if (categoryBudgets.isNotEmpty()) {
+            categoryBudgets.sumOf { it.amount }
+        } else {
+            entities.sumOf { it.amount }
+        }
+    }
+
     // ==================== Mapping Helpers ====================
 
     /**
@@ -301,6 +578,8 @@ class BudgetRepository @Inject constructor(
             isGroupBudget = isGroupBudget,
             amount = amount,
             period = BudgetPeriod.fromString(period),
+            customStartDate = customStartDate,
+            customEndDate = customEndDate,
             isActive = isActive,
             createdAt = createdAt,
             updatedAt = updatedAt
@@ -314,6 +593,8 @@ class BudgetRepository @Inject constructor(
             isGroupBudget = isGroupBudget,
             amount = amount,
             period = period.name,
+            customStartDate = customStartDate,
+            customEndDate = customEndDate,
             isActive = isActive,
             createdAt = createdAt,
             updatedAt = updatedAt
