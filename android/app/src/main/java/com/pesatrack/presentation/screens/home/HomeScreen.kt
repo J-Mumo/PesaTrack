@@ -132,11 +132,6 @@ fun HomeScreen(
             ImportHistoryCard(onImport = onNavigateToImport)
         }
         
-        // How It Works Info Card
-        item {
-            HowItWorksCard()
-        }
-        
         // Uncategorized Alert
         if (uiState.uncategorizedCount > 0) {
             item {
@@ -248,42 +243,6 @@ fun MonthlySummaryCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun HowItWorksCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PhoneAndroid,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "How PesaTrack Works",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Make payments via your M-PESA menu as usual. PesaTrack automatically tracks them by reading your M-PESA SMS confirmations.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                )
             }
         }
     }
