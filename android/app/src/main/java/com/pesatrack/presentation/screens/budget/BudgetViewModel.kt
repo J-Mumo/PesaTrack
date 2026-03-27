@@ -28,75 +28,37 @@ class BudgetViewModel @Inject constructor(
     private var periodCalendar: Calendar = Calendar.getInstance()
 
     init {
-        // Initialize period labels from the current calendar
-        updatePeriodLabels()
-        loadBudgetsForPeriod()
-        loadCategoryOptions()
-        loadIncome()
+        // Refresh the cached month start day from preferences before loading
+        viewModelScope.launch {
+            budgetRepository.refreshMonthStartDay()
+            updatePeriodLabels()
+            loadBudgetsForPeriod()
+            loadCategoryOptions()
+            loadIncome()
+        }
     }
 
     // ==================== Period Navigation ====================
 
     /**
-     * Switch the period type tab (Weekly/Monthly/Yearly/Custom).
+     * Switch the period type tab (Weekly/Monthly/Yearly).
      * Resets the calendar to "now" for the new period type and reloads.
-     * For CUSTOM, restores the most recent custom date range from the database.
      */
     fun setPeriodType(type: BudgetPeriod) {
+        if (type == BudgetPeriod.CUSTOM) return // CUSTOM is hidden from UI
         periodCalendar = Calendar.getInstance()
-        _uiState.update {
-            it.copy(
-                selectedPeriodType = type,
-                // Clear custom dates when switching away from custom tab
-                customStartDate = if (type == BudgetPeriod.CUSTOM) it.customStartDate else null,
-                customEndDate = if (type == BudgetPeriod.CUSTOM) it.customEndDate else null
-            )
-        }
-
-        if (type == BudgetPeriod.CUSTOM) {
-            // Restore custom date range from existing custom budgets in the database
-            restoreCustomDateRange()
-        } else {
-            updatePeriodLabels()
-            loadBudgetsForPeriod()
-            loadIncome()
-        }
-    }
-
-    /**
-     * Restore the custom date range from the most recent custom budget in the database.
-     * Called when switching to Custom tab or when ViewModel is initialized with Custom period.
-     */
-    private fun restoreCustomDateRange() {
-        viewModelScope.launch {
-            try {
-                val dateRange = budgetRepository.getMostRecentCustomDateRange()
-                if (dateRange != null) {
-                    _uiState.update {
-                        it.copy(
-                            customStartDate = dateRange.first,
-                            customEndDate = dateRange.second
-                        )
-                    }
-                }
-            } catch (_: Exception) {
-                // Non-critical
-            }
-            // Always update labels and load budgets after restoring
-            updatePeriodLabels()
-            loadBudgetsForPeriod()
-            loadIncome()
-        }
+        _uiState.update { it.copy(selectedPeriodType = type) }
+        updatePeriodLabels()
+        loadBudgetsForPeriod()
+        loadIncome()
     }
 
     /**
      * Navigate forward or backward within the selected period type.
-     * Not applicable for CUSTOM periods.
      * @param delta +1 for next period, -1 for previous period
      */
     fun navigatePeriod(delta: Int) {
         val currentType = _uiState.value.selectedPeriodType
-        if (currentType == BudgetPeriod.CUSTOM) return // No navigation for custom
         periodCalendar = budgetRepository.navigateCalendar(currentType, periodCalendar, delta)
         updatePeriodLabels()
         loadBudgetsForPeriod()
@@ -108,38 +70,14 @@ class BudgetViewModel @Inject constructor(
      */
     private fun updatePeriodLabels() {
         val type = _uiState.value.selectedPeriodType
-        val customStart = _uiState.value.customStartDate
-        val customEnd = _uiState.value.customEndDate
-        val label = budgetRepository.getPeriodLabel(type, periodCalendar, customStart, customEnd)
-        val key = budgetRepository.getPeriodKey(type, periodCalendar, customStart, customEnd)
+        val label = budgetRepository.getPeriodLabel(type, periodCalendar)
+        val key = budgetRepository.getPeriodKey(type, periodCalendar)
         _uiState.update {
             it.copy(
                 selectedPeriodLabel = label,
                 selectedPeriodKey = key
             )
         }
-    }
-
-    // ==================== Custom Period ====================
-
-    /**
-     * Set the custom start date.
-     */
-    fun setCustomStartDate(millis: Long) {
-        _uiState.update { it.copy(customStartDate = millis) }
-        updatePeriodLabels()
-        loadBudgetsForPeriod()
-        loadIncome()
-    }
-
-    /**
-     * Set the custom end date.
-     */
-    fun setCustomEndDate(millis: Long) {
-        _uiState.update { it.copy(customEndDate = millis) }
-        updatePeriodLabels()
-        loadBudgetsForPeriod()
-        loadIncome()
     }
 
     // ==================== Data Loading ====================
@@ -208,7 +146,6 @@ class BudgetViewModel @Inject constructor(
     /**
      * Update available categories, marking which ones already have budgets.
      * Builds a hierarchical list: Group1 → Sub1a, Sub1b, ... → Group2 → ...
-     * No "Total Spending" sentinel option.
      */
     private fun updateAvailableCategories() {
         viewModelScope.launch {
@@ -220,9 +157,7 @@ class BudgetViewModel @Inject constructor(
 
                     val options = mutableListOf<BudgetCategoryOption>()
 
-                    // Category groups + their sub-categories (no "Total Spending")
                     for (group in groups) {
-                        // Add group-level option
                         options.add(
                             BudgetCategoryOption(
                                 id = group.id,
@@ -234,7 +169,6 @@ class BudgetViewModel @Inject constructor(
                             )
                         )
 
-                        // Add sub-category options under this group
                         val subCategories = categoryRepository.getSubCategoriesSync(group.id)
                         for (sub in subCategories) {
                             options.add(
@@ -380,7 +314,6 @@ class BudgetViewModel @Inject constructor(
     /**
      * Save the budget (create or update).
      * Period is taken from the selected period type.
-     * For CUSTOM periods, customStartDate and customEndDate are stored on the budget.
      */
     fun saveBudget() {
         val state = _uiState.value
@@ -392,22 +325,10 @@ class BudgetViewModel @Inject constructor(
             return
         }
 
-        // Category is required (no "Total Spending" option)
+        // Category is required
         if (state.dialogCategoryId == null) {
             _uiState.update { it.copy(error = "Select a category") }
             return
-        }
-
-        // For CUSTOM period, validate date range
-        if (state.selectedPeriodType == BudgetPeriod.CUSTOM) {
-            if (state.customStartDate == null || state.customEndDate == null) {
-                _uiState.update { it.copy(error = "Set both start and end dates for custom period") }
-                return
-            }
-            if (state.customStartDate >= state.customEndDate) {
-                _uiState.update { it.copy(error = "End date must be after start date") }
-                return
-            }
         }
 
         viewModelScope.launch {
@@ -421,8 +342,6 @@ class BudgetViewModel @Inject constructor(
                         existing.copy(
                             amount = amount,
                             period = period,
-                            customStartDate = if (period == BudgetPeriod.CUSTOM) state.customStartDate else null,
-                            customEndDate = if (period == BudgetPeriod.CUSTOM) state.customEndDate else null,
                             updatedAt = System.currentTimeMillis()
                         )
                     )
@@ -435,9 +354,7 @@ class BudgetViewModel @Inject constructor(
                             categoryColor = null,
                             isGroupBudget = state.dialogIsGroupBudget,
                             amount = amount,
-                            period = period,
-                            customStartDate = if (period == BudgetPeriod.CUSTOM) state.customStartDate else null,
-                            customEndDate = if (period == BudgetPeriod.CUSTOM) state.customEndDate else null
+                            period = period
                         )
                     )
                 }
@@ -501,9 +418,14 @@ class BudgetViewModel @Inject constructor(
 
     /**
      * Refresh budgets (called when returning to screen).
+     * Also refreshes the month start day in case it was changed in settings.
      */
     fun refresh() {
-        loadBudgetsForPeriod()
-        loadIncome()
+        viewModelScope.launch {
+            budgetRepository.refreshMonthStartDay()
+            updatePeriodLabels()
+            loadBudgetsForPeriod()
+            loadIncome()
+        }
     }
 }

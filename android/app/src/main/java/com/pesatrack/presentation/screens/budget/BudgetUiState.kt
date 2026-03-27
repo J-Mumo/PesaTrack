@@ -16,28 +16,14 @@ data class BudgetUiState(
 
     // ==================== Period Navigation ====================
 
-    /** Currently selected period type tab */
+    /** Currently selected period type tab (Weekly/Monthly/Yearly) */
     val selectedPeriodType: BudgetPeriod = BudgetPeriod.MONTHLY,
 
-    /** Human-readable label for the selected period, e.g. "March 2026" */
+    /** Human-readable label for the selected period, e.g. "March 2026" or "Mar 25 – Apr 24, 2026" */
     val selectedPeriodLabel: String = "",
 
-    /** Key string used for income lookup, e.g. "2026-03", "2026-W13", "2026", "custom-xxx-yyy" */
+    /** Key string used for income lookup, e.g. "2026-03", "2026-W13", "2026" */
     val selectedPeriodKey: String = "",
-
-    // ==================== Custom Period ====================
-
-    /** Start date millis for custom period (null = not set) */
-    val customStartDate: Long? = null,
-
-    /** End date millis for custom period (null = not set) */
-    val customEndDate: Long? = null,
-
-    /** Whether the date picker for custom start is showing */
-    val showCustomStartPicker: Boolean = false,
-
-    /** Whether the date picker for custom end is showing */
-    val showCustomEndPicker: Boolean = false,
 
     // ==================== Budgets ====================
 
@@ -74,7 +60,6 @@ data class BudgetUiState(
     val dialogIsGroupBudget: Boolean = true, // true = group-level, false = sub-category
     val dialogAmount: String = "",
     // Note: period is inherited from selectedPeriodType — no dialogPeriod needed
-    // For CUSTOM: customStartDate/customEndDate from the screen state are used
 
     /** Confirmation dialog for delete */
     val showDeleteConfirmation: Boolean = false,

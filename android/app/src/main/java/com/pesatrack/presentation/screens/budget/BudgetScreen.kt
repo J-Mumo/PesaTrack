@@ -33,10 +33,6 @@ import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.utils.formatAsCurrency
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,11 +95,7 @@ fun BudgetScreen(
                         periodLabel = uiState.selectedPeriodLabel,
                         onPeriodTypeChanged = { viewModel.setPeriodType(it) },
                         onNavigatePrevious = { viewModel.navigatePeriod(-1) },
-                        onNavigateNext = { viewModel.navigatePeriod(1) },
-                        customStartDate = uiState.customStartDate,
-                        customEndDate = uiState.customEndDate,
-                        onCustomStartDatePicked = { viewModel.setCustomStartDate(it) },
-                        onCustomEndDatePicked = { viewModel.setCustomEndDate(it) }
+                        onNavigateNext = { viewModel.navigatePeriod(1) }
                     )
                 }
 
@@ -193,8 +185,7 @@ fun BudgetScreen(
 // ==================== Period Selector ====================
 
 /**
- * Period selector composable: period type tabs (Weekly/Monthly/Yearly/Custom) + left/right arrows with label.
- * For CUSTOM, shows date range pickers instead of navigation arrows.
+ * Period selector composable: period type tabs (Weekly/Monthly/Yearly) + left/right arrows with label.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -203,29 +194,24 @@ fun PeriodSelector(
     periodLabel: String,
     onPeriodTypeChanged: (BudgetPeriod) -> Unit,
     onNavigatePrevious: () -> Unit,
-    onNavigateNext: () -> Unit,
-    customStartDate: Long?,
-    customEndDate: Long?,
-    onCustomStartDatePicked: (Long) -> Unit,
-    onCustomEndDatePicked: (Long) -> Unit
+    onNavigateNext: () -> Unit
 ) {
-    var showStartDatePicker by remember { mutableStateOf(false) }
-    var showEndDatePicker by remember { mutableStateOf(false) }
+    val uiPeriods = BudgetPeriod.uiEntries
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Period type tabs (scrollable row for 4 items)
+            // Period type tabs (3 items: Weekly / Monthly / Yearly)
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                BudgetPeriod.entries.forEachIndexed { index, period ->
+                uiPeriods.forEachIndexed { index, period ->
                     SegmentedButton(
                         selected = selectedPeriodType == period,
                         onClick = { onPeriodTypeChanged(period) },
                         shape = SegmentedButtonDefaults.itemShape(
                             index = index,
-                            count = BudgetPeriod.entries.size
+                            count = uiPeriods.size
                         )
                     ) {
                         Text(
@@ -239,173 +225,31 @@ fun PeriodSelector(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (selectedPeriodType == BudgetPeriod.CUSTOM) {
-                // Custom date range pickers
-                CustomDateRangeSelector(
-                    startDate = customStartDate,
-                    endDate = customEndDate,
-                    onStartClick = { showStartDatePicker = true },
-                    onEndClick = { showEndDatePicker = true }
-                )
-            } else {
-                // Navigation row: ◀ Label ▶
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onNavigatePrevious) {
-                        Icon(
-                            imageVector = Icons.Filled.ChevronLeft,
-                            contentDescription = "Previous period"
-                        )
-                    }
-
-                    Text(
-                        text = periodLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+            // Navigation row: ◀ Label ▶
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigatePrevious) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronLeft,
+                        contentDescription = "Previous period"
                     )
-
-                    IconButton(onClick = onNavigateNext) {
-                        Icon(
-                            imageVector = Icons.Filled.ChevronRight,
-                            contentDescription = "Next period"
-                        )
-                    }
                 }
-            }
-        }
-    }
 
-    // Date picker dialogs
-    if (showStartDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = customStartDate ?: System.currentTimeMillis()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showStartDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { onCustomStartDatePicked(it) }
-                        showStartDatePicker = false
-                    }
-                ) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel") }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    if (showEndDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = customEndDate ?: System.currentTimeMillis()
-        )
-        DatePickerDialog(
-            onDismissRequest = { showEndDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { onCustomEndDatePicked(it) }
-                        showEndDatePicker = false
-                    }
-                ) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndDatePicker = false }) { Text("Cancel") }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-}
-
-/**
- * Custom date range selector — two date chips for start and end.
- */
-@Composable
-fun CustomDateRangeSelector(
-    startDate: Long?,
-    endDate: Long?,
-    onStartClick: () -> Unit,
-    onEndClick: () -> Unit
-) {
-    val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-    val startText = if (startDate != null) dateFormat.format(Date(startDate)) else "Start Date"
-    val endText = if (endDate != null) dateFormat.format(Date(endDate)) else "End Date"
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Start date chip
-        OutlinedCard(
-            modifier = Modifier
-                .weight(1f)
-                .clickable { onStartClick() }
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.CalendarToday,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = startText,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = if (startDate != null) FontWeight.Medium else FontWeight.Normal,
-                    color = if (startDate != null) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    text = periodLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-            }
-        }
 
-        Text(
-            text = "→",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-        )
-
-        // End date chip
-        OutlinedCard(
-            modifier = Modifier
-                .weight(1f)
-                .clickable { onEndClick() }
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.CalendarToday,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = endText,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = if (endDate != null) FontWeight.Medium else FontWeight.Normal,
-                    color = if (endDate != null) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                )
+                IconButton(onClick = onNavigateNext) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = "Next period"
+                    )
+                }
             }
         }
     }
@@ -697,14 +541,7 @@ fun BudgetProgressCard(
 ) {
     val budget = progress.budget
     val categoryName = budget.categoryName ?: "Unknown"
-    val periodLabel = if (budget.period == BudgetPeriod.CUSTOM) {
-        val fmt = SimpleDateFormat("MMM d", Locale.getDefault())
-        val start = budget.customStartDate?.let { fmt.format(Date(it)) } ?: "?"
-        val end = budget.customEndDate?.let { fmt.format(Date(it)) } ?: "?"
-        "$start – $end"
-    } else {
-        budget.period.displayName()
-    }
+    val periodLabel = budget.period.displayName()
     // Show "(group)" tag for group-level budgets to distinguish from sub-category budgets
     val levelTag = if (budget.categoryId != null && budget.isGroupBudget) " (group)" else ""
 
@@ -857,14 +694,7 @@ fun AddEditBudgetDialog(
     }
 
     // Period subtitle
-    val periodSubtitle = if (uiState.selectedPeriodType == BudgetPeriod.CUSTOM) {
-        val fmt = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-        val start = uiState.customStartDate?.let { fmt.format(Date(it)) } ?: "?"
-        val end = uiState.customEndDate?.let { fmt.format(Date(it)) } ?: "?"
-        "Custom • $start – $end"
-    } else {
-        "${uiState.selectedPeriodType.displayName()} • ${uiState.selectedPeriodLabel}"
-    }
+    val periodSubtitle = "${uiState.selectedPeriodType.displayName()} • ${uiState.selectedPeriodLabel}"
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -926,8 +756,6 @@ fun AddEditBudgetDialog(
                     prefix = { Text("KES ") }
                 )
 
-                // No period selector — period is inherited from the selected period type
-
                 // Error message
                 if (uiState.error != null) {
                     Text(
@@ -970,7 +798,6 @@ fun AddEditBudgetDialog(
 /**
  * Searchable category picker dialog for budget creation.
  * Shows a search bar + hierarchical list: Groups (expandable) → Sub-categories.
- * No "Total Spending" option.
  * Filters by search query, auto-expands matching groups, and hides categories that already have budgets.
  */
 @Composable
@@ -984,7 +811,7 @@ fun BudgetCategoryPickerDialog(
     var searchQuery by remember { mutableStateOf("") }
     var expandedGroups by remember { mutableStateOf(setOf<Long>()) }
 
-    // Build hierarchical structure from flat list (no "Total Spending")
+    // Build hierarchical structure from flat list
     val groupOptions = availableCategories.filter { it.isGroup == true }
     val subOptions = availableCategories.filter { it.isGroup == false }
 
@@ -1104,12 +931,11 @@ fun BudgetCategoryPickerDialog(
                     }
                 }
 
-                // Category list — groups + sub-categories only (no "Total Spending")
+                // Category list — groups + sub-categories
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    // Groups + sub-categories
                     filteredGroups.forEach { (group, children) ->
                         // Group header
                         item(key = "group_${group.id}") {

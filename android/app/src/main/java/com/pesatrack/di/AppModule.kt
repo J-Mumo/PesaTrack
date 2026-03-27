@@ -9,6 +9,7 @@ import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.IncomeDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
+import com.pesatrack.services.SampleDataService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -87,5 +88,16 @@ object AppModule {
     @Singleton
     fun provideIncomeDao(database: PesaTrackDatabase): IncomeDao {
         return database.incomeDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSampleDataService(
+        expenseDao: ExpenseDao,
+        categoryDao: CategoryDao,
+        budgetDao: BudgetDao,
+        incomeDao: IncomeDao
+    ): SampleDataService {
+        return SampleDataService(expenseDao, categoryDao, budgetDao, incomeDao)
     }
 }

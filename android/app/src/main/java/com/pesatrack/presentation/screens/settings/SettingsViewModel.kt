@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.DataManagementService
+import com.pesatrack.services.SampleDataService
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -22,7 +23,7 @@ import javax.inject.Inject
  * Manages:
  * - Bank SMS tracking preferences (master toggle + individual bank toggles)
  * - PIN lock settings (enabled, biometric toggle, lock timeout)
- * - Data management (reset categories, export CSV)
+ * - Data management (reset categories, export CSV, sample data)
  *
  * Bank list is populated from [SmsParserRegistry], excluding M-PESA
  * (which is always enabled and not toggleable).
@@ -30,7 +31,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
-    private val dataManagementService: DataManagementService
+    private val dataManagementService: DataManagementService,
+    private val sampleDataService: SampleDataService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -50,8 +52,16 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.enabledBanks,
                 appPreferences.pinEnabled,
                 appPreferences.biometricEnabled,
-                appPreferences.lockTimeoutSeconds
-            ) { trackingEnabled, enabledBanks, pinEnabled, biometricEnabled, lockTimeout ->
+                appPreferences.lockTimeoutSeconds,
+                appPreferences.monthStartDay
+            ) { values ->
+                val trackingEnabled = values[0] as Boolean
+                val enabledBanks = @Suppress("UNCHECKED_CAST") (values[1] as Set<String>)
+                val pinEnabled = values[2] as Boolean
+                val biometricEnabled = values[3] as Boolean
+                val lockTimeout = values[4] as Int
+                val monthStartDay = values[5] as Int
+
                 // Get all non-MPESA parser names from the registry
                 val bankNames = SmsParserRegistry.getAllParserNames()
                     .filter { it != "M-PESA" } // M-PESA is always on, not toggleable
@@ -63,13 +73,14 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
 
-                SettingsUiState(
+                _uiState.value.copy(
                     bankTrackingEnabled = trackingEnabled,
                     availableBanks = bankToggles,
                     isLoading = false,
                     pinEnabled = pinEnabled,
                     biometricEnabled = biometricEnabled,
-                    lockTimeoutSeconds = lockTimeout
+                    lockTimeoutSeconds = lockTimeout,
+                    monthStartDay = monthStartDay
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -122,6 +133,17 @@ class SettingsViewModel @Inject constructor(
      */
     fun setBiometricAvailable(available: Boolean) {
         _uiState.value = _uiState.value.copy(biometricAvailable = available)
+    }
+
+    // ==================== Budget Settings ====================
+
+    /**
+     * Set the day of the month when budget periods start (1–28).
+     */
+    fun setMonthStartDay(day: Int) {
+        viewModelScope.launch {
+            appPreferences.setMonthStartDay(day)
+        }
     }
 
     // ==================== Data Management ====================
@@ -190,6 +212,52 @@ class SettingsViewModel @Inject constructor(
                 delay(3000)
                 _uiState.value = _uiState.value.copy(dataManagementMessage = null)
             }
+        }
+    }
+
+    /**
+     * Populate the database with sample data for demo/screenshot purposes.
+     */
+    fun populateSampleData() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isPopulatingSampleData = true, dataManagementMessage = null)
+            try {
+                sampleDataService.populateSampleData()
+                _uiState.value = _uiState.value.copy(
+                    isPopulatingSampleData = false,
+                    dataManagementMessage = "Sample data populated successfully"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isPopulatingSampleData = false,
+                    dataManagementMessage = "Failed to populate sample data: ${e.message}"
+                )
+            }
+            delay(3000)
+            _uiState.value = _uiState.value.copy(dataManagementMessage = null)
+        }
+    }
+
+    /**
+     * Clear all expense, budget, and income data.
+     */
+    fun clearAllData() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isPopulatingSampleData = true, dataManagementMessage = null)
+            try {
+                sampleDataService.clearAllData()
+                _uiState.value = _uiState.value.copy(
+                    isPopulatingSampleData = false,
+                    dataManagementMessage = "All data cleared successfully"
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isPopulatingSampleData = false,
+                    dataManagementMessage = "Failed to clear data: ${e.message}"
+                )
+            }
+            delay(3000)
+            _uiState.value = _uiState.value.copy(dataManagementMessage = null)
         }
     }
 

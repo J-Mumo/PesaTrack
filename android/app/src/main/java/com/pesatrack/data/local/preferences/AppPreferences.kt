@@ -74,6 +74,15 @@ class AppPreferences @Inject constructor(
 
         /** Timestamp (epoch millis) when the app last went to background. */
         private val KEY_LAST_BACKGROUND_TIMESTAMP = longPreferencesKey("last_background_timestamp")
+
+        // ── Budget ──
+
+        /**
+         * Day of the month when the user's budget period starts (1–28).
+         * Default 1 = standard calendar month. 25 = "salary on 25th" use case.
+         * Capped at 28 to avoid issues with short months.
+         */
+        private val KEY_MONTH_START_DAY = intPreferencesKey("month_start_day")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -249,6 +258,29 @@ class AppPreferences @Inject constructor(
     suspend fun setLastBackgroundTimestamp(timestamp: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_BACKGROUND_TIMESTAMP] = timestamp
+        }
+    }
+
+    // ==================== Budget ====================
+
+    /**
+     * Day of the month when budget periods start (1–28, default 1).
+     * Setting to 25 means a "monthly" budget runs from the 25th to the 24th of the next month.
+     */
+    val monthStartDay: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[KEY_MONTH_START_DAY] ?: 1
+    }
+
+    /** Snapshot: get month start day. */
+    suspend fun getMonthStartDay(): Int {
+        return context.dataStore.data.first()[KEY_MONTH_START_DAY] ?: 1
+    }
+
+    /** Set month start day (1–28). */
+    suspend fun setMonthStartDay(day: Int) {
+        val clamped = day.coerceIn(1, 28)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_MONTH_START_DAY] = clamped
         }
     }
 

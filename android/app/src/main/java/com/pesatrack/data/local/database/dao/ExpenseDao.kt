@@ -27,6 +27,12 @@ interface ExpenseDao {
      */
     @Delete
     suspend fun delete(expense: ExpenseEntity)
+
+    /**
+     * Delete all expenses
+     */
+    @Query("DELETE FROM expenses")
+    suspend fun deleteAll()
     
     /**
      * Get expense by ID
@@ -529,7 +535,7 @@ interface ExpenseDao {
         FROM expenses e
         INNER JOIN categories c ON e.categoryId = c.id
         WHERE e.isExcluded = 0
-        AND e.timestamp >= :startMs AND e.timestamp < :endMs
+        AND e.timestamp >= :startMs AND timestamp < :endMs
         AND (c.parentId = :groupId OR c.id = :groupId)
     """)
     suspend fun getGroupSpendingInRange(groupId: Long, startMs: Long, endMs: Long): Double

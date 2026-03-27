@@ -6,6 +6,7 @@ import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.IncomeDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.IncomeEntity
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetAlert
 import com.pesatrack.domain.models.BudgetPeriod
@@ -30,16 +31,36 @@ import javax.inject.Singleton
  * - Sub-category-level (categoryId = sub-category ID, isGroupBudget = false)
  *
  * Supports period types:
- * - WEEKLY / MONTHLY / YEARLY — calendar-aligned, navigable via periodCalendar
- * - CUSTOM — user-defined date range stored on the budget entity
+ * - WEEKLY — calendar-aligned week (Mon–Sun)
+ * - MONTHLY — offset by user's "month start day" preference (default 1)
+ * - YEARLY — calendar-aligned year
+ * - CUSTOM — legacy, kept for DB compatibility but hidden from UI
  */
 @Singleton
 class BudgetRepository @Inject constructor(
     private val budgetDao: BudgetDao,
     private val expenseDao: ExpenseDao,
     private val categoryDao: CategoryDao,
-    private val incomeDao: IncomeDao
+    private val incomeDao: IncomeDao,
+    private val appPreferences: AppPreferences
 ) {
+
+    /**
+     * Cached month start day, updated from AppPreferences.
+     * Default 1 = standard calendar month. Set to e.g. 25 for "salary on 25th" use case.
+     * Call [refreshMonthStartDay] to update from preferences (called by ViewModel on init).
+     */
+    @Volatile
+    private var _monthStartDay: Int = 1
+    val monthStartDay: Int get() = _monthStartDay
+
+    /**
+     * Refresh the cached month start day from AppPreferences.
+     * Should be called from a coroutine context (e.g. ViewModel init).
+     */
+    suspend fun refreshMonthStartDay() {
+        _monthStartDay = appPreferences.getMonthStartDay()
+    }
 
     // ==================== CRUD ====================
 
@@ -140,11 +161,21 @@ class BudgetRepository @Inject constructor(
                 Pair(start, end)
             }
             BudgetPeriod.MONTHLY -> {
-                cal.set(Calendar.DAY_OF_MONTH, 1)
+                val startDay = _monthStartDay.coerceIn(1, 28)
                 cal.set(Calendar.HOUR_OF_DAY, 0)
                 cal.set(Calendar.MINUTE, 0)
                 cal.set(Calendar.SECOND, 0)
                 cal.set(Calendar.MILLISECOND, 0)
+
+                // Determine period start:
+                // If calendar's day >= startDay, period started this month on startDay.
+                // If calendar's day < startDay, period started last month on startDay.
+                if (cal.get(Calendar.DAY_OF_MONTH) >= startDay) {
+                    cal.set(Calendar.DAY_OF_MONTH, startDay)
+                } else {
+                    cal.add(Calendar.MONTH, -1)
+                    cal.set(Calendar.DAY_OF_MONTH, startDay)
+                }
                 val start = cal.timeInMillis
                 cal.add(Calendar.MONTH, 1)
                 val end = cal.timeInMillis
@@ -309,10 +340,14 @@ class BudgetRepository @Inject constructor(
     /**
      * Get a period key string for income lookup, based on period type and a Calendar reference.
      *
-     * - MONTHLY → "2026-03"
+     * For MONTHLY with monthStartDay offset, the key uses the period-start date:
+     * e.g. monthStartDay=25 with calendar in late March → key "2026-03-25" (period Mar 25–Apr 24).
+     *
+     * - MONTHLY (startDay=1) → "2026-03"
+     * - MONTHLY (startDay≠1) → "2026-03-25" (year-month-startDay of period start)
      * - WEEKLY  → "2026-W13"
      * - YEARLY  → "2026"
-     * - CUSTOM  → "custom-{startMs}-{endMs}" (unique key per custom range)
+     * - CUSTOM  → "custom-{startMs}-{endMs}" (legacy)
      */
     fun getPeriodKey(
         period: BudgetPeriod,
@@ -322,9 +357,21 @@ class BudgetRepository @Inject constructor(
     ): String {
         return when (period) {
             BudgetPeriod.MONTHLY -> {
-                val year = calendar.get(Calendar.YEAR)
-                val month = calendar.get(Calendar.MONTH) + 1
-                String.format("%04d-%02d", year, month)
+                val startDay = _monthStartDay.coerceIn(1, 28)
+                if (startDay == 1) {
+                    // Standard key: "2026-03"
+                    val year = calendar.get(Calendar.YEAR)
+                    val month = calendar.get(Calendar.MONTH) + 1
+                    String.format("%04d-%02d", year, month)
+                } else {
+                    // Offset key: compute period start, use "2026-03-25"
+                    val (startMs, _) = getPeriodRange(period, calendar)
+                    val startCal = Calendar.getInstance().apply { timeInMillis = startMs }
+                    val year = startCal.get(Calendar.YEAR)
+                    val month = startCal.get(Calendar.MONTH) + 1
+                    val day = startCal.get(Calendar.DAY_OF_MONTH)
+                    String.format("%04d-%02d-%02d", year, month, day)
+                }
             }
             BudgetPeriod.WEEKLY -> {
                 val year = calendar.get(Calendar.YEAR)
@@ -344,10 +391,12 @@ class BudgetRepository @Inject constructor(
     /**
      * Get a human-readable label for a period, based on period type and a Calendar reference.
      *
-     * - MONTHLY → "March 2026"
+     * For MONTHLY with monthStartDay=1: "March 2026"
+     * For MONTHLY with monthStartDay≠1: "Mar 25 – Apr 24, 2026"
+     *
      * - WEEKLY  → "Mar 24 – Mar 30, 2026"
      * - YEARLY  → "2026"
-     * - CUSTOM  → "Mar 25 – Apr 25, 2026"
+     * - CUSTOM  → "Mar 25 – Apr 25, 2026" (legacy)
      */
     fun getPeriodLabel(
         period: BudgetPeriod,
@@ -365,9 +414,27 @@ class BudgetRepository @Inject constructor(
         )
         return when (period) {
             BudgetPeriod.MONTHLY -> {
-                val year = calendar.get(Calendar.YEAR)
-                val month = calendar.get(Calendar.MONTH)
-                "${monthNames[month]} $year"
+                val startDay = _monthStartDay.coerceIn(1, 28)
+                if (startDay == 1) {
+                    // Standard label: "March 2026"
+                    val year = calendar.get(Calendar.YEAR)
+                    val month = calendar.get(Calendar.MONTH)
+                    "${monthNames[month]} $year"
+                } else {
+                    // Offset label: "Mar 25 – Apr 24, 2026"
+                    val (startMs, endMs) = getPeriodRange(period, calendar)
+                    val startCal = Calendar.getInstance().apply { timeInMillis = startMs }
+                    val endCal = Calendar.getInstance().apply {
+                        timeInMillis = endMs
+                        add(Calendar.DAY_OF_MONTH, -1) // end is exclusive, show last inclusive day
+                    }
+                    val sMonth = shortMonthNames[startCal.get(Calendar.MONTH)]
+                    val sDay = startCal.get(Calendar.DAY_OF_MONTH)
+                    val eMonth = shortMonthNames[endCal.get(Calendar.MONTH)]
+                    val eDay = endCal.get(Calendar.DAY_OF_MONTH)
+                    val eYear = endCal.get(Calendar.YEAR)
+                    "$sMonth $sDay – $eMonth $eDay, $eYear"
+                }
             }
             BudgetPeriod.WEEKLY -> {
                 // Compute the Monday of the week
@@ -426,6 +493,9 @@ class BudgetRepository @Inject constructor(
      */
     suspend fun checkBudgetAlerts(expenseCategoryId: Long?): List<BudgetAlert> {
         if (expenseCategoryId == null) return emptyList()
+
+        // Ensure month start day is fresh (may be called from SmsReceiver before any ViewModel)
+        refreshMonthStartDay()
 
         // Resolve the group ID from the sub-category
         val groupId = getGroupIdForCategory(expenseCategoryId) ?: return emptyList()

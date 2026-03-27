@@ -33,7 +33,9 @@ data class Budget(
  * Budget period — how often the budget resets.
  */
 enum class BudgetPeriod {
-    WEEKLY, MONTHLY, YEARLY, CUSTOM;
+    WEEKLY, MONTHLY, YEARLY,
+    /** Legacy — kept for DB compatibility with existing custom budgets. Hidden from UI. */
+    CUSTOM;
 
     fun displayName(): String = when (this) {
         WEEKLY -> "Weekly"
@@ -45,6 +47,9 @@ enum class BudgetPeriod {
     companion object {
         fun fromString(value: String): BudgetPeriod =
             try { valueOf(value) } catch (_: Exception) { MONTHLY }
+
+        /** Period types shown in the UI period selector (CUSTOM is hidden). */
+        val uiEntries: List<BudgetPeriod> = listOf(WEEKLY, MONTHLY, YEARLY)
     }
 }
 

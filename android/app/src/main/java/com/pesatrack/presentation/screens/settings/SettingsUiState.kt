@@ -20,9 +20,13 @@ data class SettingsUiState(
     val biometricEnabled: Boolean = false,
     val biometricAvailable: Boolean = false,
     val lockTimeoutSeconds: Int = 30,
+    // Budget
+    /** Day of the month when budget periods start (1–28, default 1). */
+    val monthStartDay: Int = 1,
     // Data Management
     val isExporting: Boolean = false,
     val isResettingCategories: Boolean = false,
+    val isPopulatingSampleData: Boolean = false,
     val dataManagementMessage: String? = null
 )
 

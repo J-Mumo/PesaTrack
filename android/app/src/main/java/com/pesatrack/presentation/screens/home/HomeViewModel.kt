@@ -43,6 +43,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             // Initialize default categories
             categoryRepository.initializeDefaultCategories()
+            // Ensure budget month start day is loaded from preferences
+            budgetRepository.refreshMonthStartDay()
         }
     }
     

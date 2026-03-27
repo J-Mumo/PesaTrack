@@ -18,6 +18,12 @@ interface IncomeDao {
     suspend fun upsert(income: IncomeEntity): Long
 
     /**
+     * Delete all income records.
+     */
+    @Query("DELETE FROM income")
+    suspend fun deleteAll()
+
+    /**
      * Get income for a specific month (e.g. "2026-03").
      * Returns null if no income has been set for that month.
      */

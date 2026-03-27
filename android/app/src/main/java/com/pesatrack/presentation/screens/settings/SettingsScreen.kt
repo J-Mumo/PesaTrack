@@ -7,17 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -97,10 +87,8 @@ fun SettingsScreen(
                     uiState = uiState,
                     onPinToggle = { enabled ->
                         if (enabled) {
-                            // Navigate to PIN setup screen
                             onNavigateToPinSetup("setup")
                         } else {
-                            // Navigate to PIN disable screen (verify current PIN first)
                             onNavigateToPinSetup("disable")
                         }
                     },
@@ -117,6 +105,12 @@ fun SettingsScreen(
                 // Section: Budgets
                 BudgetsSection(onNavigateToBudget = onNavigateToBudget)
 
+                // Section: Budget Month Start Day
+                MonthStartDaySection(
+                    monthStartDay = uiState.monthStartDay,
+                    onMonthStartDayChanged = viewModel::setMonthStartDay
+                )
+
                 // Section: SMS Sources
                 SmsSourcesSection(
                     uiState = uiState,
@@ -129,6 +123,8 @@ fun SettingsScreen(
                     uiState = uiState,
                     onResetCategories = viewModel::resetCategoriesToDefault,
                     onExportData = { viewModel.exportData(context) },
+                    onPopulateSampleData = viewModel::populateSampleData,
+                    onClearData = viewModel::clearAllData,
                     viewModel = viewModel
                 )
 
@@ -139,9 +135,6 @@ fun SettingsScreen(
     }
 }
 
-/**
- * Security section — PIN lock, biometric unlock, lock timeout.
- */
 @Composable
 private fun SecuritySection(
     uiState: SettingsUiState,
@@ -166,7 +159,6 @@ private fun SecuritySection(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // PIN Lock toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -201,11 +193,8 @@ private fun SecuritySection(
                 )
             }
 
-            // Remaining options shown only when PIN is enabled
             if (uiState.pinEnabled) {
                 HorizontalDivider()
-
-                // Change PIN
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -217,7 +206,7 @@ private fun SecuritySection(
                     Text(
                         text = "Change PIN",
                         style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 36.dp) // Align with text above
+                        modifier = Modifier.padding(start = 36.dp)
                     )
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
@@ -226,7 +215,6 @@ private fun SecuritySection(
                     )
                 }
 
-                // Biometric toggle (only if device supports it)
                 if (uiState.biometricAvailable) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -262,8 +250,6 @@ private fun SecuritySection(
                         )
                     }
                 }
-
-                // Lock timeout picker
                 LockTimeoutPicker(
                     currentTimeout = uiState.lockTimeoutSeconds,
                     onTimeoutChanged = onLockTimeoutChanged
@@ -273,23 +259,18 @@ private fun SecuritySection(
     }
 }
 
-/**
- * Lock timeout picker — dropdown with predefined timeout options.
- */
 @Composable
 private fun LockTimeoutPicker(
     currentTimeout: Int,
     onTimeoutChanged: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-
     val timeoutOptions = listOf(
         0 to "Immediately",
         30 to "After 30 seconds",
         60 to "After 1 minute",
         300 to "After 5 minutes"
     )
-
     val currentLabel = timeoutOptions.find { it.first == currentTimeout }?.second
         ?: "After ${currentTimeout}s"
 
@@ -329,18 +310,11 @@ private fun LockTimeoutPicker(
             contentDescription = "Change timeout",
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             timeoutOptions.forEach { (seconds, label) ->
                 DropdownMenuItem(
                     text = {
-                        Text(
-                            text = label,
-                            fontWeight = if (seconds == currentTimeout) FontWeight.Bold else FontWeight.Normal
-                        )
+                        Text(text = label, fontWeight = if (seconds == currentTimeout) FontWeight.Bold else FontWeight.Normal)
                     },
                     onClick = {
                         onTimeoutChanged(seconds)
@@ -352,491 +326,303 @@ private fun LockTimeoutPicker(
     }
 }
 
-/**
- * Categories section — navigate to category management screen.
- */
 @Composable
-private fun CategoriesSection(
-    onNavigateToCategoryManagement: () -> Unit
-) {
-    Text(
-        text = "Categories",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-
-    Card(
-        onClick = onNavigateToCategoryManagement,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Category,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+private fun CategoriesSection(onNavigateToCategoryManagement: () -> Unit) {
+    Text(text = "Categories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(onClick = onNavigateToCategoryManagement, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(imageVector = Icons.Default.Category, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Column {
-                    Text(
-                        text = "Manage Categories",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Add custom categories & auto-categorization rules",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = "Manage Categories", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(text = "Add custom categories & auto-categorization rules", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Go to Categories",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to Categories", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-/**
- * Budgets section — navigate to budget management screen.
- */
 @Composable
-private fun BudgetsSection(
-    onNavigateToBudget: () -> Unit
-) {
-    Text(
-        text = "Budgets",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-
-    Card(
-        onClick = onNavigateToBudget,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AccountBalanceWallet,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+private fun BudgetsSection(onNavigateToBudget: () -> Unit) {
+    Text(text = "Budgets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(onClick = onNavigateToBudget, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(imageVector = Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Column {
-                    Text(
-                        text = "Manage Budgets",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Set spending limits per category or total",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = "Manage Budgets", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(text = "Set spending limits per category or total", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Go to Budgets",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to Budgets", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-/**
- * SMS Sources configuration section.
- */
 @Composable
-private fun SmsSourcesSection(
-    uiState: SettingsUiState,
-    onBankTrackingToggled: (Boolean) -> Unit,
-    onBankToggled: (String, Boolean) -> Unit
-) {
-    // Section header
-    Text(
-        text = "SMS Sources",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-
-    // M-PESA card (always on, not toggleable)
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+private fun SmsSourcesSection(uiState: SettingsUiState, onBankTrackingToggled: (Boolean) -> Unit, onBankToggled: (String, Boolean) -> Unit) {
+    Text(text = "SMS Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "M-PESA",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Always enabled — tracks all M-PESA transaction SMS",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(text = "M-PESA", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(text = "Always enabled — tracks all M-PESA transaction SMS", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(
-                checked = true,
-                onCheckedChange = null, // Not toggleable
-                enabled = false
-            )
+            Switch(checked = true, onCheckedChange = null, enabled = false)
         }
     }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(imageVector = Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(text = "Bank SMS Tracking", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Track expenses from bank confirmation SMS. Duplicates with M-PESA are automatically filtered.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(checked = uiState.bankTrackingEnabled, onCheckedChange = onBankTrackingToggled)
+            }
+            if (uiState.bankTrackingEnabled && uiState.availableBanks.isNotEmpty()) {
+                HorizontalDivider()
+                Text(text = "Select banks to track:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                uiState.availableBanks.forEach { bank ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = bank.displayName, style = MaterialTheme.typography.bodyMedium)
+                        Switch(checked = bank.enabled, onCheckedChange = { enabled -> onBankToggled(bank.displayName, enabled) })
+                    }
+                }
+            }
+            if (!uiState.bankTrackingEnabled) {
+                Text(text = "Enable to import expenses from supported bank SMS (NCBA, etc.)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 32.dp))
+            }
+        }
+    }
+}
 
-    // Bank SMS tracking section
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+@Composable
+private fun MonthStartDaySection(
+    monthStartDay: Int,
+    onMonthStartDayChanged: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val dayOptions = (1..28).toList()
+
+    // Ordinal suffix helper
+    fun ordinal(day: Int): String = when {
+        day in 11..13 -> "${day}th"
+        day % 10 == 1 -> "${day}st"
+        day % 10 == 2 -> "${day}nd"
+        day % 10 == 3 -> "${day}rd"
+        else -> "${day}th"
+    }
+
+    val currentLabel = if (monthStartDay == 1) {
+        "1st of each month (default)"
+    } else {
+        "${ordinal(monthStartDay)} of each month"
+    }
+
+    Text(
+        text = "Budget Period",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Master toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalance,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
                         Text(
-                            text = "Bank SMS Tracking",
+                            text = "Month Starts On",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Medium
                         )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Track expenses from bank confirmation SMS. " +
-                                "Duplicates with M-PESA are automatically filtered.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = uiState.bankTrackingEnabled,
-                    onCheckedChange = onBankTrackingToggled
-                )
-            }
-
-            // Individual bank toggles (only shown when master toggle is on)
-            if (uiState.bankTrackingEnabled && uiState.availableBanks.isNotEmpty()) {
-                HorizontalDivider()
-
-                Text(
-                    text = "Select banks to track:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                uiState.availableBanks.forEach { bank ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         Text(
-                            text = bank.displayName,
-                            style = MaterialTheme.typography.bodyMedium
+                            text = currentLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Switch(
-                            checked = bank.enabled,
-                            onCheckedChange = { enabled ->
-                                onBankToggled(bank.displayName, enabled)
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Change",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    dayOptions.forEach { day ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (day == 1) "1st (default)" else ordinal(day),
+                                    fontWeight = if (day == monthStartDay) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                onMonthStartDayChanged(day)
+                                expanded = false
                             }
                         )
                     }
                 }
             }
 
-            // Hint when bank tracking is off
-            if (!uiState.bankTrackingEnabled) {
-                Text(
-                    text = "Enable to import expenses from supported bank SMS (NCBA, etc.)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 32.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * About section — navigate to the About screen.
- */
-@Composable
-private fun AboutSection(
-    onNavigateToAbout: () -> Unit
-) {
-    Text(
-        text = "About",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-
-    Card(
-        onClick = onNavigateToAbout,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column {
-                    Text(
-                        text = "About PesaTrack",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Version info, privacy policy & contact",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Go to About",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                text = "Set this to your salary date. A monthly budget from the ${ordinal(monthStartDay)} " +
+                    "runs to the ${ordinal(if (monthStartDay == 1) 1 else monthStartDay - 1)} of the next month.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
-/**
- * Data Management section — Reset categories to default, Export data as CSV.
- */
+@Composable
+private fun AboutSection(onNavigateToAbout: () -> Unit) {
+    Text(text = "About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(onClick = onNavigateToAbout, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Column {
+                    Text(text = "About PesaTrack", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(text = "Version info, privacy policy & contact", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to About", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun DataManagementSection(
     uiState: SettingsUiState,
     onResetCategories: () -> Unit,
     onExportData: () -> Unit,
+    onPopulateSampleData: () -> Unit,
+    onClearData: () -> Unit,
     viewModel: SettingsViewModel
 ) {
     val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
 
-    Text(
-        text = "Data Management",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary
-    )
-
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    Text(text = "Data Management", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Export Data
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !uiState.isExporting) { onExportData() }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FileDownload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isExporting) { onExportData() }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column {
-                        Text(
-                            text = "Export Data",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "Export all expenses as CSV",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(text = "Export Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Export all expenses as CSV", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (uiState.isExporting) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = "Export",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (uiState.isExporting) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                else Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Export", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            HorizontalDivider()
+
+            // Populate Sample Data (New)
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { onPopulateSampleData() }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text(text = "Populate Sample Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Add demo expenses for screenshots", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
+                if (uiState.isPopulatingSampleData) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
 
             HorizontalDivider()
 
             // Reset Categories
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = !uiState.isResettingCategories) { showResetDialog = true }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.RestartAlt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isResettingCategories) { showResetDialog = true }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.RestartAlt, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                     Column {
-                        Text(
-                            text = "Reset Categories",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "Remove custom categories & rules, restore defaults",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(text = "Reset Categories", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Remove custom categories & rules, restore defaults", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (uiState.isResettingCategories) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                if (uiState.isResettingCategories) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+
+            HorizontalDivider()
+
+            // Clear All Data (New)
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { showClearDialog = true }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Column {
+                        Text(text = "Clear All Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Delete all expenses, budgets, and income", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 
-            // Status message
             uiState.dataManagementMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 36.dp)
-                )
+                Text(text = message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 36.dp))
             }
         }
     }
 
-    // Launch share sheet when export completes
     LaunchedEffect(uiState.dataManagementMessage) {
         if (uiState.dataManagementMessage == "Export ready — opening share…") {
             val intent = viewModel.createShareIntent(context)
-            if (intent != null) {
-                context.startActivity(intent)
-            }
+            if (intent != null) context.startActivity(intent)
             viewModel.clearDataManagementMessage()
         }
     }
 
-    // Reset categories confirmation dialog
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.RestartAlt,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-            },
+            icon = { Icon(imageVector = Icons.Default.RestartAlt, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Reset Categories?") },
-            text = {
-                Text(
-                    "This will:\n" +
-                    "• Delete all custom categories and sub-categories\n" +
-                    "• Delete all auto-categorization rules\n" +
-                    "• Restore default categories\n\n" +
-                    "Expenses with custom categories will become uncategorized.\n" +
-                    "Your expense data will NOT be deleted."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showResetDialog = false
-                        onResetCategories()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Reset")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            text = { Text("This will:\n• Delete all custom categories and sub-categories\n• Delete all auto-categorization rules\n• Restore default categories\n\nExpenses with custom categories will become uncategorized.\nYour expense data will NOT be deleted.") },
+            confirmButton = { TextButton(onClick = { showResetDialog = false; onResetCategories() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Reset") } },
+            dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            icon = { Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Clear All Data?") },
+            text = { Text("This will permanently delete all your expenses, budgets, and income records. This action cannot be undone.") },
+            confirmButton = { TextButton(onClick = { showClearDialog = false; onClearData() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Clear All") } },
+            dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("Cancel") } }
         )
     }
 }
