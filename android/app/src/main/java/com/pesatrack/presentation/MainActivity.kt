@@ -273,26 +273,20 @@ fun MainScreen() {
                         label = { Text(label) },
                         selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
                         onClick = {
-                            try {
-                                navController.navigate(item.route) {
-                                    // Pop up to the start destination of the graph to
-                                    // avoid building up a large stack of destinations
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    // Avoid multiple copies of the same destination
-                                    launchSingleTop = true
-                                    // Restore state when reselecting a previously selected item
-                                    restoreState = true
+                            // Special-case the start destination (Home):
+                            // restoreState = true silently fails when there is
+                            // no previously-saved state, so we skip save/restore
+                            // for the Home tab and use inclusive = true to clear
+                            // the entire back-stack.
+                            val isStartDest =
+                                item.route == navController.graph.findStartDestination().route
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = !isStartDest
+                                    inclusive = isStartDest
                                 }
-                            } catch (_: Exception) {
-                                // restoreState can fail if no state was saved — retry without it
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        inclusive = false
-                                    }
-                                    launchSingleTop = true
-                                }
+                                launchSingleTop = true
+                                restoreState = !isStartDest
                             }
                         }
                     )
