@@ -1,5 +1,9 @@
 package com.pesatrack.presentation.screens.settings
 
+import android.net.Uri
+import com.pesatrack.BuildConfig
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,6 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Settings screen for configuring:
@@ -23,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * - Category management (custom categories + auto-categorization rules)
  * - Budget management
  * - Bank SMS tracking (master toggle + individual bank toggles)
+ * - Data management (backup/restore, export CSV, reset, clear)
  *
  * M-PESA tracking is always on and not shown here.
  */
@@ -123,6 +131,8 @@ fun SettingsScreen(
                     uiState = uiState,
                     onResetCategories = viewModel::resetCategoriesToDefault,
                     onExportData = { viewModel.exportData(context) },
+                    onBackupData = { uri -> viewModel.backupDatabase(context, uri) },
+                    onRestoreData = { uri -> viewModel.restoreDatabase(context, uri) },
                     onPopulateSampleData = viewModel::populateSampleData,
                     onClearData = viewModel::clearAllData,
                     viewModel = viewModel
@@ -525,6 +535,8 @@ private fun DataManagementSection(
     uiState: SettingsUiState,
     onResetCategories: () -> Unit,
     onExportData: () -> Unit,
+    onBackupData: (Uri) -> Unit,
+    onRestoreData: (Uri) -> Unit,
     onPopulateSampleData: () -> Unit,
     onClearData: () -> Unit,
     viewModel: SettingsViewModel
@@ -532,10 +544,61 @@ private fun DataManagementSection(
     val context = LocalContext.current
     var showResetDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+
+    // SAF launcher for backup — creates a new .zip file
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let { onBackupData(it) }
+    }
+
+    // SAF launcher for restore — opens an existing .zip file
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { onRestoreData(it) }
+    }
 
     Text(text = "Data Management", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Backup Data
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isBackingUp) {
+                val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                val fileName = "PesaTrack_Backup_${dateFormat.format(Date())}.zip"
+                backupLauncher.launch(fileName)
+            }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.Backup, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text(text = "Backup Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Save a backup of all your data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (uiState.isBackingUp) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                else Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Backup", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            HorizontalDivider()
+
+            // Restore Data
+            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isRestoring) {
+                showRestoreDialog = true
+            }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text(text = "Restore Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Restore from a previous backup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (uiState.isRestoring) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                else Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Restore", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            HorizontalDivider()
+
             // Export Data
             Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isExporting) { onExportData() }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -547,20 +610,6 @@ private fun DataManagementSection(
                 }
                 if (uiState.isExporting) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 else Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Export", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            HorizontalDivider()
-
-            // Populate Sample Data (New)
-            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { onPopulateSampleData() }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column {
-                        Text(text = "Populate Sample Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Text(text = "Add demo expenses for screenshots", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (uiState.isPopulatingSampleData) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
 
             HorizontalDivider()
@@ -579,15 +628,34 @@ private fun DataManagementSection(
 
             HorizontalDivider()
 
-            // Clear All Data (New)
-            Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { showClearDialog = true }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Column {
-                        Text(text = "Clear All Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Text(text = "Delete all expenses, budgets, and income", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Developer-only: Sample Data & Clear All Data (hidden in release builds)
+            if (BuildConfig.DEBUG) {
+                // Populate Sample Data
+                Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { onPopulateSampleData() }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column {
+                            Text(text = "Populate Sample Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Text(text = "Add demo expenses for screenshots", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (uiState.isPopulatingSampleData) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+
+                HorizontalDivider()
+
+                // Clear All Data
+                Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isPopulatingSampleData) { showClearDialog = true }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Column {
+                            Text(text = "Clear All Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                            Text(text = "Delete all expenses, budgets, and income", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
+
+                HorizontalDivider()
             }
 
             uiState.dataManagementMessage?.let { message ->
@@ -623,6 +691,25 @@ private fun DataManagementSection(
             text = { Text("This will permanently delete all your expenses, budgets, and income records. This action cannot be undone.") },
             confirmButton = { TextButton(onClick = { showClearDialog = false; onClearData() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Clear All") } },
             dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            icon = { Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Restore Backup?") },
+            text = { Text("This will REPLACE all current data:\n• All expenses and categories\n• Budgets and income records\n• Auto-categorization rules\n• Recipient mappings\n\nThis cannot be undone.\nThe app will restart after restore.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRestoreDialog = false
+                        restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("Restore") }
+            },
+            dismissButton = { TextButton(onClick = { showRestoreDialog = false }) { Text("Cancel") } }
         )
     }
 }

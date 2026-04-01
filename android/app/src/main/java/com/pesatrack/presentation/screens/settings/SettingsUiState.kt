@@ -10,6 +10,8 @@ package com.pesatrack.presentation.screens.settings
  * @property biometricEnabled Whether biometric unlock is enabled
  * @property biometricAvailable Whether the device supports biometric authentication
  * @property lockTimeoutSeconds Seconds before app re-locks after backgrounding
+ * @property isBackingUp Whether a database backup is in progress
+ * @property isRestoring Whether a database restore is in progress
  */
 data class SettingsUiState(
     val bankTrackingEnabled: Boolean = false,
@@ -25,6 +27,8 @@ data class SettingsUiState(
     val monthStartDay: Int = 1,
     // Data Management
     val isExporting: Boolean = false,
+    val isBackingUp: Boolean = false,
+    val isRestoring: Boolean = false,
     val isResettingCategories: Boolean = false,
     val isPopulatingSampleData: Boolean = false,
     val dataManagementMessage: String? = null

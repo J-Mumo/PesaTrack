@@ -27,7 +27,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
 | **Phase 2 M5: Settings & Configuration** | ✅ Complete | 100% |
 | **About Screen + Privacy Policy** | ✅ Complete | 100% |
-| **Data Management (Export + Reset)** | ✅ Complete | 100% |
+| **Data Management (Export + Backup/Restore + Reset)** | ✅ Complete | 100% |
 | **Expense Charts & Analytics** | ✅ Complete | 100% |
 | **Year-over-Year Analytics** | ✅ Complete | 100% |
 | **Phase 2 M6: Investment Category Deep-Dive** | ✅ Complete | 100% |
@@ -602,6 +602,7 @@ backend/
 18. **Global Month Start Day Setting** — Replaced the CUSTOM period tab with a single global preference: "My month starts on day X" (default 1, range 1–28). All MONTHLY budgets use this offset globally. Covers the "salary on 25th" use case without per-budget custom date pickers. `AppPreferences` stores the setting; `BudgetRepository` caches it and computes offset-aware period ranges, keys ("2026-03-25" format), and labels ("Mar 25 – Apr 24, 2026"). CUSTOM enum kept in `BudgetPeriod` for DB compatibility but hidden from UI via `BudgetPeriod.uiEntries`. Settings screen has a new "Budget Month" section with a dropdown picker showing ordinal suffixes (1st, 2nd, 3rd, etc.).
 19. **HowItWorksCard Removal** — Removed the static onboarding "How It Works" card from the Home screen feed. The information is still available in the onboarding flow for new users.
 20. **Bottom Navigation Fix** — Fixed Analytics → Home navigation not working. Root cause: `restoreState = true` silently fails when no previously-saved state exists for the start destination. Fix: special-case the start destination (Home) to use `inclusive = true` and skip `saveState`/`restoreState`, eliminating the silent no-op.
+21. **Database Backup & Restore** — Full database backup/restore via SAF (Storage Access Framework). Backup creates a .zip archive containing the Room database + a settings.json with month start day and bank tracking preferences. Restore validates the SQLite header, closes the current database, replaces files, restores preferences to DataStore, and restarts the app process to reinitialize Hilt singletons. Users can save backups to Downloads, Google Drive, etc. Solves data loss on uninstall, debug-to-Play Store migration, and device transfers.
 
 ---
 
@@ -659,6 +660,7 @@ backend/
 | **M7** | Category & Sub-Category Budgets | ✅ Complete | Group-level + sub-category-level + total budgets (weekly/monthly/yearly); DB v8→v9 (budgets table), v11→v12 (sub-category support: renamed categoryGroupId→categoryId, added isGroupBudget); BudgetScreen CRUD with hierarchical category picker; Budget Alerts at 80%/100% for all levels; Home budget summary + data-driven prompt; Analytics setup banner; Settings entry point |
 | **M8** | Custom Categories & Auto-Rules | ✅ Complete | Custom groups + sub-categories CRUD with icon/color pickers; user-defined auto-categorization rules (EXACT/CONTAINS/STARTS_WITH); DB v9→v10 (category_rules table); rules integrated into CategorizationService (checked before built-in engine); Settings entry point |
 | — | Forecasting | ⏳ Deferred | Budget burn rate projections — [plan](../plans/forecasting-plan.md). Revisit after budget adoption validated. |
+| — | Database Backup/Restore | ✅ Complete | .zip backup via SAF (database + settings.json); restore with SQLite validation + app restart |
 | — | Export to CSV | ⏳ Pending | Shareable reports |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
 | — | Recurring expense tracking | ⏳ Pending | Detect repeating patterns |

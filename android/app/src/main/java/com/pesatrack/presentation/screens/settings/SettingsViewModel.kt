@@ -1,6 +1,8 @@
 package com.pesatrack.presentation.screens.settings
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
@@ -23,7 +25,7 @@ import javax.inject.Inject
  * Manages:
  * - Bank SMS tracking preferences (master toggle + individual bank toggles)
  * - PIN lock settings (enabled, biometric toggle, lock timeout)
- * - Data management (reset categories, export CSV, sample data)
+ * - Data management (reset categories, export CSV, backup/restore, sample data)
  *
  * Bank list is populated from [SmsParserRegistry], excluding M-PESA
  * (which is always enabled and not toggleable).
@@ -215,6 +217,95 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ==================== Database Backup & Restore ====================
+
+    /**
+     * Backup the database + settings to a .zip archive at the given SAF URI.
+     *
+     * @param context Needed for database path access
+     * @param destinationUri SAF URI where the backup .zip will be written
+     */
+    fun backupDatabase(context: Context, destinationUri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isBackingUp = true, dataManagementMessage = null)
+            try {
+                val success = dataManagementService.backupDatabase(context, destinationUri)
+                if (success) {
+                    _uiState.value = _uiState.value.copy(
+                        isBackingUp = false,
+                        dataManagementMessage = "Backup saved successfully"
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isBackingUp = false,
+                        dataManagementMessage = "Backup failed — could not write file"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isBackingUp = false,
+                    dataManagementMessage = "Backup failed: ${e.message}"
+                )
+            }
+            delay(3000)
+            _uiState.value = _uiState.value.copy(dataManagementMessage = null)
+        }
+    }
+
+    /**
+     * Restore the database + settings from a .zip backup at the given SAF URI.
+     * On success, restarts the app process to reinitialize all Hilt singletons.
+     *
+     * @param context Needed for database path access and app restart
+     * @param sourceUri SAF URI of the backup .zip file
+     */
+    fun restoreDatabase(context: Context, sourceUri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRestoring = true, dataManagementMessage = null)
+            try {
+                val success = dataManagementService.restoreDatabase(context, sourceUri)
+                if (success) {
+                    _uiState.value = _uiState.value.copy(
+                        isRestoring = false,
+                        dataManagementMessage = "Restore successful — restarting…"
+                    )
+                    // Brief delay so the user sees the success message
+                    delay(1000)
+                    // Restart the app process to reinitialize Hilt singletons with the new database
+                    restartApp(context)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isRestoring = false,
+                        dataManagementMessage = "Restore failed — invalid backup file"
+                    )
+                    delay(3000)
+                    _uiState.value = _uiState.value.copy(dataManagementMessage = null)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isRestoring = false,
+                    dataManagementMessage = "Restore failed: ${e.message}"
+                )
+                delay(3000)
+                _uiState.value = _uiState.value.copy(dataManagementMessage = null)
+            }
+        }
+    }
+
+    /**
+     * Kill and restart the app process.
+     * This forces Hilt to recreate all singletons (including the database connection)
+     * with the restored database.
+     */
+    private fun restartApp(context: Context) {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        Runtime.getRuntime().exit(0)
+    }
+
+    // ==================== Sample Data ====================
+
     /**
      * Populate the database with sample data for demo/screenshot purposes.
      */
@@ -264,7 +355,7 @@ class SettingsViewModel @Inject constructor(
     /**
      * Create a share intent for the last exported CSV file.
      */
-    fun createShareIntent(context: Context): android.content.Intent? {
+    fun createShareIntent(context: Context): Intent? {
         val file = _lastExportedFile ?: return null
         return dataManagementService.createShareIntent(context, file)
     }
