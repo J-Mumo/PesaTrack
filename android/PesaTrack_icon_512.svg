@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="108" height="108" fill="#1B5E20"/>
+
+    <!-- Icon Group (Centered and Scaled) -->
+    <g transform="translate(27, 27) scale(0.5)">
+        <!-- Wallet outline -->
+        <path d="M96,24H12c-6.6,0 -12,5.4 -12,12v48c0,6.6 5.4,12 12,12h84c6.6,0 12,-5.4 12,-12V36C108,29.4 102.6,24 96,24zM96,84H12V36h84V84z" fill="#FFFFFF"/>
+        <!-- M-PESA style checkmark -->
+        <path d="M76,52L52,76L36,60l8,-8l8,8l16,-16L76,52z" fill="#00C853"/>
+    </g>
+</svg>

@@ -34,6 +34,8 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M7: Category & Sub-Category Budgets** | ✅ Complete | 100% |
 | **Phase 2 M8: Custom Categories & Auto-Rules** | ✅ Complete | 100% |
 | **PIN Lock + Biometric Unlock** | ✅ Complete | 100% |
+| **Onboarding Flow** | ✅ Complete | 100% |
+| **Play Store Release (v1.0.0)** | ✅ Published | 100% |
 
 ---
 
@@ -353,6 +355,28 @@ SMS Sources ──────────────────────�
 
 ---
 
+### 9. Play Store Release
+
+#### ✅ Published (v1.0.0)
+
+| Item | Details |
+|------|---------|
+| **Application ID** | `com.pesatrack` |
+| **Version** | 1.0.0 (versionCode 1) |
+| **Signed AAB** | `app-release.aab` — 13.9 MB, R8 minified + resource shrunk |
+| **Signing Key** | `pesatrack-upload.jks` — CN=Joel Ngei, OU=PesaTrack, O=PesaTrack, L=Nairobi, C=KE (valid until 2053-08-07) |
+| **Play App Signing** | Upload key used; Google re-signs for distribution |
+| **Production Track** | Submitted — under Google review (1–7 days for new apps) |
+| **Internal Testing** | Live — testers can install via opt-in link |
+| **Store Listing** | Short description (76 chars), full description (~1950 chars), 8 screenshots, feature graphic (1024×500), hi-res icon (512×512) |
+| **Privacy Policy** | [`docs/privacy-policy.html`](../docs/privacy-policy.html) — hosted via GitHub Pages |
+| **Content Rating** | IARC questionnaire completed |
+| **Data Safety** | Completed — no data collected/shared, all data stored on-device |
+| **SMS Permission Declaration** | Pending — option not yet available in Play Console |
+| **Listing Plan** | [`plans/play-store-listing-plan.md`](../plans/play-store-listing-plan.md) — store copy, release notes, form answers |
+
+---
+
 ## Removed Components
 
 The following were removed when STK Push was dropped in favour of SMS-only tracking:
@@ -647,8 +671,10 @@ backend/
 - [x] Test on a real Android device with actual M-PESA + NCBA SMS messages
 - [x] Fix any parsing bugs discovered from real-world SMS formats
 - [x] Pre-release cleanup (removed unused permissions, dead code, configured signing) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
-- [ ] Generate signed AAB for Play Store distribution
-- [ ] Submit to Google Play Store (SMS Permission Declaration required) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
+- [x] Generate signed AAB for Play Store distribution — `app-release.aab` (13.9 MB), signed by CN=Joel Ngei, valid until 2053
+- [x] Submit to Google Play Store — v1.0.0 published to Production track (under review) + Internal Testing (live for testers)
+- [ ] Complete SMS Permission Declaration (option not yet available in Play Console — submit when it appears)
+- [ ] Monitor Production review status (1–7 days for new apps)
 
 ### Medium Priority — Phase 2 Milestone 5
 - [x] About section (app version, privacy policy link, contact, data practices summary)
