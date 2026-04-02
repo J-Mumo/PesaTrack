@@ -21,6 +21,11 @@ data class HomeUiState(
     /** Month-over-month comparison for trend card */
     val monthComparison: MonthComparison? = null,
 
+    // ==================== SMS Permission ====================
+
+    /** Whether to show the SMS permission banner (permission missing + not permanently dismissed) */
+    val showSmsPermissionBanner: Boolean = false,
+
     // ==================== Budget ====================
 
     /** Top budget progress items (sorted by % used, max 4) — shown when user has budgets */

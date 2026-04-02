@@ -83,6 +83,14 @@ class AppPreferences @Inject constructor(
          * Capped at 28 to avoid issues with short months.
          */
         private val KEY_MONTH_START_DAY = intPreferencesKey("month_start_day")
+
+        // ── SMS Permission Banner ──
+
+        /**
+         * Whether the user has permanently dismissed the SMS permission banner on the Home screen.
+         * Respects manual-only users who don't want SMS tracking.
+         */
+        private val KEY_SMS_BANNER_DISMISSED = booleanPreferencesKey("sms_banner_dismissed")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -300,6 +308,28 @@ class AppPreferences @Inject constructor(
     suspend fun setOnboardingCompleted() {
         context.dataStore.edit { preferences ->
             preferences[KEY_ONBOARDING_COMPLETED] = true
+        }
+    }
+
+    // ==================== SMS Permission Banner ====================
+
+    /**
+     * Whether the SMS permission banner has been permanently dismissed.
+     * Respects manual-only users who don't need SMS tracking.
+     */
+    val smsBannerDismissed: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SMS_BANNER_DISMISSED] ?: false
+    }
+
+    /** Snapshot: is SMS banner dismissed? */
+    suspend fun isSmsBannerDismissed(): Boolean {
+        return context.dataStore.data.first()[KEY_SMS_BANNER_DISMISSED] ?: false
+    }
+
+    /** Permanently dismiss the SMS permission banner ("Don't ask again"). */
+    suspend fun dismissSmsBanner() {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_SMS_BANNER_DISMISSED] = true
         }
     }
 

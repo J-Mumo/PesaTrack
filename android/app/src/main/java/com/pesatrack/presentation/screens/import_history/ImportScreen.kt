@@ -1,5 +1,12 @@
 package com.pesatrack.presentation.screens.import_history
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,11 +16,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pesatrack.services.SmsImportService
 import com.pesatrack.utils.formatAsCurrency
@@ -40,6 +52,25 @@ fun ImportScreen(
             )
         }
     ) { padding ->
+        val context = LocalContext.current
+
+        // Track SMS permission state — rechecked when returning from App Settings
+        var smsPermissionGranted by remember {
+            mutableStateOf(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+                        PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) ==
+                        PackageManager.PERMISSION_GRANTED
+            )
+        }
+
+        // Permission launcher
+        val smsPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            smsPermissionGranted = permissions.values.all { it }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -49,42 +80,77 @@ fun ImportScreen(
         ) {
             when (uiState.phase) {
                 ImportPhase.READY -> {
-                    // Info card
-                    item {
-                        ImportInfoCard()
-                    }
-
-                    // Date range selection
-                    item {
-                        DateRangeSelector(
-                            selectedRange = uiState.selectedRange,
-                            onRangeSelected = viewModel::selectDateRange
-                        )
-                    }
-
-                    // Start import button
-                    item {
-                        Button(
-                            onClick = viewModel::startImport,
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                            Icon(Icons.Filled.FileDownload, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Import M-PESA History")
+                    if (!smsPermissionGranted) {
+                        // SMS permission gate — blocks SMS import but allows Excel
+                        item {
+                            SmsPermissionGateCard(
+                                onGrantPermission = {
+                                    smsPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.READ_SMS,
+                                            Manifest.permission.RECEIVE_SMS
+                                        )
+                                    )
+                                },
+                                onOpenSettings = {
+                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                    context.startActivity(intent)
+                                }
+                            )
                         }
-                    }
 
-                    // Excel import button
-                    item {
-                        OutlinedButton(
-                            onClick = onNavigateToExcelImport,
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                            Icon(Icons.Filled.TableChart, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Import from Excel")
+                        // Excel import still available without SMS permission
+                        item {
+                            OutlinedButton(
+                                onClick = onNavigateToExcelImport,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.TableChart, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import from Excel")
+                            }
+                        }
+                    } else {
+                        // Info card
+                        item {
+                            ImportInfoCard()
+                        }
+
+                        // Date range selection
+                        item {
+                            DateRangeSelector(
+                                selectedRange = uiState.selectedRange,
+                                onRangeSelected = viewModel::selectDateRange
+                            )
+                        }
+
+                        // Start import button
+                        item {
+                            Button(
+                                onClick = viewModel::startImport,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.FileDownload, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import M-PESA History")
+                            }
+                        }
+
+                        // Excel import button
+                        item {
+                            OutlinedButton(
+                                onClick = onNavigateToExcelImport,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.TableChart, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import from Excel")
+                            }
                         }
                     }
                 }
@@ -414,6 +480,77 @@ private fun ErrorCard(
             Button(onClick = onRetry) {
                 Text("Try Again")
             }
+        }
+    }
+}
+
+/**
+ * Full-screen gate card shown on the Import screen when SMS permission is not granted.
+ * Explains why the permission is needed and provides buttons to grant it.
+ * Excel import is still available separately (doesn't need SMS permission).
+ */
+@Composable
+private fun SmsPermissionGateCard(
+    onGrantPermission: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Sms,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "SMS Permission Required",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "PesaTrack needs SMS permission to read your M-PESA message history.\n\n" +
+                        "This is used only to find and import M-PESA transactions — we never read personal messages.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onGrantPermission,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Icon(Icons.Filled.Lock, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Grant SMS Permission")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Open App Settings")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "You can still import expenses from Excel files without SMS permission.",
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+            )
         }
     }
 }

@@ -20,7 +20,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -106,6 +109,9 @@ class MainActivity : FragmentActivity() {
         val onboardingCompleted by appPreferences.onboardingCompleted.collectAsState(initial = true)
         val coroutineScope = rememberCoroutineScope()
 
+        // Track whether user tapped "Import Now" during onboarding
+        var pendingImportNavigation by remember { mutableStateOf(false) }
+
         if (!onboardingCompleted) {
             OnboardingScreen(
                 onComplete = {
@@ -119,21 +125,24 @@ class MainActivity : FragmentActivity() {
                     // SMS permission is handled inside OnboardingScreen via ActivityResult
                 },
                 onImportHistory = {
-                    // Navigate to import screen after onboarding completes
-                    // The import will happen from the Import screen
+                    // Flag that we should navigate to import screen after onboarding completes
+                    pendingImportNavigation = true
                 }
             )
             return
         }
 
-        AppWithLockOverlay()
+        AppWithLockOverlay(navigateToImport = pendingImportNavigation, onImportNavigated = { pendingImportNavigation = false })
     }
 
     /**
      * Root composable that shows either the PIN lock screen or the main app.
      */
     @Composable
-    private fun AppWithLockOverlay() {
+    private fun AppWithLockOverlay(
+        navigateToImport: Boolean = false,
+        onImportNavigated: () -> Unit = {}
+    ) {
         val isLocked by appLockLifecycleObserver.isLocked.collectAsState()
 
         if (isLocked) {
@@ -163,7 +172,7 @@ class MainActivity : FragmentActivity() {
                 }
             )
         } else {
-            MainScreen()
+            MainScreen(navigateToImport = navigateToImport, onImportNavigated = onImportNavigated)
         }
     }
 
@@ -251,10 +260,21 @@ class MainActivity : FragmentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    navigateToImport: Boolean = false,
+    onImportNavigated: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    // Navigate to import screen if user tapped "Import Now" during onboarding
+    LaunchedEffect(navigateToImport) {
+        if (navigateToImport) {
+            navController.navigate(Screen.ImportHistory.route)
+            onImportNavigated()
+        }
+    }
 
     // Define bottom nav items with icons
     val items = listOf(

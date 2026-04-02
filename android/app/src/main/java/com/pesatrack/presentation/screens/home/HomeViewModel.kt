@@ -37,6 +37,7 @@ class HomeViewModel @Inject constructor(
         loadData()
         loadTrendData()
         loadBudgetData()
+        loadSmsBannerState()
     }
     
     private fun initializeData() {
@@ -247,6 +248,50 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             appPreferences.dismissBudgetPrompt()
             _uiState.update { it.copy(showBudgetPrompt = false) }
+        }
+    }
+
+    // ==================== SMS Permission Banner ====================
+
+    /** Whether the banner was permanently dismissed — cached from DataStore. */
+    private var smsBannerPermanentlyDismissed = false
+
+    /**
+     * Load the permanent dismiss state from DataStore.
+     * The actual permission check happens in the composable via [updateSmsPermissionStatus].
+     */
+    private fun loadSmsBannerState() {
+        viewModelScope.launch {
+            smsBannerPermanentlyDismissed = appPreferences.isSmsBannerDismissed()
+            // Don't show banner yet — wait for composable to call updateSmsPermissionStatus()
+        }
+    }
+
+    /**
+     * Called by the composable when it checks SMS permission on (re)composition.
+     * If permission is granted OR banner was permanently dismissed → hide.
+     */
+    fun updateSmsPermissionStatus(hasPermission: Boolean) {
+        val shouldShow = !hasPermission && !smsBannerPermanentlyDismissed
+        _uiState.update { it.copy(showSmsPermissionBanner = shouldShow) }
+    }
+
+    /**
+     * Dismiss the SMS permission banner for this session only.
+     */
+    fun dismissSmsBannerSession() {
+        _uiState.update { it.copy(showSmsPermissionBanner = false) }
+    }
+
+    /**
+     * Permanently dismiss the SMS permission banner ("Don't ask again").
+     * Respects manual-only users.
+     */
+    fun dismissSmsBannerPermanently() {
+        viewModelScope.launch {
+            appPreferences.dismissSmsBanner()
+            smsBannerPermanentlyDismissed = true
+            _uiState.update { it.copy(showSmsPermissionBanner = false) }
         }
     }
 

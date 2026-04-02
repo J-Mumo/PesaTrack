@@ -16,7 +16,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Transaction Cost Auto-Tracking** | ✅ Complete | 100% |
 | **Room Database (v14)** | ✅ Complete | 100% |
 | **Category System (18 groups + custom)** | ✅ Complete | 100% |
-| **Expense Management UI** | ✅ Complete | 100% |
+| **Expense Management UI**ka | ✅ Complete | 100% |
 | **Notifications** | ✅ Complete | 100% |
 | **Runtime Permissions** | ✅ Complete | 100% |
 | **Backend Server (unused)** | 🟡 Dormant | N/A |
@@ -578,6 +578,7 @@ backend/
 7. **Icons.AutoMirrored.Filled.Send** — Not available in compose icons version; fixed with `@Suppress("DEPRECATION") Icons.Filled.Send`.
 8. **NCBA Paybill regex (Format B)** — Original regex expected a standalone paybill number (digits) before "account" (e.g. `"to CHURCH 87 account number Offering"`). Failed on NCBA SMS where the business name directly precedes "account number" with no separate paybill number (e.g. `"to Lipa na KCB account number 7575077"`). Fixed by splitting into `paybillPatternA` (with paybill number) and `paybillPatternB` (without), tried in order of specificity.
 9. **Bottom Nav: Analytics → Home broken** — `restoreState = true` silently fails when the start destination (Home) has no previously-saved state. Navigation appears to do nothing — no exception thrown. Fixed by special-casing the start destination: `inclusive = true` + `saveState = false` + `restoreState = false` for Home tab; other tabs retain save/restore for state preservation.
+10. **Onboarding "Import Now" → Home instead of Import screen** — The "Import Now" button on onboarding page 4 called `onImportHistory()` (a no-op) then `onComplete()`, which marked onboarding done and showed the Home screen. Fixed by using a `pendingImportNavigation` state flag: `onImportHistory` sets the flag, and after onboarding completes, `MainScreen` uses a `LaunchedEffect` to navigate to `Screen.ImportHistory`.
 
 ### Implemented Features
 
@@ -603,6 +604,8 @@ backend/
 19. **HowItWorksCard Removal** — Removed the static onboarding "How It Works" card from the Home screen feed. The information is still available in the onboarding flow for new users.
 20. **Bottom Navigation Fix** — Fixed Analytics → Home navigation not working. Root cause: `restoreState = true` silently fails when no previously-saved state exists for the start destination. Fix: special-case the start destination (Home) to use `inclusive = true` and skip `saveState`/`restoreState`, eliminating the silent no-op.
 21. **Database Backup & Restore** — Full database backup/restore via SAF (Storage Access Framework). Backup creates a .zip archive containing the Room database + a settings.json with month start day and bank tracking preferences. Restore validates the SQLite header, closes the current database, replaces files, restores preferences to DataStore, and restarts the app process to reinitialize Hilt singletons. Users can save backups to Downloads, Google Drive, etc. Solves data loss on uninstall, debug-to-Play Store migration, and device transfers.
+22. **Onboarding "Import Now" Navigation Fix** — Fixed the "Import Now" button on onboarding page 4 navigating to the Home screen instead of the Import screen. Root cause: `onImportNow` callback called both `onImportHistory()` (no-op) and `onComplete()` (which finishes onboarding and shows Home). Fix: `onImportHistory` now sets a `pendingImportNavigation` flag in `AppEntryPoint`; after onboarding completes and `MainScreen` loads, a `LaunchedEffect` navigates to `Screen.ImportHistory` and clears the flag.
+23. **SMS Permission Recovery (Home Banner + Import Gate)** — Added two surfaces to recover users who skipped onboarding SMS permission or later revoked it. **(a) Home Screen banner**: shown when SMS permission is missing and not permanently dismissed; three actions — "Enable" (launches permission request), "Not now" (session dismiss), "Don't ask again" (permanent dismiss via `KEY_SMS_BANNER_DISMISSED` in DataStore — respects manual-only users). Permission status rechecked on every `Lifecycle.RESUMED` event (catches returns from App Settings). **(b) Import Screen gate**: when `READ_SMS` is not granted, the SMS import UI is replaced with a full-screen explanation card + "Grant SMS Permission" / "Open App Settings" buttons; Excel import remains accessible below the gate. `AppPreferences` gains `smsBannerDismissed` Flow + snapshot + setter.
 
 ---
 

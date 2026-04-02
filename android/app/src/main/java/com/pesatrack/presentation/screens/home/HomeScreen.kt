@@ -1,5 +1,13 @@
 package com.pesatrack.presentation.screens.home
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,16 +21,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
@@ -52,7 +67,25 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Check SMS permission status on every resume (e.g. returning from App Settings)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val hasPermission = hasSmsPermission(context)
+            viewModel.updateSmsPermissionStatus(hasPermission)
+        }
+    }
+
+    // Permission launcher for SMS — used by the banner "Enable" button
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.values.all { it }
+        viewModel.updateSmsPermissionStatus(granted)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -78,6 +111,31 @@ fun HomeScreen(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
+            }
+        }
+
+        // SMS Permission Banner (shown when permission missing + not permanently dismissed)
+        if (uiState.showSmsPermissionBanner) {
+            item {
+                SmsPermissionBanner(
+                    onEnable = {
+                        // Check if we should show rationale or go to App Settings
+                        smsPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.READ_SMS,
+                                Manifest.permission.RECEIVE_SMS
+                            )
+                        )
+                    },
+                    onOpenSettings = {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                    },
+                    onDismissSession = { viewModel.dismissSmsBannerSession() },
+                    onDismissPermanently = { viewModel.dismissSmsBannerPermanently() }
+                )
             }
         }
         
@@ -659,6 +717,126 @@ fun BudgetPromptCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("Maybe Later")
+                }
+            }
+        }
+    }
+}
+
+// ==================== SMS Permission Banner ====================
+
+/**
+ * Check if both SMS permissions are granted.
+ */
+private fun hasSmsPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * Banner shown on the Home screen when SMS permission is not granted.
+ * Offers three actions:
+ * - Enable: Request the permission (or open App Settings if permanently denied)
+ * - Not now: Hide for this session
+ * - Don't ask again: Permanently dismiss (respects manual-only users)
+ */
+@Composable
+fun SmsPermissionBanner(
+    onEnable: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDismissSession: () -> Unit,
+    onDismissPermanently: () -> Unit
+) {
+    var showDismissMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Sms,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Enable automatic M-PESA tracking?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Box {
+                    IconButton(
+                        onClick = { showDismissMenu = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showDismissMenu,
+                        onDismissRequest = { showDismissMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Not now") },
+                            onClick = {
+                                showDismissMenu = false
+                                onDismissSession()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Don't ask again") },
+                            onClick = {
+                                showDismissMenu = false
+                                onDismissPermanently()
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Grant SMS permission to auto-capture M-PESA transactions from your messages.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onEnable,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Enable")
+                }
+                OutlinedButton(
+                    onClick = onDismissSession,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Not now")
                 }
             }
         }

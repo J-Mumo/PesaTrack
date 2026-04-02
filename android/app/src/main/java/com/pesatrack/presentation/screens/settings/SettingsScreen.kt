@@ -546,14 +546,14 @@ private fun DataManagementSection(
     var showClearDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
 
-    // SAF launcher for backup — creates a new .zip file
+    // SAF launcher for backup — creates a new .db file
     val backupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip")
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         uri?.let { onBackupData(it) }
     }
 
-    // SAF launcher for restore — opens an existing .zip file
+    // SAF launcher for restore — opens an existing .db file
     val restoreLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -566,7 +566,7 @@ private fun DataManagementSection(
             // Backup Data
             Row(modifier = Modifier.fillMaxWidth().clickable(enabled = !uiState.isBackingUp) {
                 val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                val fileName = "PesaTrack_Backup_${dateFormat.format(Date())}.zip"
+                val fileName = "PesaTrack_Backup_${dateFormat.format(Date())}.db"
                 backupLauncher.launch(fileName)
             }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -704,7 +704,7 @@ private fun DataManagementSection(
                 TextButton(
                     onClick = {
                         showRestoreDialog = false
-                        restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                        restoreLauncher.launch(arrayOf("application/octet-stream", "application/x-sqlite3", "*/*"))
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) { Text("Restore") }
