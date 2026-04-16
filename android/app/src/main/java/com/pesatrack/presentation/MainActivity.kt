@@ -1,6 +1,7 @@
 package com.pesatrack.presentation
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -80,6 +81,10 @@ class MainActivity : FragmentActivity() {
     /** Callback to invoke when biometric succeeds — set by the Compose layer. */
     private var onBiometricSuccess: (() -> Unit)? = null
 
+    /** Deep-link navigation target from notification intent extras. */
+    private val pendingNavigateTo = mutableStateOf<String?>(null)
+    private val pendingExpenseId = mutableStateOf<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -89,10 +94,30 @@ class MainActivity : FragmentActivity() {
         // Set up biometric prompt
         setupBiometric()
 
+        // Handle deep-link from notification
+        handleDeepLinkIntent(intent)
+
         setContent {
             PesaTrackTheme {
                 AppEntryPoint()
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    /**
+     * Extract deep-link navigation extras from the notification intent.
+     */
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val navigateTo = intent?.getStringExtra("navigate_to") ?: return
+        val expenseId = intent.getLongExtra("expense_id", -1L)
+        pendingNavigateTo.value = navigateTo
+        if (expenseId != -1L) {
+            pendingExpenseId.value = expenseId
         }
     }
 
@@ -172,7 +197,18 @@ class MainActivity : FragmentActivity() {
                 }
             )
         } else {
-            MainScreen(navigateToImport = navigateToImport, onImportNavigated = onImportNavigated)
+            val deepLinkTarget by pendingNavigateTo
+            val deepLinkExpenseId by pendingExpenseId
+            MainScreen(
+                navigateToImport = navigateToImport,
+                onImportNavigated = onImportNavigated,
+                deepLinkTarget = deepLinkTarget,
+                deepLinkExpenseId = deepLinkExpenseId,
+                onDeepLinkHandled = {
+                    pendingNavigateTo.value = null
+                    pendingExpenseId.value = null
+                }
+            )
         }
     }
 
@@ -262,7 +298,10 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun MainScreen(
     navigateToImport: Boolean = false,
-    onImportNavigated: () -> Unit = {}
+    onImportNavigated: () -> Unit = {},
+    deepLinkTarget: String? = null,
+    deepLinkExpenseId: Long? = null,
+    onDeepLinkHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -273,6 +312,21 @@ fun MainScreen(
         if (navigateToImport) {
             navController.navigate(Screen.ImportHistory.route)
             onImportNavigated()
+        }
+    }
+
+    // Handle deep-link navigation from notification tap
+    LaunchedEffect(deepLinkTarget) {
+        when (deepLinkTarget) {
+            "categorize" -> {
+                deepLinkExpenseId?.let { id ->
+                    navController.navigate(Screen.Categorize.createRoute(id))
+                }
+            }
+            "budget" -> navController.navigate(Screen.Budget.route)
+        }
+        if (deepLinkTarget != null) {
+            onDeepLinkHandled()
         }
     }
 
