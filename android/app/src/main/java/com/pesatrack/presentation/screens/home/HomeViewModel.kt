@@ -178,39 +178,40 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * Load budget progress (if budgets exist) or budget prompt (if conditions met).
+     * Load budget progress reactively. Collects from Room's Flow so that
+     * additions/deletions on the Budget screen are reflected immediately on Home.
      */
     private fun loadBudgetData() {
         viewModelScope.launch {
-            try {
-                val hasBudgets = budgetRepository.hasActiveBudgets()
-
-                if (hasBudgets) {
-                    // Show budget summary card
-                    val progressList = budgetRepository.getBudgetProgressList()
-                    _uiState.update {
-                        it.copy(
-                            budgetProgressList = progressList
-                                .sortedByDescending { bp -> bp.percentage }
-                                .take(4),
-                            showBudgetPrompt = false
-                        )
+            budgetRepository.getActiveBudgets().collectLatest { activeBudgets ->
+                try {
+                    if (activeBudgets.isNotEmpty()) {
+                        // Recompute progress for all active budgets
+                        val progressList = budgetRepository.getBudgetProgressList()
+                        _uiState.update {
+                            it.copy(
+                                budgetProgressList = progressList
+                                    .sortedByDescending { bp -> bp.percentage }
+                                    .take(4),
+                                showBudgetPrompt = false
+                            )
+                        }
+                        // Load forecasts when budgets exist
+                        loadForecastData()
+                    } else {
+                        // No budgets — clear and check prompt
+                        _uiState.update {
+                            it.copy(
+                                budgetProgressList = emptyList(),
+                                budgetForecasts = emptyList(),
+                                showForecastCard = false
+                            )
+                        }
+                        checkBudgetPrompt()
                     }
-                    // Load forecasts when budgets exist
-                    loadForecastData()
-                } else {
-                    // Check if we should show the budget prompt
-                    _uiState.update {
-                        it.copy(
-                            budgetProgressList = emptyList(),
-                            budgetForecasts = emptyList(),
-                            showForecastCard = false
-                        )
-                    }
-                    checkBudgetPrompt()
+                } catch (_: Exception) {
+                    // Non-critical — silently fail
                 }
-            } catch (_: Exception) {
-                // Non-critical — silently fail
             }
         }
     }
@@ -331,6 +332,7 @@ class HomeViewModel @Inject constructor(
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
         loadData()
-        loadBudgetData() // Also triggers loadForecastData() when budgets exist
+        // Budget data is reactively collected via Flow — no need to reload here.
+        // The Flow from BudgetDao.getActiveBudgets() auto-emits on DB changes.
     }
 }
