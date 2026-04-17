@@ -45,6 +45,7 @@ import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.MonthComparison
+import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.presentation.components.ExpenseCard
@@ -86,9 +87,24 @@ fun HomeScreen(
         viewModel.updateSmsPermissionStatus(granted)
     }
 
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onNavigateToManualEntry,
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = "Add expense",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    ) { innerPadding ->
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .padding(innerPadding)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -157,6 +173,16 @@ fun HomeScreen(
             }
         }
 
+        // Forecast Card (when ≥5 days into period and budgets exist)
+        if (uiState.showForecastCard) {
+            item {
+                ForecastCard(
+                    forecasts = uiState.budgetForecasts,
+                    onViewBudgets = onNavigateToBudget
+                )
+            }
+        }
+
         // Budget Prompt Card (when user has no budgets but enough data)
         if (uiState.showBudgetPrompt) {
             item {
@@ -180,11 +206,6 @@ fun HomeScreen(
             }
         }
         
-        // Add Expense Card
-        item {
-            AddExpenseCard(onAdd = onNavigateToManualEntry)
-        }
-
         // Import History Card
         item {
             ImportHistoryCard(onImport = onNavigateToImport)
@@ -246,6 +267,7 @@ fun HomeScreen(
                 )
             }
         }
+    }
     }
 }
 
@@ -376,49 +398,6 @@ fun EmptyExpensesCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-fun AddExpenseCard(onAdd: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onAdd() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Add Expense Manually",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Record a cash or non-SMS expense.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-            Icon(
-                imageVector = Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }
@@ -840,5 +819,162 @@ fun SmsPermissionBanner(
                 }
             }
         }
+    }
+}
+
+// ==================== Forecast Card ====================
+
+@Composable
+fun ForecastCard(
+    forecasts: List<BudgetForecast>,
+    onViewBudgets: () -> Unit
+) {
+    val currentMonth = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date())
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onViewBudgets() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🔮 $currentMonth Forecast",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "View →",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Find the "Total" budget forecast (categoryId == null) if it exists
+            val totalForecast = forecasts.find { it.budget.categoryId == null }
+            if (totalForecast != null) {
+                ForecastTotalRow(totalForecast)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Safe daily budget (from total or first forecast)
+            val primaryForecast = totalForecast ?: forecasts.firstOrNull()
+            if (primaryForecast != null && primaryForecast.daysRemaining > 0) {
+                val safeDailyFormatted = String.format("KES %,.0f", primaryForecast.safeDailyBudget)
+                val safeDailyColor = if (primaryForecast.safeDailyBudget < 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                }
+                Text(
+                    text = "Safe daily spend: $safeDailyFormatted/day • ${primaryForecast.daysRemaining} days left",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = safeDailyColor
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Per-category forecast rows (exclude "Total", max 4)
+            val categoryForecasts = forecasts
+                .filter { it.budget.categoryId != null }
+                .take(4)
+
+            for (forecast in categoryForecasts) {
+                ForecastCategoryRow(forecast)
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForecastTotalRow(forecast: BudgetForecast) {
+    val projectedFormatted = String.format("KES %,.0f", forecast.projectedTotal)
+    val budgetFormatted = String.format("KES %,.0f", forecast.budget.amount)
+    val pctFormatted = String.format("%.0f%%", forecast.projectedPercentage)
+    val overUnder = forecast.projectedTotal - forecast.budget.amount
+
+    val statusColor = when {
+        forecast.projectedPercentage >= 100 -> MaterialTheme.colorScheme.error
+        forecast.projectedPercentage >= 80 -> Color(0xFFFF9800)
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Projected: $projectedFormatted",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = pctFormatted,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = statusColor
+            )
+        }
+        Text(
+            text = "Budget: $budgetFormatted" + if (overUnder > 0) {
+                " • ⚠️ ~${String.format("KES %,.0f", overUnder)} over"
+            } else {
+                " • ✅ on track"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
+private fun ForecastCategoryRow(forecast: BudgetForecast) {
+    val name = forecast.budget.categoryName ?: "Unknown"
+
+    val (icon, description, textColor) = when {
+        forecast.exhaustionDate != null -> {
+            val exhaustionDateStr = SimpleDateFormat("MMM d", Locale.getDefault())
+                .format(Date(forecast.exhaustionDate))
+            Triple(
+                "🔴",
+                "$name — runs out ~$exhaustionDateStr",
+                MaterialTheme.colorScheme.error
+            )
+        }
+        forecast.projectedPercentage >= 80 -> {
+            Triple(
+                "🟡",
+                "$name — on track at ${String.format("%.0f", forecast.projectedPercentage)}%",
+                Color(0xFFFF9800)
+            )
+        }
+        else -> {
+            Triple(
+                "🟢",
+                "$name — comfortable at ${String.format("%.0f", forecast.projectedPercentage)}%",
+                MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(text = icon, style = MaterialTheme.typography.bodySmall)
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor
+        )
     }
 }

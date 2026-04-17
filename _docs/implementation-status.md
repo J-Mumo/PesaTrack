@@ -35,6 +35,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M8: Custom Categories & Auto-Rules** | ✅ Complete | 100% |
 | **PIN Lock + Biometric Unlock** | ✅ Complete | 100% |
 | **Onboarding Flow** | ✅ Complete | 100% |
+| **Budget Forecasting (4 phases)** | ✅ Complete | 100% |
 | **Play Store Release (v1.0.0)** | ✅ Published | 100% |
 
 ---
@@ -163,6 +164,7 @@ SMS Sources ──────────────────────�
 | Expense Model | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:6) | Domain model with `isCategorized` + `isExcluded` flags |
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
 | Budget Model | [`Budget.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Budget.kt:1) | Budget (with isGroupBudget flag), BudgetPeriod (WEEKLY/MONTHLY/YEARLY/CUSTOM — CUSTOM hidden via `uiEntries`), BudgetProgress, BudgetStatus (UNDER/WARNING/EXCEEDED), BudgetAlert |
+| Budget Forecast Model | [`BudgetForecast.kt`](../android/app/src/main/java/com/pesatrack/domain/models/BudgetForecast.kt:1) | BudgetForecast (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget), ForecastStatus (ON_TRACK/PROJECTED_OVER/EXHAUSTION_IMMINENT) |
 | PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:32) | 9 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT, CASH |
 | ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, EXCEL_IMPORT, MANUAL |
 
@@ -253,9 +255,9 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist; **Forecast projection chart** (cumulative actual + projected dashed line + budget ceiling) |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check, **forecast projection data loading** |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets, **cumulativeActual/cumulativeProjection/totalBudgetCeiling** |
 | AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 | **Budget Screen** | | |
@@ -271,7 +273,7 @@ SMS Sources ──────────────────────�
 
 | Feature | File | Description |
 |---------|------|-------------|
-| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts + budget alerts |
+| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts + budget alerts + forecast notifications |
 | Expense Notification Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:29) | "Expense Notifications" channel (Android 8+) |
 | Budget Alert Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:104) | "Budget Alerts" channel — high importance when exceeded |
 | Expense Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:54) | Shows "New Expense: KES X,XXX.XX" + "To recipient" |
@@ -372,7 +374,7 @@ SMS Sources ──────────────────────�
 | **Privacy Policy** | [`docs/privacy-policy.html`](../docs/privacy-policy.html) — hosted via GitHub Pages |
 | **Content Rating** | IARC questionnaire completed |
 | **Data Safety** | Completed — no data collected/shared, all data stored on-device |
-| **SMS Permission Declaration** | Pending — option not yet available in Play Console |
+| **SMS Permission Declaration** | ✅ Complete |
 | **Listing Plan** | [`plans/play-store-listing-plan.md`](../plans/play-store-listing-plan.md) — store copy, release notes, form answers |
 
 ---
@@ -443,7 +445,7 @@ app/src/main/java/com/pesatrack/
 │   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
 │   │   │       └── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
 │   │   └── preferences/
-│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day)
+│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
@@ -453,6 +455,7 @@ app/src/main/java/com/pesatrack/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   ├── Category.kt                          ✅ Domain model
 │   ├── Budget.kt                            ✅ Budget, BudgetPeriod, BudgetProgress, BudgetStatus, BudgetAlert
+│   ├── BudgetForecast.kt                    ✅ BudgetForecast (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget), ForecastStatus enum
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Onboarding → PIN lock → main app; BiometricPrompt; 3-tab bottom nav (start-dest-aware save/restore)
@@ -461,9 +464,9 @@ app/src/main/java/com/pesatrack/
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs) + PinSetup route
 │   ├── screens/
 │   │   ├── home/
-│   │   │   ├── HomeScreen.kt                ✅ Monthly summary (with investment % breakdown) + mini trend chart + recent expenses + budget summary/prompt cards (HowItWorksCard removed)
-│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + trend data + investment total + budget progress + prompt logic + month-start-day refresh
-│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory + MonthlyTrend + MonthComparison + investmentThisMonth + budget fields
+│   │   │   ├── HomeScreen.kt                ✅ Monthly summary (with investment % breakdown) + mini trend chart + recent expenses + budget summary/prompt cards + **ForecastCard** (HowItWorksCard removed)
+│   │   │   ├── HomeViewModel.kt             ✅ Category-aware state + trend data + investment total + budget progress + prompt logic + month-start-day refresh + **forecast loading**
+│   │   │   └── HomeUiState.kt               ✅ ExpenseWithCategory + MonthlyTrend + MonthComparison + investmentThisMonth + budget fields + **budgetForecasts + showForecastCard**
 │   │   ├── expenses/
 │   │   │   ├── ExpenseListScreen.kt          ✅ Full expense list
 │   │   │   ├── ExpensesViewModel.kt          ✅ Category mapping
@@ -485,13 +488,13 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
 │   │   │   └── ManualEntryUiState.kt      ✅ Form state model
 │   │   ├── analytics/
-│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics + budget setup banner (when no budgets)
-│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status
-│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets
+│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics + budget setup banner + **ForecastProjectionChart** (cumulative actual + projected + budget ceiling)
+│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status + **forecast projection data**
+│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets + **cumulativeActual/cumulativeProjection/totalBudgetCeiling**
 │   │   ├── budget/
-│   │   │   ├── BudgetScreen.kt            ✅ Period-first flow: PeriodSelector (tabs + nav), always-visible IncomeCard, filtered budget list, searchable category picker (no Total Spending)
-│   │   │   ├── BudgetViewModel.kt         ✅ Period navigation, period-filtered loading, income per period key, CRUD inherits period
-│   │   │   └── BudgetUiState.kt           ✅ Period state (type/label/key), progress list, BudgetCategoryOption, income & allocation, dialog (no dialogPeriod)
+│   │   │   ├── BudgetScreen.kt            ✅ Period-first flow: PeriodSelector (tabs + nav), always-visible IncomeCard, filtered budget list, searchable category picker (no Total Spending), **per-card forecast subtitle**
+│   │   │   ├── BudgetViewModel.kt         ✅ Period navigation, period-filtered loading, income per period key, CRUD inherits period, **forecast loading per period**
+│   │   │   └── BudgetUiState.kt           ✅ Period state (type/label/key), progress list, BudgetCategoryOption, income & allocation, dialog (no dialogPeriod), **forecastMap**
 │   │   ├── category_management/
 │   │   │   ├── CategoryManagementScreen.kt  ✅ Tab-based CRUD: Categories + Auto-Rules, icon/color pickers, dialogs
 │   │   │   ├── CategoryManagementViewModel.kt ✅ Category + rule CRUD, dialog state, expense count validation
@@ -516,13 +519,14 @@ app/src/main/java/com/pesatrack/
 │       ├── Color.kt                         ✅ getCategoryColor()
 │       └── Type.kt                          ✅ Typography
 ├── services/
-│   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver + budget alert check after save
+│   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver + budget alert check + **forecast check** after save
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
 │   ├── ExcelImportService.kt                ✅ Excel import orchestration (match + standalone)
 │   ├── AiCategorizationService.kt           ✅ CategorizationService — two-pass: user rules first, then built-in engine
 │   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
-│   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save, notification dispatch
-│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds)
+│   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save + **forecast checking** (checkForecastsAfterExpense)
+│   ├── ForecastService.kt                   ✅ Linear burn rate forecasting — getForecastsForActiveBudgets, getForecastForBudget, getForecastsForPeriod, shouldSendForecastNotification
+│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds) + **forecast notifications**
 │   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
 │   └── AppLockLifecycleObserver.kt          ✅ ProcessLifecycleOwner observer — background/foreground lock management
 └── utils/
@@ -606,6 +610,7 @@ backend/
 21. **Database Backup & Restore** — Full database backup/restore via SAF (Storage Access Framework). Backup creates a .zip archive containing the Room database + a settings.json with month start day and bank tracking preferences. Restore validates the SQLite header, closes the current database, replaces files, restores preferences to DataStore, and restarts the app process to reinitialize Hilt singletons. Users can save backups to Downloads, Google Drive, etc. Solves data loss on uninstall, debug-to-Play Store migration, and device transfers.
 22. **Onboarding "Import Now" Navigation Fix** — Fixed the "Import Now" button on onboarding page 4 navigating to the Home screen instead of the Import screen. Root cause: `onImportNow` callback called both `onImportHistory()` (no-op) and `onComplete()` (which finishes onboarding and shows Home). Fix: `onImportHistory` now sets a `pendingImportNavigation` flag in `AppEntryPoint`; after onboarding completes and `MainScreen` loads, a `LaunchedEffect` navigates to `Screen.ImportHistory` and clears the flag.
 23. **SMS Permission Recovery (Home Banner + Import Gate)** — Added two surfaces to recover users who skipped onboarding SMS permission or later revoked it. **(a) Home Screen banner**: shown when SMS permission is missing and not permanently dismissed; three actions — "Enable" (launches permission request), "Not now" (session dismiss), "Don't ask again" (permanent dismiss via `KEY_SMS_BANNER_DISMISSED` in DataStore — respects manual-only users). Permission status rechecked on every `Lifecycle.RESUMED` event (catches returns from App Settings). **(b) Import Screen gate**: when `READ_SMS` is not granted, the SMS import UI is replaced with a full-screen explanation card + "Grant SMS Permission" / "Open App Settings" buttons; Excel import remains accessible below the gate. `AppPreferences` gains `smsBannerDismissed` Flow + snapshot + setter.
+24. **Budget Forecasting (4 Phases)** — Linear burn rate forecasting across the entire budget system. **Phase A (Home Forecast Card):** New `ForecastService` (`@Singleton`, Hilt-injected, pure Kotlin — no DB tables, no schema migration) computes `BudgetForecast` objects (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget) from existing budget/spending data. `HomeScreen` shows a `ForecastCard` with top 5 at-risk budgets, color-coded status (🔴 exhaustion imminent / 🟡 projected over / 🟢 on track), safe daily spend, and "View →" navigation to budget screen. Minimum 5-day data guard prevents noisy projections. **Phase B (Budget Per-Card Forecast):** Each `BudgetProgressCard` on the budget screen shows a forecast subtitle: projected % by period-end, exhaustion date warning, and safe daily spend — all period-aware (weekly/monthly/yearly). `BudgetUiState.forecastMap` maps budget IDs to forecasts. **Phase C (Forecast Notifications):** `SmsReceiver` triggers `BudgetService.checkForecastsAfterExpense()` after each SMS expense save. Notifications fire when projected ≥110% with ≥7 days remaining OR exhaustion <5 days. 24-hour per-budget throttle via `AppPreferences` DataStore keys prevents notification spam. **Phase D (Analytics Projection Chart):** `ForecastProjectionChart` in analytics shows cumulative actual spending (solid line) + projected extension to month-end (second series) + horizontal budget ceiling reference line. Uses Vico 2-series line chart. Only shown for current month with spending data.
 
 ---
 
@@ -662,9 +667,8 @@ backend/
 | **M6** | Investment Category Deep-Dive | ✅ Complete | New group 18 "Investment & Savings" (13 sub-categories); Financial trimmed to expense-only (6 sub-categories); DB migration v7→v8 remaps IDs; KeywordRulesEngine + ExcelCategoryMapper updated with Kenyan investment paybills |
 | **M7** | Category & Sub-Category Budgets | ✅ Complete | Group-level + sub-category-level + total budgets (weekly/monthly/yearly); DB v8→v9 (budgets table), v11→v12 (sub-category support: renamed categoryGroupId→categoryId, added isGroupBudget); BudgetScreen CRUD with hierarchical category picker; Budget Alerts at 80%/100% for all levels; Home budget summary + data-driven prompt; Analytics setup banner; Settings entry point |
 | **M8** | Custom Categories & Auto-Rules | ✅ Complete | Custom groups + sub-categories CRUD with icon/color pickers; user-defined auto-categorization rules (EXACT/CONTAINS/STARTS_WITH); DB v9→v10 (category_rules table); rules integrated into CategorizationService (checked before built-in engine); Settings entry point |
-| — | Forecasting | ⏳ Deferred | Budget burn rate projections — [plan](../plans/forecasting-plan.md). Revisit after budget adoption validated. |
+| — | Forecasting | ✅ Complete | Budget burn rate projections — 4 phases: Home forecast card, Budget screen per-card forecast, Forecast notifications (24h throttle), Analytics projection chart |
 | — | Database Backup/Restore | ✅ Complete | .zip backup via SAF (database + settings.json); restore with SQLite validation + app restart |
-| — | Export to CSV | ⏳ Pending | Shareable reports |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
 | — | Recurring expense tracking | ⏳ Pending | Detect repeating patterns |
 
@@ -678,13 +682,13 @@ backend/
 - [x] Pre-release cleanup (removed unused permissions, dead code, configured signing) — see [`plans/signed-apk-playstore-plan.md`](../plans/signed-apk-playstore-plan.md)
 - [x] Generate signed AAB for Play Store distribution — `app-release.aab` (13.9 MB), signed by CN=Joel Ngei, valid until 2053
 - [x] Submit to Google Play Store — v1.0.0 published to Production track (under review) + Internal Testing (live for testers)
-- [ ] Complete SMS Permission Declaration (option not yet available in Play Console — submit when it appears)
+- [x] Complete SMS Permission Declaration
 - [ ] Monitor Production review status (1–7 days for new apps)
 
 ### Medium Priority — Phase 2 Milestone 5
 - [x] About section (app version, privacy policy link, contact, data practices summary)
 - [x] Privacy policy page (GitHub Pages: `docs/privacy-policy.html`)
-- [x] Data management — Export all expenses as CSV (via share sheet) + Reset categories to defaults (removes custom categories & rules)
+- [x] Data management — Reset categories to defaults (removes custom categories & rules)
 - [x] First-launch onboarding flow (4-page HorizontalPager: Welcome, How It Works, SMS Permission, Import History)
 - [ ] Notification preferences (deferred — low priority)
 - [x] Category management UI (M8 — custom categories + auto-rules)
@@ -713,7 +717,6 @@ backend/
 ### Lower Priority
 - [ ] Add more bank parsers (Equity, KCB, Cooperative, etc.)
 - [x] Expense charts/analytics (Vico library — monthly trend, variable-spend category trends with CV detection, daily spending, category breakdown, top spenders, payment types, MoM comparison, **YoY yearly analytics with tab-based view**)
-- [ ] Export to CSV
 - [ ] Clean up unused backend deployment on Railway
 
 ---
@@ -945,10 +948,10 @@ Based on the last 3–6 months of data:
 
 ---
 
-## Brainstorm: Forecasting (Deferred)
+## Brainstorm: Forecasting (✅ Complete)
 
-> **Status:** Deferred — revisit after budgets are tested with real users.
-> **Full plan:** [`plans/forecasting-plan.md`](../plans/forecasting-plan.md)
+> **Status:** ✅ Implemented — all 4 phases complete. See [implementation plan](../plans/forecasting-implementation-plan.md).
+> **Original plan:** [`plans/forecasting-plan.md`](../plans/forecasting-plan.md)
 
 ### The Idea
 
@@ -981,7 +984,6 @@ Forecasting completes the budget loop. Budgets are reactive (alert at 80%/100% o
 
 A new `ForecastService` (pure Kotlin, Hilt-injected) takes existing `ExpenseRepository` + `BudgetRepository` as inputs and produces `BudgetForecast` objects. **No new database tables. No schema migration.**
 
-### Trigger to Revisit
+### ~~Trigger to Revisit~~ — Implemented
 
-- Real users have used budgets for ≥1 month
-- OR recurring expense detection is in progress
+All 4 phases implemented. Linear burn rate model (MVP) deployed across Home, Budget, Analytics screens, and notifications. No new DB tables — `ForecastService` is pure computation on top of existing `BudgetRepository` data.

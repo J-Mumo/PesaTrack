@@ -6,6 +6,7 @@ import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetPeriod
+import com.pesatrack.services.ForecastService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,8 @@ import javax.inject.Inject
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val forecastService: ForecastService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BudgetUiState())
@@ -96,10 +98,16 @@ class BudgetViewModel @Inject constructor(
                     periodCalendar
                 )
                 val totalBudgeted = budgetRepository.getTotalBudgetedForPeriod(periodType)
+
+                // Load forecasts for the selected period
+                val forecasts = forecastService.getForecastsForPeriod(periodType, periodCalendar)
+                val forecastMap = forecasts.associateBy { it.budget.id }
+
                 _uiState.update {
                     it.copy(
                         budgetProgressList = progressList.sortedByDescending { bp -> bp.percentage },
                         totalBudgeted = totalBudgeted,
+                        forecastMap = forecastMap,
                         isLoading = false,
                         error = null
                     )

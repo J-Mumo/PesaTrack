@@ -504,6 +504,54 @@ interface ExpenseDao {
         endOfYear: Long
     ): List<PaymentTypeTotal>
 
+    // ==================== Recipient Search Queries ====================
+
+    /**
+     * Search for recipients matching a query string within a specific month.
+     * Returns all matching recipients with total amount and transaction count.
+     * Used by the recipient search feature in the Analytics screen.
+     * No LIMIT — shows all matches so the user can find anyone.
+     */
+    @Query("""
+        SELECT
+            COALESCE(recipientName, recipient) AS recipientKey,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startMs AND timestamp < :endMs
+          AND COALESCE(recipientName, recipient) LIKE '%' || :query || '%'
+        GROUP BY recipientKey
+        ORDER BY total DESC
+    """)
+    suspend fun searchRecipientSpendingForMonth(
+        query: String,
+        startMs: Long,
+        endMs: Long
+    ): List<TopSpender>
+
+    /**
+     * Search for recipients matching a query string within a specific year.
+     * Returns all matching recipients with total amount and transaction count.
+     */
+    @Query("""
+        SELECT
+            COALESCE(recipientName, recipient) AS recipientKey,
+            COALESCE(SUM(amount), 0.0) AS total,
+            COUNT(*) AS transactionCount
+        FROM expenses
+        WHERE isExcluded = 0
+          AND timestamp >= :startMs AND timestamp < :endMs
+          AND COALESCE(recipientName, recipient) LIKE '%' || :query || '%'
+        GROUP BY recipientKey
+        ORDER BY total DESC
+    """)
+    suspend fun searchRecipientSpendingForYear(
+        query: String,
+        startMs: Long,
+        endMs: Long
+    ): List<TopSpender>
+
     // ==================== Investment Queries ====================
 
     /**

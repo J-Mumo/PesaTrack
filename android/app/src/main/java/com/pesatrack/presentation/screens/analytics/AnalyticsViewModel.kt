@@ -2,14 +2,17 @@ package com.pesatrack.presentation.screens.analytics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.YearComparison
+import com.pesatrack.services.ForecastService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +28,8 @@ import kotlin.math.sqrt
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val budgetRepository: BudgetRepository
+    private val budgetRepository: BudgetRepository,
+    private val forecastService: ForecastService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnalyticsUiState())
@@ -76,7 +80,11 @@ class AnalyticsViewModel @Inject constructor(
             state.copy(
                 selectedYear = cal.get(Calendar.YEAR),
                 selectedMonth = cal.get(Calendar.MONTH) + 1,
-                isLoading = true
+                isLoading = true,
+                recipientSearchQuery = "",
+                recipientSearchResults = null,
+                recipientSearchTotal = 0.0,
+                recipientSearchLoading = false
             )
         }
         loadMonthData()
@@ -104,7 +112,11 @@ class AnalyticsViewModel @Inject constructor(
             it.copy(
                 selectedYear = cal.get(Calendar.YEAR),
                 selectedMonth = cal.get(Calendar.MONTH) + 1,
-                isLoading = true
+                isLoading = true,
+                recipientSearchQuery = "",
+                recipientSearchResults = null,
+                recipientSearchTotal = 0.0,
+                recipientSearchLoading = false
             )
         }
         loadMonthData()
@@ -130,7 +142,11 @@ class AnalyticsViewModel @Inject constructor(
             it.copy(
                 selectedYearForYearly = it.selectedYearForYearly - 1,
                 yearlyIsLoading = true,
-                yearComparison = null // Force reload
+                yearComparison = null, // Force reload
+                recipientSearchQuery = "",
+                yearlyRecipientSearchResults = null,
+                yearlyRecipientSearchTotal = 0.0,
+                recipientSearchLoading = false
             )
         }
         loadYearlyData()
@@ -146,7 +162,11 @@ class AnalyticsViewModel @Inject constructor(
             it.copy(
                 selectedYearForYearly = it.selectedYearForYearly + 1,
                 yearlyIsLoading = true,
-                yearComparison = null // Force reload
+                yearComparison = null, // Force reload
+                recipientSearchQuery = "",
+                yearlyRecipientSearchResults = null,
+                yearlyRecipientSearchTotal = 0.0,
+                recipientSearchLoading = false
             )
         }
         loadYearlyData()
@@ -267,6 +287,9 @@ class AnalyticsViewModel @Inject constructor(
                         error = null
                     )
                 }
+
+                // Load projection data for current month
+                loadProjectionData(year, month, dailyTotals, daysInMonth, daysForAvg, totalForMonth)
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -403,6 +426,94 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
+    // ==================== Recipient Search ====================
+
+    /**
+     * Update the recipient search query and trigger a search.
+     * Debounced via the UI layer (300ms delay recommended).
+     */
+    fun searchRecipient(query: String) {
+        _uiState.update { it.copy(recipientSearchQuery = query) }
+
+        if (query.isBlank()) {
+            // Clear search results — revert to default top-10 view
+            _uiState.update {
+                it.copy(
+                    recipientSearchResults = null,
+                    recipientSearchTotal = 0.0,
+                    yearlyRecipientSearchResults = null,
+                    yearlyRecipientSearchTotal = 0.0,
+                    recipientSearchLoading = false
+                )
+            }
+            return
+        }
+
+        _uiState.update { it.copy(recipientSearchLoading = true) }
+
+        viewModelScope.launch {
+            try {
+                val state = _uiState.value
+
+                // Search for the active tab
+                when (state.selectedTab) {
+                    AnalyticsTab.MONTHLY -> {
+                        val results = expenseRepository.searchRecipientSpendingForMonth(
+                            query, state.selectedYear, state.selectedMonth
+                        )
+                        val total = results.sumOf { it.total }
+                        _uiState.update {
+                            it.copy(
+                                recipientSearchResults = results,
+                                recipientSearchTotal = total,
+                                recipientSearchLoading = false
+                            )
+                        }
+                    }
+                    AnalyticsTab.YEARLY -> {
+                        val results = expenseRepository.searchRecipientSpendingForYear(
+                            query, state.selectedYearForYearly
+                        )
+                        val total = results.sumOf { it.total }
+                        _uiState.update {
+                            it.copy(
+                                yearlyRecipientSearchResults = results,
+                                yearlyRecipientSearchTotal = total,
+                                recipientSearchLoading = false
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        recipientSearchResults = emptyList(),
+                        recipientSearchTotal = 0.0,
+                        yearlyRecipientSearchResults = emptyList(),
+                        yearlyRecipientSearchTotal = 0.0,
+                        recipientSearchLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Clear the recipient search (called when closing the search bar)
+     */
+    fun clearRecipientSearch() {
+        _uiState.update {
+            it.copy(
+                recipientSearchQuery = "",
+                recipientSearchResults = null,
+                recipientSearchTotal = 0.0,
+                yearlyRecipientSearchResults = null,
+                yearlyRecipientSearchTotal = 0.0,
+                recipientSearchLoading = false
+            )
+        }
+    }
+
     // ==================== Budget Integration ====================
 
     /**
@@ -416,6 +527,79 @@ class AnalyticsViewModel @Inject constructor(
                 _uiState.update { it.copy(hasActiveBudgets = hasBudgets) }
             } catch (_: Exception) {
                 // Non-critical — leave default (false)
+            }
+        }
+    }
+
+    // ==================== Forecast Projection ====================
+
+    /**
+     * Load forecast projection line data for the daily spending chart.
+     * Only computed when viewing the current month and active budgets exist.
+     *
+     * Creates projected cumulative daily spending from today to month-end
+     * using the daily burn rate. Also finds the total budget ceiling.
+     */
+    private suspend fun loadProjectionData(
+        year: Int,
+        month: Int,
+        dailyTotals: List<DailyTotal>,
+        daysInMonth: Int,
+        daysElapsed: Int,
+        totalForMonth: Double
+    ) {
+        try {
+            val now = Calendar.getInstance()
+            val isCurrentMonth = year == now.get(Calendar.YEAR) &&
+                month == now.get(Calendar.MONTH) + 1
+
+            if (!isCurrentMonth || daysElapsed < 5) {
+                _uiState.update {
+                    it.copy(projectionLine = emptyList(), budgetCeiling = null)
+                }
+                return
+            }
+
+            val hasBudgets = budgetRepository.hasActiveBudgets()
+            if (!hasBudgets) {
+                _uiState.update {
+                    it.copy(projectionLine = emptyList(), budgetCeiling = null)
+                }
+                return
+            }
+
+            // Build daily map and compute cumulative actual spend through today
+            val dailyMap = dailyTotals.associate { it.dayOfMonth to it.total }
+            var cumulativeSum = 0.0
+            for (day in 1..daysElapsed) {
+                cumulativeSum += (dailyMap[day] ?: 0.0)
+            }
+
+            // Daily burn rate
+            val dailyBurnRate = if (daysElapsed > 0) totalForMonth / daysElapsed else 0.0
+
+            // Project forward: cumulative spending from tomorrow to month-end
+            val projectionEntries = mutableListOf<DailyTotal>()
+            var projectedCumulative = cumulativeSum
+            for (day in (daysElapsed + 1)..daysInMonth) {
+                projectedCumulative += dailyBurnRate
+                projectionEntries.add(DailyTotal(dayOfMonth = day, total = projectedCumulative))
+            }
+
+            // Find total budget ceiling (categoryId == null = "Total Spending" budget)
+            val budgetProgressList = budgetRepository.getBudgetProgressList()
+            val totalBudget = budgetProgressList.find { it.budget.categoryId == null }
+            val budgetCeiling = totalBudget?.budget?.amount
+
+            _uiState.update {
+                it.copy(
+                    projectionLine = projectionEntries,
+                    budgetCeiling = budgetCeiling
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update {
+                it.copy(projectionLine = emptyList(), budgetCeiling = null)
             }
         }
     }

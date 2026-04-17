@@ -1,6 +1,7 @@
 package com.pesatrack.presentation.screens.budget
 
 import com.pesatrack.domain.models.Budget
+import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 
@@ -64,6 +65,11 @@ data class BudgetUiState(
     /** Confirmation dialog for delete */
     val showDeleteConfirmation: Boolean = false,
     val budgetToDelete: Budget? = null,
+
+    // ==================== Forecasts ====================
+
+    /** Map of budget ID → BudgetForecast for the selected period */
+    val forecastMap: Map<Long, BudgetForecast> = emptyMap(),
 
     val error: String? = null,
     val saveSuccess: Boolean = false

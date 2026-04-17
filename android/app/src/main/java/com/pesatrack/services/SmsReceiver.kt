@@ -145,6 +145,7 @@ class SmsReceiver : BroadcastReceiver() {
                 if (mainExpense.isCategorized && mainExpense.categoryId != null) {
                     try {
                         val alerts = budgetService.checkBudgetsAfterExpense(mainExpense.categoryId)
+                        val alertBudgetIds = mutableSetOf<Long>()
                         for (alert in alerts) {
                             val categoryName = alert.budget.categoryName ?: "Total Spending"
                             NotificationHelper.showBudgetAlertNotification(
@@ -156,9 +157,18 @@ class SmsReceiver : BroadcastReceiver() {
                                 percentage = alert.percentage.toInt(),
                                 threshold = alert.threshold
                             )
+                            alertBudgetIds.add(alert.budget.id)
                         }
+
+                        // Check forecast projections (proactive warnings)
+                        // Skip budgets that already fired threshold alerts
+                        budgetService.checkForecastsAfterExpense(
+                            context = context,
+                            expenseCategoryId = mainExpense.categoryId,
+                            budgetAlertIds = alertBudgetIds
+                        )
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error checking budget alerts", e)
+                        Log.e(TAG, "Error checking budget/forecast alerts", e)
                     }
                 }
 

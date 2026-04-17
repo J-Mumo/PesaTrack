@@ -91,6 +91,15 @@ class AppPreferences @Inject constructor(
          * Respects manual-only users who don't want SMS tracking.
          */
         private val KEY_SMS_BANNER_DISMISSED = booleanPreferencesKey("sms_banner_dismissed")
+
+        // ── Forecast Notifications ──
+
+        /**
+         * Key prefix for forecast notification throttle.
+         * Stores the last timestamp (epoch millis) a forecast notification was sent for each budget.
+         * Dynamic key: "forecast_notif_{budgetId}"
+         */
+        private const val FORECAST_NOTIF_PREFIX = "forecast_notif_"
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -331,6 +340,36 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[KEY_SMS_BANNER_DISMISSED] = true
         }
+    }
+
+    // ==================== Forecast Notification Throttle ====================
+
+    /**
+     * Get the last time a forecast notification was sent for a specific budget.
+     * Returns 0L if never sent.
+     */
+    suspend fun getLastForecastNotifTime(budgetId: Long): Long {
+        val key = longPreferencesKey("${FORECAST_NOTIF_PREFIX}$budgetId")
+        return context.dataStore.data.first()[key] ?: 0L
+    }
+
+    /**
+     * Record the timestamp when a forecast notification was sent for a budget.
+     */
+    suspend fun setLastForecastNotifTime(budgetId: Long, timestamp: Long = System.currentTimeMillis()) {
+        val key = longPreferencesKey("${FORECAST_NOTIF_PREFIX}$budgetId")
+        context.dataStore.edit { prefs ->
+            prefs[key] = timestamp
+        }
+    }
+
+    /**
+     * Check if a forecast notification can be sent for a budget (throttle: max 1 per 24 hours).
+     */
+    suspend fun canSendForecastNotification(budgetId: Long): Boolean {
+        val lastSent = getLastForecastNotifTime(budgetId)
+        val elapsed = System.currentTimeMillis() - lastSent
+        return elapsed >= 24 * 60 * 60 * 1000L // 24 hours
     }
 
     /**

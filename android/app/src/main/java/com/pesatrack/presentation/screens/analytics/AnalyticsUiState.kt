@@ -75,10 +75,42 @@ data class AnalyticsUiState(
     val yearlyTopSpenders: List<TopSpender> = emptyList(),
     val yearlyPaymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
 
+    // ==================== Recipient Search ====================
+
+    /** Current search query for recipient lookup (shared between monthly/yearly tabs) */
+    val recipientSearchQuery: String = "",
+
+    /** Search results for the monthly tab (null = not searching, empty = no matches) */
+    val recipientSearchResults: List<TopSpender>? = null,
+
+    /** Aggregate total across all monthly search results */
+    val recipientSearchTotal: Double = 0.0,
+
+    /** Search results for the yearly tab (null = not searching, empty = no matches) */
+    val yearlyRecipientSearchResults: List<TopSpender>? = null,
+
+    /** Aggregate total across all yearly search results */
+    val yearlyRecipientSearchTotal: Double = 0.0,
+
+    /** Whether a search is currently loading */
+    val recipientSearchLoading: Boolean = false,
+
     // ==================== Budget Integration ====================
 
     /** Whether the user has any active budgets (used to show/hide budget banner) */
     val hasActiveBudgets: Boolean = false,
+
+    // ==================== Forecast Projection ====================
+
+    /**
+     * Projected cumulative daily spending from today to month-end.
+     * Each entry: day number (1-based) → projected cumulative total.
+     * Only populated when viewing the current month and total budget exists.
+     */
+    val projectionLine: List<DailyTotal> = emptyList(),
+
+    /** Budget ceiling value for the total budget (null if no total budget exists) */
+    val budgetCeiling: Double? = null,
 
     val error: String? = null
 )

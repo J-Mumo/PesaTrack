@@ -180,4 +180,81 @@ object NotificationHelper {
         val notificationId = (budgetId * 10 + threshold).toInt()
         notificationManager.notify(notificationId, notification)
     }
+
+    /**
+     * Show a proactive forecast notification when spending is projected to exceed budget.
+     *
+     * Two message templates:
+     * - **Projected overspend**: "📊 Food & Dining: On track for KES 18,600 (124%). KES 240/day to stay on budget."
+     * - **Exhaustion imminent**: "⏰ Food & Dining budget runs out in ~4 days. KES 2,400 remaining."
+     *
+     * Uses PRIORITY_DEFAULT (lower than budget exceeded alerts which use PRIORITY_HIGH).
+     * Notification ID: budgetId * 10 + 5 (distinct from threshold 80/100 IDs).
+     *
+     * @param context Application context
+     * @param budgetId The budget ID
+     * @param categoryName Category name or "Total Spending"
+     * @param projectedTotal Projected end-of-period total (KES)
+     * @param budgetAmount Budget limit (KES)
+     * @param projectedPercentage Projected % of budget at end of period
+     * @param safeDailyBudget KES per day to stay on track
+     * @param daysRemaining Days left in the period
+     * @param exhaustionImminent Whether budget runs out within 5 days
+     * @param remaining Budget amount minus current spending (KES)
+     */
+    fun showForecastNotification(
+        context: Context,
+        budgetId: Long,
+        categoryName: String,
+        projectedTotal: Double,
+        budgetAmount: Double,
+        projectedPercentage: Int,
+        safeDailyBudget: Double,
+        daysRemaining: Int,
+        exhaustionImminent: Boolean,
+        remaining: Double
+    ) {
+        // Ensure channel exists
+        createBudgetAlertChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "budget")
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            (budgetId * 10 + 5).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val (title, text) = if (exhaustionImminent) {
+            val formattedRemaining = String.format("KES %,.0f", remaining)
+            "⏰ $categoryName budget runs out in ~${daysRemaining} days" to
+                "$formattedRemaining remaining"
+        } else {
+            val formattedProjected = String.format("KES %,.0f", projectedTotal)
+            val formattedSafe = String.format("KES %,.0f", safeDailyBudget)
+            "📊 $categoryName: On track for $formattedProjected ($projectedPercentage%)" to
+                "$formattedSafe/day to stay on budget"
+        }
+
+        val notification = NotificationCompat.Builder(context, BUDGET_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+
+        // Unique notification ID: budgetId * 10 + 5 (distinct from 80/100 threshold IDs)
+        val notificationId = (budgetId * 10 + 5).toInt()
+        notificationManager.notify(notificationId, notification)
+    }
 }

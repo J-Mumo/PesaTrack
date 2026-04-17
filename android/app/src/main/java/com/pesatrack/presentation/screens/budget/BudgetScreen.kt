@@ -29,10 +29,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.utils.formatAsCurrency
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +125,7 @@ fun BudgetScreen(
                     items(uiState.budgetProgressList) { progress ->
                         BudgetProgressCard(
                             progress = progress,
+                            forecast = uiState.forecastMap[progress.budget.id],
                             onEdit = { viewModel.showEditDialog(progress.budget) },
                             onDelete = { viewModel.showDeleteConfirmation(progress.budget) }
                         )
@@ -536,6 +541,7 @@ fun EmptyBudgetContent(
 @Composable
 fun BudgetProgressCard(
     progress: BudgetProgress,
+    forecast: BudgetForecast? = null,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -650,7 +656,58 @@ fun BudgetProgressCard(
                     )
                 }
             }
+
+            // Forecast subtitle
+            if (forecast != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                ForecastSubtitle(forecast = forecast)
+            }
         }
+    }
+}
+
+/**
+ * Forecast subtitle shown below the budget progress bar.
+ * Shows projected end-of-period status and safe daily spend.
+ */
+@Composable
+private fun ForecastSubtitle(forecast: BudgetForecast) {
+    val subtitleColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+
+    val forecastText = when {
+        forecast.daysElapsed < BudgetForecast.MIN_DAYS_FOR_FORECAST -> {
+            "📊 Not enough data for forecast"
+        }
+        forecast.exhaustionDate != null -> {
+            val dateStr = SimpleDateFormat("MMM d", Locale.getDefault())
+                .format(Date(forecast.exhaustionDate))
+            "⚠️ Projected ${String.format("%.0f", forecast.projectedPercentage)}% — runs out ~$dateStr"
+        }
+        forecast.isProjectedOverBudget -> {
+            "⚠️ Projected ${String.format("%.0f", forecast.projectedPercentage)}% by period end"
+        }
+        else -> {
+            "✅ On track — projected ${String.format("%.0f", forecast.projectedPercentage)}% by period end"
+        }
+    }
+
+    Text(
+        text = forecastText,
+        style = MaterialTheme.typography.bodySmall,
+        color = when {
+            forecast.isProjectedOverBudget -> MaterialTheme.colorScheme.error
+            forecast.projectedPercentage >= 80 -> Color(0xFFFF9800)
+            else -> subtitleColor
+        }
+    )
+
+    if (forecast.daysRemaining > 0 && forecast.daysElapsed >= BudgetForecast.MIN_DAYS_FOR_FORECAST) {
+        val safeDailyFormatted = String.format("KES %,.0f", forecast.safeDailyBudget)
+        Text(
+            text = "Safe: $safeDailyFormatted/day for ${forecast.daysRemaining} remaining days",
+            style = MaterialTheme.typography.bodySmall,
+            color = subtitleColor
+        )
     }
 }
 

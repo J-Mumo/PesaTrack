@@ -342,6 +342,26 @@ class ExpenseRepository @Inject constructor(
         return expenseDao.getPaymentTypeBreakdownForYear(start, end)
     }
 
+    // ==================== Recipient Search ====================
+
+    /**
+     * Search for recipients matching a query within a specific month.
+     * Returns all matching recipients (no limit) with total and transaction count.
+     */
+    suspend fun searchRecipientSpendingForMonth(query: String, year: Int, month: Int): List<TopSpender> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.searchRecipientSpendingForMonth(query, start, end)
+    }
+
+    /**
+     * Search for recipients matching a query within a specific year.
+     * Returns all matching recipients (no limit) with total and transaction count.
+     */
+    suspend fun searchRecipientSpendingForYear(query: String, year: Int): List<TopSpender> {
+        val (start, end) = getYearRange(year)
+        return expenseDao.searchRecipientSpendingForYear(query, start, end)
+    }
+
     /**
      * Get start and end timestamps for a specific year.
      * Returns Pair(Jan 1 00:00:00, Jan 1 next year 00:00:00).

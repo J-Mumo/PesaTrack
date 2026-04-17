@@ -81,13 +81,17 @@ fun AnalyticsScreen(
                 onPreviousMonth = { viewModel.previousMonth() },
                 onNextMonth = { viewModel.nextMonth() },
                 canGoNext = viewModel.canGoNext(),
-                onNavigateToBudget = onNavigateToBudget
+                onNavigateToBudget = onNavigateToBudget,
+                onSearchRecipient = { viewModel.searchRecipient(it) },
+                onClearSearch = { viewModel.clearRecipientSearch() }
             )
             AnalyticsTab.YEARLY -> YearlyTabContent(
                 uiState = uiState,
                 onPreviousYear = { viewModel.previousYear() },
                 onNextYear = { viewModel.nextYear() },
-                canGoNextYear = viewModel.canGoNextYear()
+                canGoNextYear = viewModel.canGoNextYear(),
+                onSearchRecipient = { viewModel.searchRecipient(it) },
+                onClearSearch = { viewModel.clearRecipientSearch() }
             )
         }
     }
@@ -101,7 +105,9 @@ fun MonthlyTabContent(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     canGoNext: Boolean,
-    onNavigateToBudget: () -> Unit = {}
+    onNavigateToBudget: () -> Unit = {},
+    onSearchRecipient: (String) -> Unit = {},
+    onClearSearch: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -191,6 +197,20 @@ fun MonthlyTabContent(
             }
         }
 
+        // Forecast Projection Chart (current month only, when projection data exists)
+        if (uiState.projectionLine.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Spending Projection")
+            }
+            item {
+                ForecastProjectionChart(
+                    dailySpending = uiState.dailySpending,
+                    projectionLine = uiState.projectionLine,
+                    budgetCeiling = uiState.budgetCeiling
+                )
+            }
+        }
+
         // Category Breakdown
         if (uiState.categoryBreakdown.isNotEmpty()) {
             item {
@@ -204,16 +224,48 @@ fun MonthlyTabContent(
             }
         }
 
-        // Top Spenders
-        if (uiState.topSpenders.isNotEmpty()) {
+        // Top Spenders with Recipient Search
+        if (uiState.topSpenders.isNotEmpty() || uiState.recipientSearchResults != null) {
             item {
-                SectionHeader(title = "Top Recipients")
-            }
-            items(uiState.topSpenders) { spender ->
-                TopSpenderRow(
-                    spender = spender,
-                    maxTotal = uiState.topSpenders.firstOrNull()?.total ?: 1.0
+                RecipientSearchHeader(
+                    searchQuery = uiState.recipientSearchQuery,
+                    onSearchQueryChange = onSearchRecipient,
+                    onClearSearch = onClearSearch,
+                    isLoading = uiState.recipientSearchLoading
                 )
+            }
+
+            // Show search results or default top-10
+            val displayList = uiState.recipientSearchResults ?: uiState.topSpenders
+            val maxTotal = displayList.firstOrNull()?.total ?: 1.0
+
+            if (uiState.recipientSearchResults != null && displayList.isEmpty()) {
+                item {
+                    Text(
+                        text = "No recipients found for \"${uiState.recipientSearchQuery}\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            } else {
+                items(displayList) { spender ->
+                    TopSpenderRow(
+                        spender = spender,
+                        maxTotal = maxTotal
+                    )
+                }
+            }
+
+            // Aggregate total row when searching with results
+            if (uiState.recipientSearchResults != null && uiState.recipientSearchResults!!.size > 1) {
+                item {
+                    RecipientSearchTotalRow(
+                        query = uiState.recipientSearchQuery,
+                        total = uiState.recipientSearchTotal,
+                        transactionCount = uiState.recipientSearchResults!!.sumOf { it.transactionCount }
+                    )
+                }
             }
         }
 
@@ -244,7 +296,9 @@ fun YearlyTabContent(
     uiState: AnalyticsUiState,
     onPreviousYear: () -> Unit,
     onNextYear: () -> Unit,
-    canGoNextYear: Boolean
+    canGoNextYear: Boolean,
+    onSearchRecipient: (String) -> Unit = {},
+    onClearSearch: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -319,16 +373,48 @@ fun YearlyTabContent(
             }
         }
 
-        // Top Spenders for Year
-        if (uiState.yearlyTopSpenders.isNotEmpty()) {
+        // Top Spenders for Year with Recipient Search
+        if (uiState.yearlyTopSpenders.isNotEmpty() || uiState.yearlyRecipientSearchResults != null) {
             item {
-                SectionHeader(title = "Top Recipients")
-            }
-            items(uiState.yearlyTopSpenders) { spender ->
-                TopSpenderRow(
-                    spender = spender,
-                    maxTotal = uiState.yearlyTopSpenders.firstOrNull()?.total ?: 1.0
+                RecipientSearchHeader(
+                    searchQuery = uiState.recipientSearchQuery,
+                    onSearchQueryChange = onSearchRecipient,
+                    onClearSearch = onClearSearch,
+                    isLoading = uiState.recipientSearchLoading
                 )
+            }
+
+            // Show search results or default top-10
+            val displayList = uiState.yearlyRecipientSearchResults ?: uiState.yearlyTopSpenders
+            val maxTotal = displayList.firstOrNull()?.total ?: 1.0
+
+            if (uiState.yearlyRecipientSearchResults != null && displayList.isEmpty()) {
+                item {
+                    Text(
+                        text = "No recipients found for \"${uiState.recipientSearchQuery}\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            } else {
+                items(displayList) { spender ->
+                    TopSpenderRow(
+                        spender = spender,
+                        maxTotal = maxTotal
+                    )
+                }
+            }
+
+            // Aggregate total row when searching with results
+            if (uiState.yearlyRecipientSearchResults != null && uiState.yearlyRecipientSearchResults!!.size > 1) {
+                item {
+                    RecipientSearchTotalRow(
+                        query = uiState.recipientSearchQuery,
+                        total = uiState.yearlyRecipientSearchTotal,
+                        transactionCount = uiState.yearlyRecipientSearchResults!!.sumOf { it.transactionCount }
+                    )
+                }
             }
         }
 
@@ -840,6 +926,161 @@ fun DailySpendingChart(data: List<DailyTotal>) {
     }
 }
 
+// ==================== Forecast Projection Chart ====================
+
+/**
+ * Cumulative spending projection chart.
+ * Shows: solid line (actual cumulative) + dashed projection (burn rate to month-end)
+ * + optional horizontal budget ceiling line.
+ */
+@Composable
+fun ForecastProjectionChart(
+    dailySpending: List<DailyTotal>,
+    projectionLine: List<DailyTotal>,
+    budgetCeiling: Double?
+) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    // Build cumulative actual data and merge with projection
+    LaunchedEffect(dailySpending, projectionLine, budgetCeiling) {
+        // Build cumulative actual
+        val cumulativeActual = mutableListOf<Double>()
+        var runningTotal = 0.0
+        for (dt in dailySpending) {
+            runningTotal += dt.total
+            cumulativeActual.add(runningTotal)
+        }
+
+        // Total days = last actual day + projection days
+        val actualDays = dailySpending.size
+        val projDays = projectionLine.size
+        val totalDays = actualDays + projDays
+
+        if (totalDays == 0) return@LaunchedEffect
+
+        // Series 1: Actual cumulative (solid line) — values for actual days, null/0 for projected days
+        val actualSeries = mutableListOf<Number>()
+        for (i in 0 until totalDays) {
+            if (i < actualDays) {
+                actualSeries.add(cumulativeActual[i])
+            } else {
+                // Use last actual value as a bridge point for the first projected day,
+                // then 0 for the rest (won't be rendered since line stops)
+                actualSeries.add(cumulativeActual.lastOrNull() ?: 0.0)
+            }
+        }
+
+        // Series 2: Projection line (dashed) — 0 for actual days, cumulative projected for rest
+        val projSeries = mutableListOf<Number>()
+        val lastActual = cumulativeActual.lastOrNull() ?: 0.0
+        for (i in 0 until totalDays) {
+            if (i < actualDays) {
+                // Bridge: use last actual value at the junction point
+                if (i == actualDays - 1) {
+                    projSeries.add(lastActual)
+                } else {
+                    projSeries.add(0)
+                }
+            } else {
+                val projIndex = i - actualDays
+                if (projIndex < projectionLine.size) {
+                    projSeries.add(projectionLine[projIndex].total)
+                } else {
+                    projSeries.add(0)
+                }
+            }
+        }
+
+        // Series 3: Budget ceiling (horizontal line)
+        val ceilingSeries = mutableListOf<Number>()
+        if (budgetCeiling != null && budgetCeiling > 0) {
+            for (i in 0 until totalDays) {
+                ceilingSeries.add(budgetCeiling)
+            }
+        }
+
+        modelProducer.runTransaction {
+            if (ceilingSeries.isNotEmpty()) {
+                lineSeries {
+                    series(actualSeries)
+                    series(projSeries)
+                    series(ceilingSeries)
+                }
+            } else {
+                lineSeries {
+                    series(actualSeries)
+                    series(projSeries)
+                }
+            }
+        }
+    }
+
+    // Build day labels
+    val dayLabels = remember(dailySpending, projectionLine) {
+        val labels = mutableMapOf<Int, String>()
+        dailySpending.forEachIndexed { index, dt ->
+            labels[index] = dt.dayOfMonth.toString()
+        }
+        projectionLine.forEachIndexed { index, dt ->
+            labels[dailySpending.size + index] = dt.dayOfMonth.toString()
+        }
+        labels
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Legend row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                LegendDot(color = MaterialTheme.colorScheme.primary, label = "Actual")
+                LegendDot(color = Color.Gray, label = "Projected")
+                if (budgetCeiling != null) {
+                    LegendDot(color = MaterialTheme.colorScheme.error, label = "Budget")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberLineCartesianLayer(),
+                    startAxis = VerticalAxis.rememberStart(),
+                    bottomAxis = HorizontalAxis.rememberBottom(
+                        valueFormatter = CartesianValueFormatter { _, value, _ ->
+                            dayLabels[value.toInt()] ?: ""
+                        }
+                    ),
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+    }
+}
+
 // ==================== Category Breakdown ====================
 
 @Composable
@@ -964,6 +1205,135 @@ fun TopSpenderRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
+        }
+    }
+}
+
+// ==================== Recipient Search ====================
+
+/**
+ * Header for the Top Recipients section with an integrated search bar.
+ * Shows "Top Recipients" title with a search icon that toggles the search field.
+ */
+@Composable
+fun RecipientSearchHeader(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    isLoading: Boolean = false
+) {
+    var isSearchExpanded by remember { mutableStateOf(searchQuery.isNotBlank()) }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (searchQuery.isBlank()) "Top Recipients" else "Recipient Search",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(
+                onClick = {
+                    if (isSearchExpanded && searchQuery.isNotBlank()) {
+                        onClearSearch()
+                    }
+                    isSearchExpanded = !isSearchExpanded
+                }
+            ) {
+                Icon(
+                    imageVector = if (isSearchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                    contentDescription = if (isSearchExpanded) "Close search" else "Search recipients"
+                )
+            }
+        }
+
+        if (isSearchExpanded) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Search recipient...") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = "Clear search"
+                                )
+                            }
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                )
+            )
+        }
+    }
+}
+
+/**
+ * Aggregate total row shown at the bottom of search results.
+ * Displays the combined total across all matching recipients.
+ */
+@Composable
+fun RecipientSearchTotalRow(
+    query: String,
+    total: Double,
+    transactionCount: Int
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Total for \"$query\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "$transactionCount transactions",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+            Text(
+                text = total.formatAsCurrency(),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
