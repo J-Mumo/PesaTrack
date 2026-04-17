@@ -16,12 +16,18 @@
 -keep class org.apache.poi.** { *; }
 -keep class org.apache.xmlbeans.** { *; }
 -keep class org.openxmlformats.** { *; }
+-keep class com.microsoft.schemas.** { *; }
+-keep class org.etsi.uri.** { *; }
+-keep class org.w3.x2000.** { *; }
+-keep class schemaorg_apache_xmlbeans.** { *; }
 -dontwarn org.apache.poi.**
 -dontwarn org.apache.xmlbeans.**
 -dontwarn org.openxmlformats.**
 -dontwarn org.apache.commons.compress.**
 -dontwarn org.apache.logging.**
 -dontwarn org.slf4j.**
+-dontwarn schemaorg_apache_xmlbeans.**
+-dontwarn com.microsoft.schemas.**
 
 # Handle missing Java Desktop classes (AWT)
 # POI references java.awt.geom.Rectangle2D in XSLF/SVG code (unused on Android)

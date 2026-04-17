@@ -1,6 +1,8 @@
 package com.pesatrack.services
 
 import android.util.Log
+import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Expense
@@ -13,6 +15,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 
 /**
  * Service that orchestrates Excel expense import.
@@ -21,16 +24,18 @@ import javax.inject.Singleton
  * 1. Parse Excel files via [ExcelParser]
  * 2. Map category labels via [ExcelCategoryMapper]
  * 3. Determine SMS-covered date range from DB
- * 4. For each Excel row within range:
- *    a. Try to match an uncategorized SMS expense (amount ± 1 KES, date ± 1 day)
+ * 4. Batch-load all expenses from DB into memory for matching
+ * 5. For each Excel row within range:
+ *    a. Try to match an uncategorized expense (amount ± 1 KES, date ± 1 day)
  *    b. If matched → apply category + save recipient→category mapping
  *    c. If no match and no existing expense at that amount+date → import as standalone
- * 5. Report results
+ * 6. Report results
  */
 @Singleton
 class ExcelImportService @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val recipientMappingRepository: RecipientMappingRepository
+    private val recipientMappingRepository: RecipientMappingRepository,
+    private val expenseDao: ExpenseDao
 ) {
     companion object {
         private const val TAG = "ExcelImportService"
@@ -129,7 +134,32 @@ class ExcelImportService @Inject constructor(
             Log.d(TAG, "SMS date range: $minDateStr to $maxDateStr")
         }
 
-        // Phase 3: Process each row
+        // Phase 3: Batch-load all expenses from DB into memory for matching
+        // This avoids per-row DB queries which cause ANR with large datasets
+        onProgress(0, allRows.size, "Loading expenses for matching...")
+
+        // Determine the date range we need from Excel rows
+        val excelMinDate = allRows.minOf { it.date } - DAY_MS
+        val excelMaxDate = allRows.maxOf { it.date } + DAY_MS
+
+        // Load all expenses in the relevant date range
+        val allExpensesInRange = expenseDao.getExpensesInRange(excelMinDate, excelMaxDate)
+        Log.d(TAG, "Loaded ${allExpensesInRange.size} expenses from DB for matching")
+
+        // Index: uncategorized expenses for matching
+        // Use a mutable list so we can "consume" matches
+        val uncategorizedExpenses = allExpensesInRange
+            .filter { !it.isCategorized && !it.isExcluded }
+            .toMutableList()
+
+        // Index: all expenses for duplicate checking (by amount+date)
+        // Group by approximate date (day) for fast lookup
+        val expensesByDay = allExpensesInRange.groupBy { it.timestamp / DAY_MS }
+
+        // Load existing transaction IDs for re-import safety
+        val existingTxIds = mutableSetOf<String>()
+
+        // Phase 4: Process each row (in-memory matching)
         var rowsMatchedToSms = 0
         var rowsImportedAsStandalone = 0
         var rowsSkippedOutOfRange = 0
@@ -139,6 +169,11 @@ class ExcelImportService @Inject constructor(
 
         // Track already-matched expense IDs to avoid double-matching
         val matchedExpenseIds = mutableSetOf<Long>()
+
+        // Batch collections for DB writes
+        val categoriesToUpdate = mutableListOf<Pair<Long, Long>>() // expenseId -> categoryId
+        val mappingsToSave = mutableListOf<Triple<String, Long, String>>() // recipientKey, categoryId, displayName
+        val expensesToInsert = mutableListOf<Expense>()
 
         for ((index, excelRow) in allRows.withIndex()) {
             if (index % 50 == 0) {
@@ -167,48 +202,37 @@ class ExcelImportService @Inject constructor(
             val dayStart = excelRow.date - DAY_MS
             val dayEnd = excelRow.date + DAY_MS
 
-            // Try to find a matching uncategorized SMS expense
-            val matchedExpense = expenseRepository.findMatchByAmountAndDate(
-                amount = excelRow.amount,
-                tolerance = AMOUNT_TOLERANCE,
-                dayStartMs = dayStart,
-                dayEndMs = dayEnd
+            // In-memory match: find uncategorized expense with similar amount in date window
+            val matchedExpense = findMatchInMemory(
+                uncategorizedExpenses, matchedExpenseIds,
+                excelRow.amount, dayStart, dayEnd
             )
 
-            if (matchedExpense != null && matchedExpense.id !in matchedExpenseIds) {
-                // Match found — apply category
+            if (matchedExpense != null) {
+                // Match found — queue category update
                 if (categoryId != null) {
-                    expenseRepository.updateCategory(matchedExpense.id, categoryId)
+                    categoriesToUpdate.add(matchedExpense.id to categoryId)
 
                     // Save recipient→category mapping for future auto-categorization
                     val recipientKey = RecipientMappingRepository.normalizeRecipientKey(
                         matchedExpense.recipientName ?: matchedExpense.recipient
                     )
                     if (recipientKey.isNotBlank()) {
-                        try {
-                            recipientMappingRepository.saveMapping(
-                                recipientKey = recipientKey,
-                                categoryId = categoryId,
-                                displayName = matchedExpense.recipientName
-                                    ?: matchedExpense.recipient
+                        mappingsToSave.add(
+                            Triple(
+                                recipientKey, categoryId,
+                                matchedExpense.recipientName ?: matchedExpense.recipient
                             )
-                            recipientMappingsLearned++
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to save mapping for $recipientKey: ${e.message}")
-                        }
+                        )
+                        recipientMappingsLearned++
                     }
                 }
 
                 matchedExpenseIds.add(matchedExpense.id)
                 rowsMatchedToSms++
             } else {
-                // No match — check if expense already exists at this amount+date
-                val alreadyExists = expenseRepository.expenseExistsAtAmountAndDate(
-                    amount = excelRow.amount,
-                    tolerance = AMOUNT_TOLERANCE,
-                    dayStartMs = dayStart,
-                    dayEndMs = dayEnd
-                )
+                // No match — check if expense already exists at this amount+date (in-memory)
+                val alreadyExists = existsInMemory(expensesByDay, excelRow.amount, dayStart, dayEnd)
 
                 if (alreadyExists) {
                     rowsSkippedAlreadyExists++
@@ -216,8 +240,7 @@ class ExcelImportService @Inject constructor(
                     // Import as standalone expense
                     val syntheticTxId = buildSyntheticTransactionId(excelRow)
 
-                    // Check if this synthetic ID already exists (re-import safety)
-                    if (!expenseRepository.transactionExists(syntheticTxId)) {
+                    if (syntheticTxId !in existingTxIds) {
                         val expense = Expense(
                             transactionId = syntheticTxId,
                             amount = excelRow.amount,
@@ -230,17 +253,48 @@ class ExcelImportService @Inject constructor(
                             timestamp = excelRow.date,
                             isCategorized = categoryId != null
                         )
-
-                        try {
-                            expenseRepository.saveExpense(expense)
-                            rowsImportedAsStandalone++
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to import standalone expense: ${e.message}")
-                            totalParseErrors++
-                        }
+                        expensesToInsert.add(expense)
+                        existingTxIds.add(syntheticTxId)
+                        rowsImportedAsStandalone++
                     } else {
                         rowsSkippedAlreadyExists++
                     }
+                }
+            }
+        }
+
+        // Phase 5: Batch write to DB
+        onProgress(allRows.size, allRows.size, "Saving to database...")
+
+        // Batch update categories
+        for ((expenseId, catId) in categoriesToUpdate) {
+            try {
+                expenseDao.updateCategory(expenseId, catId)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update category for expense $expenseId: ${e.message}")
+            }
+        }
+
+        // Batch save recipient mappings
+        for ((recipientKey, catId, displayName) in mappingsToSave) {
+            try {
+                recipientMappingRepository.saveMapping(recipientKey, catId, displayName)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save mapping for $recipientKey: ${e.message}")
+            }
+        }
+
+        // Batch insert new expenses (check for existing txIds first)
+        if (expensesToInsert.isNotEmpty()) {
+            val txIds = expensesToInsert.mapNotNull { it.transactionId }
+            val existingIds = expenseRepository.getExistingTransactionIds(txIds).toSet()
+            val newExpenses = expensesToInsert.filter { it.transactionId !in existingIds }
+            if (newExpenses.isNotEmpty()) {
+                try {
+                    expenseRepository.saveExpenses(newExpenses)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to batch insert expenses: ${e.message}")
+                    totalParseErrors += newExpenses.size
                 }
             }
         }
@@ -262,6 +316,58 @@ class ExcelImportService @Inject constructor(
 
         Log.d(TAG, "Excel import complete: $result")
         return result
+    }
+
+    /**
+     * Find an uncategorized expense matching amount (±tolerance) within a date window.
+     * Operates entirely in-memory.
+     */
+    private fun findMatchInMemory(
+        uncategorized: List<ExpenseEntity>,
+        alreadyMatched: Set<Long>,
+        amount: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): ExpenseEntity? {
+        var bestMatch: ExpenseEntity? = null
+        var bestDiff = Double.MAX_VALUE
+
+        for (expense in uncategorized) {
+            if (expense.id in alreadyMatched) continue
+            if (expense.timestamp < dayStartMs || expense.timestamp > dayEndMs) continue
+            val diff = abs(expense.amount - amount)
+            if (diff < AMOUNT_TOLERANCE && diff < bestDiff) {
+                bestDiff = diff
+                bestMatch = expense
+            }
+        }
+        return bestMatch
+    }
+
+    /**
+     * Check if any expense exists at a given amount+date window.
+     * Operates entirely in-memory using the day-indexed map.
+     */
+    private fun existsInMemory(
+        expensesByDay: Map<Long, List<ExpenseEntity>>,
+        amount: Double,
+        dayStartMs: Long,
+        dayEndMs: Long
+    ): Boolean {
+        // Check all day buckets that overlap the window
+        val startDay = dayStartMs / DAY_MS
+        val endDay = dayEndMs / DAY_MS
+        for (day in startDay..endDay) {
+            val expenses = expensesByDay[day] ?: continue
+            for (expense in expenses) {
+                if (expense.timestamp in dayStartMs..dayEndMs &&
+                    abs(expense.amount - amount) < AMOUNT_TOLERANCE
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     /**

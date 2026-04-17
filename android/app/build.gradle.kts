@@ -78,6 +78,12 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Exclude duplicate files from Apache POI dependencies
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/LICENSE.txt"
         }
     }
 }
@@ -116,11 +122,8 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Apache POI for Excel (.xlsx) file parsing
-    implementation("org.apache.poi:poi-ooxml:5.2.5") {
-        // Exclude unnecessary modules to reduce APK size
-        exclude(group = "org.apache.commons", module = "commons-compress")
-    }
-    implementation("org.apache.commons:commons-compress:1.24.0")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
+    // Note: Removed exclusions and manual commons-compress to avoid NoClassDefFoundError
 
     // Vico charting library (Compose + Material 3)
     implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.3")

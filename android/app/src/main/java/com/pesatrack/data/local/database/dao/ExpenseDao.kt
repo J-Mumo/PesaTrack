@@ -225,6 +225,16 @@ interface ExpenseDao {
     suspend fun getSmsCoveredDateRange(): DateRangeResult?
 
     /**
+     * Load all expenses within a date range for in-memory matching.
+     * Used by Excel import to batch-load instead of per-row queries.
+     */
+    @Query("""
+        SELECT * FROM expenses
+        WHERE timestamp >= :startMs AND timestamp <= :endMs
+    """)
+    suspend fun getExpensesInRange(startMs: Long, endMs: Long): List<ExpenseEntity>
+
+    /**
      * Find an uncategorized expense matching an amount (±tolerance) within a date window.
      * Used by Excel import to match Excel rows to SMS-imported expenses.
      * Returns the closest amount match first.
