@@ -25,6 +25,10 @@ object NotificationHelper {
     private const val BUDGET_CHANNEL_ID = "pesatrack_budget_alerts"
     private const val BUDGET_CHANNEL_NAME = "Budget Alerts"
     private const val BUDGET_CHANNEL_DESCRIPTION = "Alerts when spending approaches or exceeds budget limits"
+
+    private const val RECURRING_CHANNEL_ID = "pesatrack_recurring_reminders"
+    private const val RECURRING_CHANNEL_NAME = "Recurring Reminders"
+    private const val RECURRING_CHANNEL_DESCRIPTION = "Reminders for upcoming and overdue recurring expenses"
     
     /**
      * Create the notification channel (required for Android 8.0+).
@@ -255,6 +259,119 @@ object NotificationHelper {
 
         // Unique notification ID: budgetId * 10 + 5 (distinct from 80/100 threshold IDs)
         val notificationId = (budgetId * 10 + 5).toInt()
+        notificationManager.notify(notificationId, notification)
+    }
+
+    // ==================== Recurring Reminders ====================
+
+    /**
+     * Create the recurring reminders notification channel (required for Android 8.0+).
+     * Safe to call multiple times — only creates the channel once.
+     */
+    fun createRecurringReminderChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                RECURRING_CHANNEL_ID,
+                RECURRING_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = RECURRING_CHANNEL_DESCRIPTION
+            }
+
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show a reminder notification for an upcoming recurring expense.
+     *
+     * @param context Application context
+     * @param recipientKey Unique key for the recurring expense (used for notification ID)
+     * @param recipientName Display name of the recipient
+     * @param amount Expected amount (KES)
+     * @param dueDescription When it's due (e.g. "due tomorrow", "due in 3 days")
+     */
+    fun showRecurringReminderNotification(
+        context: Context,
+        recipientKey: String,
+        recipientName: String,
+        amount: Double,
+        dueDescription: String
+    ) {
+        createRecurringReminderChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+
+        val notificationId = recipientKey.hashCode() + 100_000
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedAmount = String.format("KES %,.0f", amount)
+
+        val notification = NotificationCompat.Builder(context, RECURRING_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("📅 $recipientName ($formattedAmount)")
+            .setContentText("Recurring payment $dueDescription")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(notificationId, notification)
+    }
+
+    /**
+     * Show a notification for an overdue recurring expense.
+     *
+     * @param context Application context
+     * @param recipientKey Unique key for the recurring expense (used for notification ID)
+     * @param recipientName Display name of the recipient
+     * @param expectedByDescription When it was expected (e.g. "usually by the 15th")
+     */
+    fun showOverdueNotification(
+        context: Context,
+        recipientKey: String,
+        recipientName: String,
+        expectedByDescription: String
+    ) {
+        createRecurringReminderChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+
+        val notificationId = recipientKey.hashCode() + 200_000
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, RECURRING_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("⚠️ $recipientName payment overdue")
+            .setContentText("$expectedByDescription — no payment detected yet")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
         notificationManager.notify(notificationId, notification)
     }
 }

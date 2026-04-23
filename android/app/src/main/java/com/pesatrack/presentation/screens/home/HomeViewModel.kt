@@ -232,6 +232,10 @@ class HomeViewModel @Inject constructor(
                     showForecastCard = forecasts.isNotEmpty()
                 )
             }
+            // Track forecast view counter (fire-and-forget)
+            if (forecasts.isNotEmpty()) {
+                appPreferences.incrementForecastViewsCount()
+            }
         } catch (_: Exception) {
             _uiState.update {
                 it.copy(budgetForecasts = emptyList(), showForecastCard = false)

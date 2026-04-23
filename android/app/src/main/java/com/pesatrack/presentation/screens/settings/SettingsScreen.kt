@@ -126,6 +126,12 @@ fun SettingsScreen(
                     onBankToggled = viewModel::setBankEnabled
                 )
 
+                // Section: Notifications
+                NotificationsSection(
+                    recurringRemindersEnabled = uiState.recurringRemindersEnabled,
+                    onRecurringRemindersToggled = viewModel::setRecurringRemindersEnabled
+                )
+
                 // Section: Data Management
                 DataManagementSection(
                     uiState = uiState,
@@ -408,6 +414,65 @@ private fun SmsSourcesSection(uiState: SettingsUiState, onBankTrackingToggled: (
             }
             if (!uiState.bankTrackingEnabled) {
                 Text(text = "Enable to import expenses from supported bank SMS (NCBA, etc.)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationsSection(
+    recurringRemindersEnabled: Boolean,
+    onRecurringRemindersToggled: (Boolean) -> Unit
+) {
+    Text(
+        text = "Notifications",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Recurring Reminders",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Get notified when recurring expenses are due or overdue",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = recurringRemindersEnabled,
+                    onCheckedChange = onRecurringRemindersToggled
+                )
             }
         }
     }

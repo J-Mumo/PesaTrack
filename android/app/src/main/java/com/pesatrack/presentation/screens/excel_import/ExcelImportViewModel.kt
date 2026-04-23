@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.ExcelImportService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ExcelImportViewModel @Inject constructor(
     private val application: Application,
-    private val excelImportService: ExcelImportService
+    private val excelImportService: ExcelImportService,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     companion object {
@@ -134,6 +136,11 @@ class ExcelImportViewModel @Inject constructor(
                         phase = ExcelImportPhase.COMPLETED,
                         result = result
                     )
+                }
+
+                // Track excel import counter (fire-and-forget)
+                if (result.rowsImportedAsStandalone > 0 || result.rowsMatchedToSms > 0) {
+                    appPreferences.incrementExcelImportsCount()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Excel import failed", e)

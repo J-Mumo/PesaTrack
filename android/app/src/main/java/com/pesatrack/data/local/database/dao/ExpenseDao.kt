@@ -642,9 +642,32 @@ interface ExpenseDao {
         LEFT JOIN categories c ON e.categoryId = c.id
         LEFT JOIN categories pc ON c.parentId = pc.id
         ORDER BY e.timestamp DESC
-    """)
-    suspend fun getAllExpensesForExport(): List<ExportExpense>
-}
+        """)
+        suspend fun getAllExpensesForExport(): List<ExportExpense>
+    
+        // ==================== Recurring Expense Detection ====================
+    
+        /**
+         * Get all non-excluded expenses from a date range for recurring expense detection.
+         * Returns raw rows ordered by recipient key then timestamp for grouping.
+         * No schema migration required — query-only addition.
+         */
+        @Query("""
+            SELECT
+                COALESCE(recipientName, recipient) as recipientKey,
+                recipient,
+                recipientName,
+                paymentType,
+                categoryId,
+                amount,
+                timestamp
+            FROM expenses
+            WHERE isExcluded = 0
+              AND timestamp >= :sinceTimestamp
+            ORDER BY recipientKey, timestamp ASC
+        """)
+        suspend fun getExpensesForRecurrenceDetection(sinceTimestamp: Long): List<RecurrenceCandidate>
+    }
 
 /**
  * Result class for SMS date range query
@@ -752,4 +775,21 @@ data class ExportExpense(
     val timestamp: Long,
     val isCategorized: Boolean,
     val isExcluded: Boolean
+)
+
+// ==================== Recurring Expense Detection Result Classes ====================
+
+/**
+ * Raw expense row for recurring expense detection.
+ * One row per expense, ordered by recipientKey then timestamp.
+ * Grouped in-memory by [com.pesatrack.services.RecurringExpenseService].
+ */
+data class RecurrenceCandidate(
+    val recipientKey: String,
+    val recipient: String,
+    val recipientName: String?,
+    val paymentType: String,
+    val categoryId: Long?,
+    val amount: Double,
+    val timestamp: Long
 )

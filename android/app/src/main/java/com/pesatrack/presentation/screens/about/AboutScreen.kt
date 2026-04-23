@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -157,6 +158,27 @@ fun AboutScreen(
                             context.startActivity(intent)
                         }
                     )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // Share PesaTrack
+                    LinkRow(
+                        icon = Icons.Default.Share,
+                        title = "Share PesaTrack",
+                        subtitle = "Tell friends about PesaTrack",
+                        onClick = {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    SHARE_MESSAGE
+                                )
+                            }
+                            context.startActivity(
+                                Intent.createChooser(shareIntent, "Share PesaTrack")
+                            )
+                        }
+                    )
                 }
             }
 
@@ -200,7 +222,7 @@ fun AboutScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "• No internet permission — PesaTrack cannot send data anywhere\n" +
-                                "• No cloud sync, no analytics, no ads\n" +
+                                "• No cloud sync, no ads, no data transmission\n" +
                                 "• Only reads M-PESA and supported bank SMS\n" +
                                 "• PIN lock + biometric for privacy",
                         style = MaterialTheme.typography.bodySmall,
@@ -261,3 +283,6 @@ private fun LinkRow(
 private const val PRIVACY_POLICY_URL = "https://j-mumo.github.io/PesaTrack/privacy-policy.html"
 private const val GITHUB_URL = "https://github.com/J-Mumo/PesaTrack"
 private const val CONTACT_EMAIL = "joelmumo.jm@gmail.com"
+private const val SHARE_MESSAGE =
+    "I use PesaTrack to automatically track my M-PESA expenses — it reads SMS and categorizes " +
+    "everything offline. Free on Play Store: https://play.google.com/store/apps/details?id=com.pesatrack"

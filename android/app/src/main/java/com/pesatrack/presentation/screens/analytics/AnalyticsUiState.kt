@@ -8,6 +8,7 @@ import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.MonthComparison
+import com.pesatrack.domain.models.RecurringExpense
 import com.pesatrack.domain.models.YearComparison
 
 /**
@@ -94,6 +95,17 @@ data class AnalyticsUiState(
 
     /** Whether a search is currently loading */
     val recipientSearchLoading: Boolean = false,
+
+    // ==================== Recurring Expense Detection ====================
+
+    /** Total recurring spending for the selected month (KES) */
+    val recurringTotal: Double = 0.0,
+    /** Total one-time (non-recurring) spending for the selected month (KES) */
+    val oneTimeTotal: Double = 0.0,
+    /** Top recurring expense names for display (e.g. "Rent, SACCO, WiFi") */
+    val topRecurringNames: String = "",
+    /** Whether recurring data has been loaded (hides the card until ready) */
+    val hasRecurringData: Boolean = false,
 
     // ==================== Budget Integration ====================
 

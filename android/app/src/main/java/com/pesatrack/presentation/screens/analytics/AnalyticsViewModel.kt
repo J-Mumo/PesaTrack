@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.YearMonthTotal
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.BudgetPeriod
@@ -13,6 +14,7 @@ import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.services.ForecastService
+import com.pesatrack.services.RecurringExpenseService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +31,9 @@ import kotlin.math.sqrt
 class AnalyticsViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val budgetRepository: BudgetRepository,
-    private val forecastService: ForecastService
+    private val forecastService: ForecastService,
+    private val recurringExpenseService: RecurringExpenseService,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnalyticsUiState())
@@ -50,6 +54,13 @@ class AnalyticsViewModel @Inject constructor(
         }
         loadAllData()
         loadBudgetStatus()
+        loadRecurringBreakdown()
+
+        // Track analytics viewed milestone and counter (fire-and-forget)
+        viewModelScope.launch {
+            appPreferences.recordFirstAnalyticsViewed()
+            appPreferences.incrementAnalyticsViewsCount()
+        }
     }
 
     // ==================== Tab Management ====================
@@ -511,6 +522,57 @@ class AnalyticsViewModel @Inject constructor(
                 yearlyRecipientSearchTotal = 0.0,
                 recipientSearchLoading = false
             )
+        }
+    }
+
+    // ==================== Recurring Expense Detection ====================
+
+    /**
+     * Load recurring vs one-time spending breakdown for the selected month.
+     * Uses [RecurringExpenseService] to detect patterns and compute the split.
+     */
+    private fun loadRecurringBreakdown() {
+        viewModelScope.launch {
+            try {
+                val summary = recurringExpenseService.getRecurringExpenses()
+
+                if (summary.recurringExpenses.isEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            recurringTotal = 0.0,
+                            oneTimeTotal = 0.0,
+                            topRecurringNames = "",
+                            hasRecurringData = false
+                        )
+                    }
+                    return@launch
+                }
+
+                // Sum monthly-equivalent recurring amounts
+                val recurringMonthly = summary.totalMonthlyRecurring
+
+                // One-time = total for month - recurring
+                val state = _uiState.value
+                val totalForMonth = state.totalForMonth
+                val oneTime = (totalForMonth - recurringMonthly).coerceAtLeast(0.0)
+
+                // Top 3 recurring expense names
+                val topNames = summary.recurringExpenses
+                    .take(3)
+                    .joinToString(", ") { it.recipientDisplayName }
+
+                _uiState.update {
+                    it.copy(
+                        recurringTotal = recurringMonthly,
+                        oneTimeTotal = oneTime,
+                        topRecurringNames = topNames,
+                        hasRecurringData = true
+                    )
+                }
+            } catch (_: Exception) {
+                // Non-critical — leave default (hidden)
+                _uiState.update { it.copy(hasRecurringData = false) }
+            }
         }
     }
 

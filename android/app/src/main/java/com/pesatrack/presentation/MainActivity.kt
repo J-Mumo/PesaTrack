@@ -44,9 +44,14 @@ import com.pesatrack.presentation.screens.pin.PinViewModel
 import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
+import com.pesatrack.services.RecurringReminderWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -88,8 +93,17 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Create notification channel (safe to call multiple times)
+        // Record app open milestone (fire-and-forget)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            appPreferences.recordAppOpen()
+        }
+
+        // Create notification channels (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
+        NotificationHelper.createRecurringReminderChannel(this)
+
+        // Schedule daily recurring-expense reminder worker
+        scheduleRecurringReminderWorker()
 
         // Set up biometric prompt
         setupBiometric()
@@ -138,10 +152,19 @@ class MainActivity : FragmentActivity() {
         var pendingImportNavigation by remember { mutableStateOf(false) }
 
         if (!onboardingCompleted) {
+            // Record onboarding started milestone (fire-and-forget)
+            LaunchedEffect(Unit) {
+                appPreferences.recordOnboardingStarted()
+            }
+
             OnboardingScreen(
                 onComplete = {
                     coroutineScope.launch {
                         appPreferences.setOnboardingCompleted()
+                        // Record import skipped if user finishes without tapping Import Now
+                        if (!pendingImportNavigation) {
+                            appPreferences.recordOnboardingImportSkipped()
+                        }
                     }
                     // Request remaining permissions (notifications) after onboarding
                     requestNotificationPermission()
@@ -152,6 +175,15 @@ class MainActivity : FragmentActivity() {
                 onImportHistory = {
                     // Flag that we should navigate to import screen after onboarding completes
                     pendingImportNavigation = true
+                    coroutineScope.launch {
+                        appPreferences.recordOnboardingImportChosen()
+                    }
+                },
+                onSmsPermissionGranted = {
+                    coroutineScope.launch { appPreferences.recordOnboardingSmsGranted() }
+                },
+                onSmsPermissionSkipped = {
+                    coroutineScope.launch { appPreferences.recordOnboardingSmsSkipped() }
                 }
             )
             return
@@ -258,6 +290,23 @@ class MainActivity : FragmentActivity() {
         if (!biometricAvailable) return
         onBiometricSuccess = onSuccess
         biometricPrompt.authenticate(promptInfo)
+    }
+
+    /**
+     * Schedule a daily WorkManager task that checks for upcoming/overdue
+     * recurring expenses and sends reminder notifications.
+     * Uses KEEP policy so it won't reset the schedule on every app launch.
+     */
+    private fun scheduleRecurringReminderWorker() {
+        val workRequest = PeriodicWorkRequestBuilder<RecurringReminderWorker>(
+            24, TimeUnit.HOURS
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            RecurringReminderWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
     }
 
     /**

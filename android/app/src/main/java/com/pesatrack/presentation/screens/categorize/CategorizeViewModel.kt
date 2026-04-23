@@ -3,6 +3,7 @@ package com.pesatrack.presentation.screens.categorize
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
@@ -15,6 +16,7 @@ import javax.inject.Inject
 class CategorizeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
+    private val appPreferences: AppPreferences,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
@@ -67,6 +69,12 @@ class CategorizeViewModel @Inject constructor(
             try {
                 expenseRepository.updateCategory(expenseId, category.id)
                 _uiState.update { it.copy(isSaving = false, isSaved = true) }
+
+                // Track categorization milestone and counter (fire-and-forget)
+                launch {
+                    appPreferences.recordFirstCategorization()
+                    appPreferences.incrementCategorizationsCount()
+                }
             } catch (e: Exception) {
                 _uiState.update { 
                     it.copy(

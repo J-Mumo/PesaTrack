@@ -2,6 +2,7 @@ package com.pesatrack.presentation.screens.budget
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.domain.models.Budget
@@ -20,7 +21,8 @@ import javax.inject.Inject
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
-    private val forecastService: ForecastService
+    private val forecastService: ForecastService,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BudgetUiState())
@@ -374,6 +376,14 @@ class BudgetViewModel @Inject constructor(
                         saveSuccess = true,
                         error = null
                     )
+                }
+
+                // Track budget creation milestone and counter (fire-and-forget)
+                if (existing == null) {
+                    launch {
+                        appPreferences.recordFirstBudgetCreated()
+                        appPreferences.incrementBudgetsCreatedCount()
+                    }
                 }
 
                 // Reload budgets and income allocation

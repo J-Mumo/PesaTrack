@@ -4,6 +4,7 @@ import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetPeriod
+import com.pesatrack.domain.models.RecurringPeriodInfo
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,7 +25,8 @@ import kotlin.math.max
  */
 @Singleton
 class ForecastService @Inject constructor(
-    private val budgetRepository: BudgetRepository
+    private val budgetRepository: BudgetRepository,
+    private val recurringExpenseService: RecurringExpenseService
 ) {
 
     /**
@@ -40,7 +42,10 @@ class ForecastService @Inject constructor(
         return progressList.mapNotNull { progress ->
             val budget = progress.budget
             val (periodStart, periodEnd) = getEffectivePeriodRange(budget)
-            computeForecast(budget, progress.spent, periodStart, periodEnd, now)
+            val recurringInfo = try {
+                recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
+            } catch (_: Exception) { null }
+            computeForecast(budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
         }
     }
 
@@ -57,9 +62,12 @@ class ForecastService @Inject constructor(
         val progressList = budgetRepository.getBudgetProgressListForPeriod(period, calendar)
         val (periodStart, periodEnd) = budgetRepository.getPeriodRange(period, calendar)
         val now = System.currentTimeMillis()
+        val recurringInfo = try {
+            recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
+        } catch (_: Exception) { null }
 
         return progressList.mapNotNull { progress ->
-            computeForecast(progress.budget, progress.spent, periodStart, periodEnd, now)
+            computeForecast(progress.budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
         }
     }
 
@@ -78,7 +86,8 @@ class ForecastService @Inject constructor(
         spent: Double,
         periodStart: Long,
         periodEnd: Long,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        recurringInfo: RecurringPeriodInfo? = null
     ): BudgetForecast? {
         if (budget.amount <= 0) return null
         if (periodEnd <= periodStart) return null
@@ -93,11 +102,23 @@ class ForecastService @Inject constructor(
 
         val daysRemaining = max(0, totalDays - daysElapsed)
 
-        // Linear burn rate
+        // Linear burn rate (used as fallback and for daily burn display)
         val dailyBurnRate = if (daysElapsed > 0) spent / daysElapsed else 0.0
 
-        // Projected total at end of period
-        val projectedTotal = dailyBurnRate * totalDays
+        // Projected total at end of period — recurring-aware if available
+        val projectedTotal: Double
+        if (recurringInfo != null && recurringInfo.totalRecurringForPeriod > 0) {
+            // Recurring-aware projection:
+            // Separate recurring (known) from discretionary (extrapolated)
+            val discretionarySpent = (spent - recurringInfo.paidThisPeriod).coerceAtLeast(0.0)
+            val discretionaryBurnRate = if (daysElapsed > 0) discretionarySpent / daysElapsed else 0.0
+            projectedTotal = recurringInfo.paidThisPeriod +
+                    recurringInfo.upcomingThisPeriod +
+                    (discretionaryBurnRate * daysRemaining)
+        } else {
+            // Fallback: pure linear projection
+            projectedTotal = dailyBurnRate * totalDays
+        }
 
         // Projected percentage of budget
         val projectedPercentage = if (budget.amount > 0) {
@@ -141,7 +162,10 @@ class ForecastService @Inject constructor(
         val budget = budgetRepository.getBudgetById(budgetId) ?: return null
         val spent = budgetRepository.getSpendingForBudget(budget)
         val (periodStart, periodEnd) = getEffectivePeriodRange(budget)
-        return computeForecast(budget, spent, periodStart, periodEnd)
+        val recurringInfo = try {
+            recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
+        } catch (_: Exception) { null }
+        return computeForecast(budget, spent, periodStart, periodEnd, recurringInfo = recurringInfo)
     }
 
     /**

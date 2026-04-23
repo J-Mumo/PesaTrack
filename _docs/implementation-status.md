@@ -16,7 +16,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Transaction Cost Auto-Tracking** | ✅ Complete | 100% |
 | **Room Database (v14)** | ✅ Complete | 100% |
 | **Category System (18 groups + custom)** | ✅ Complete | 100% |
-| **Expense Management UI**ka | ✅ Complete | 100% |
+| **Expense Management UI** | ✅ Complete | 100% |
 | **Notifications** | ✅ Complete | 100% |
 | **Runtime Permissions** | ✅ Complete | 100% |
 | **Backend Server (unused)** | 🟡 Dormant | N/A |
@@ -36,7 +36,8 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **PIN Lock + Biometric Unlock** | ✅ Complete | 100% |
 | **Onboarding Flow** | ✅ Complete | 100% |
 | **Budget Forecasting (4 phases)** | ✅ Complete | 100% |
-| **Play Store Release (v1.0.0)** | ✅ Published | 100% |
+| **Recurring Expense Detection** | ✅ Complete | 100% |
+| **Play Store Release (v1.1.0)** | ✅ Published | 100% |
 
 ---
 
@@ -234,9 +235,9 @@ SMS Sources ──────────────────────�
 | PinManager | [`PinManager.kt`](../android/app/src/main/java/com/pesatrack/services/PinManager.kt:1) | SHA-256 + salt PIN hashing, verification, timeout logic |
 | AppLockLifecycleObserver | [`AppLockLifecycleObserver.kt`](../android/app/src/main/java/com/pesatrack/services/AppLockLifecycleObserver.kt:1) | ProcessLifecycleOwner observer — background timestamp, lock state management |
 | **Settings Screen** | | |
-| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Security (PIN toggle, change PIN, biometric, timeout) + Category management + Budget management + **Month start day picker (1–28)** + Bank SMS tracking toggles |
-| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences + PIN/biometric preferences + month start day management |
-| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + PIN/biometric/timeout + monthStartDay state |
+| SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Security (PIN toggle, change PIN, biometric, timeout) + Category management + Budget management + **Month start day picker (1–28)** + Bank SMS tracking toggles + **Notifications section (recurring reminders toggle)** |
+| SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences + PIN/biometric preferences + month start day management + **recurring reminders toggle** |
+| SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + PIN/biometric/timeout + monthStartDay + **recurringRemindersEnabled** state |
 | **Category Management Screen** | | |
 | CategoryManagementScreen | [`CategoryManagementScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementScreen.kt:1) | Tab-based CRUD: Categories tab (add/edit/delete groups + sub-categories with icon/color pickers) + Auto-Rules tab (CRUD for user-defined categorization rules) |
 | CategoryManagementViewModel | [`CategoryManagementViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementViewModel.kt:1) | Category + rule CRUD, dialog state management, expense count validation |
@@ -255,9 +256,9 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist; **Forecast projection chart** (cumulative actual + projected dashed line + budget ceiling) |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check, **forecast projection data loading** |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets, **cumulativeActual/cumulativeProjection/totalBudgetCeiling** |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist; **Forecast projection chart**; **RecurringBreakdownCard** (recurring vs one-time split with progress bars) |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check, **forecast projection data loading**, **recurring breakdown loading** |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets, **cumulativeActual/cumulativeProjection/totalBudgetCeiling**, **recurringTotal/oneTimeTotal/topRecurringNames** |
 | AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 | **Budget Screen** | | |
@@ -273,13 +274,16 @@ SMS Sources ──────────────────────�
 
 | Feature | File | Description |
 |---------|------|-------------|
-| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts + budget alerts + forecast notifications |
+| Notification Helper | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:19) | Channel creation + expense alerts + budget alerts + forecast notifications + recurring reminders |
 | Expense Notification Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:29) | "Expense Notifications" channel (Android 8+) |
 | Budget Alert Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:104) | "Budget Alerts" channel — high importance when exceeded |
+| Recurring Reminders Channel | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:271) | "Recurring Reminders" channel — upcoming/overdue expense alerts |
 | Expense Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:54) | Shows "New Expense: KES X,XXX.XX" + "To recipient" |
 | Budget Alert Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:132) | Shows "⚠️ Budget Warning" at 80% / "🚨 Budget Exceeded" at 100% with progress details |
+| Recurring Reminder Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:297) | Shows "🔔 Rent due tomorrow ~KES 35,000" for upcoming and "⏰ Rent appears overdue" for late |
+| Recurring Reminder Worker | [`RecurringReminderWorker.kt`](../android/app/src/main/java/com/pesatrack/services/RecurringReminderWorker.kt:1) | Daily WorkManager worker — detects upcoming/overdue recurring expenses, sends notifications |
 | Tap-to-Categorize | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:64) | PendingIntent opens categorize screen |
-| Channel Init on Launch | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:51) | Created in `onCreate()` |
+| Channel Init on Launch | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:51) | Created in `onCreate()` (expense + recurring reminders channels) |
 
 ---
 
@@ -354,21 +358,22 @@ SMS Sources ──────────────────────�
 - Vico 2.0.0-beta.3 (Compose charting library — analytics charts)
 - Biometric 1.2.0-alpha05 (fingerprint / face unlock for PIN lock)
 - Lifecycle Process 2.8.7 (ProcessLifecycleOwner for app background detection)
+- WorkManager 2.10.0 + Hilt WorkManager 1.2.0 (daily recurring expense reminder worker)
 
 ---
 
 ### 9. Play Store Release
 
-#### ✅ Published (v1.0.0)
+#### ✅ Published (v1.1.0)
 
 | Item | Details |
 |------|---------|
 | **Application ID** | `com.pesatrack` |
-| **Version** | 1.0.0 (versionCode 1) |
+| **Version** | 1.1.0 (versionCode 4) |
 | **Signed AAB** | `app-release.aab` — 13.9 MB, R8 minified + resource shrunk |
 | **Signing Key** | `pesatrack-upload.jks` — CN=Joel Ngei, OU=PesaTrack, O=PesaTrack, L=Nairobi, C=KE (valid until 2053-08-07) |
 | **Play App Signing** | Upload key used; Google re-signs for distribution |
-| **Production Track** | Submitted — under Google review (1–7 days for new apps) |
+| **Production Track** | Published — live on Google Play |
 | **Internal Testing** | Live — testers can install via opt-in link |
 | **Store Listing** | Short description (76 chars), full description (~1950 chars), 8 screenshots, feature graphic (1024×500), hi-res icon (512×512) |
 | **Privacy Policy** | [`docs/privacy-policy.html`](../docs/privacy-policy.html) — hosted via GitHub Pages |
@@ -376,6 +381,7 @@ SMS Sources ──────────────────────�
 | **Data Safety** | Completed — no data collected/shared, all data stored on-device |
 | **SMS Permission Declaration** | ✅ Complete |
 | **Listing Plan** | [`plans/play-store-listing-plan.md`](../plans/play-store-listing-plan.md) — store copy, release notes, form answers |
+| **Release History** | [`_docs/releases.md`](releases.md) — version changelog and release tracking |
 
 ---
 
@@ -425,7 +431,7 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 
 ```
 app/src/main/java/com/pesatrack/
-├── PesaTrackApp.kt                          ✅ Hilt Application class + ProcessLifecycleOwner (PIN lock)
+├── PesaTrackApp.kt                          ✅ Hilt Application class + ProcessLifecycleOwner (PIN lock) + WorkManager Configuration.Provider
 ├── di/
 │   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao, IncomeDao)
 ├── data/
@@ -445,7 +451,7 @@ app/src/main/java/com/pesatrack/
 │   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
 │   │   │       └── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
 │   │   └── preferences/
-│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle)
+│   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle, **recurring reminders toggle + throttle**)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
@@ -456,9 +462,10 @@ app/src/main/java/com/pesatrack/
 │   ├── Category.kt                          ✅ Domain model
 │   ├── Budget.kt                            ✅ Budget, BudgetPeriod, BudgetProgress, BudgetStatus, BudgetAlert
 │   ├── BudgetForecast.kt                    ✅ BudgetForecast (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget), ForecastStatus enum
+│   ├── RecurringExpense.kt                  ✅ RecurringExpense, RecurrenceCycle, AmountPattern, RecurringExpenseSummary, RecurringPeriodInfo
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
 ├── presentation/
-│   ├── MainActivity.kt                      ✅ Onboarding → PIN lock → main app; BiometricPrompt; 3-tab bottom nav (start-dest-aware save/restore)
+│   ├── MainActivity.kt                      ✅ Onboarding → PIN lock → main app; BiometricPrompt; 3-tab bottom nav; **WorkManager recurring reminder scheduling**
 │   ├── navigation/
 │   │   ├── NavGraph.kt                      ✅ 12 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, PinSetup
 │   │   └── Screen.kt                        ✅ Sealed class + BottomNavItem enum (3 tabs) + PinSetup route
@@ -488,9 +495,9 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
 │   │   │   └── ManualEntryUiState.kt      ✅ Form state model
 │   │   ├── analytics/
-│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics + budget setup banner + **ForecastProjectionChart** (cumulative actual + projected + budget ceiling)
-│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status + **forecast projection data**
-│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets + **cumulativeActual/cumulativeProjection/totalBudgetCeiling**
+│   │   │   ├── AnalyticsScreen.kt         ✅ Full analytics + budget setup banner + **ForecastProjectionChart** + **RecurringBreakdownCard**
+│   │   │   ├── AnalyticsViewModel.kt      ✅ Data loading, month nav, MoM computation, CV-based trends, budget status + forecast projection + **recurring breakdown**
+│   │   │   └── AnalyticsUiState.kt        ✅ Charts data + summary stats + categoryTrends + hasActiveBudgets + forecast fields + **recurringTotal/oneTimeTotal/topRecurringNames**
 │   │   ├── budget/
 │   │   │   ├── BudgetScreen.kt            ✅ Period-first flow: PeriodSelector (tabs + nav), always-visible IncomeCard, filtered budget list, searchable category picker (no Total Spending), **per-card forecast subtitle**
 │   │   │   ├── BudgetViewModel.kt         ✅ Period navigation, period-filtered loading, income per period key, CRUD inherits period, **forecast loading per period**
@@ -507,9 +514,9 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── PinViewModel.kt              ✅ PIN verification, brute force protection (5 attempts → 30s cooldown)
 │   │   │   └── PinUiState.kt               ✅ PinMode (7 modes), digit entry, error/cooldown state
 │   │   └── settings/
-│   │       ├── SettingsScreen.kt             ✅ Security (PIN, biometric, timeout) + Category mgmt + Budget mgmt + **Month start day picker** + Bank SMS toggles
-│   │       ├── SettingsViewModel.kt          ✅ Bank + PIN/biometric + month start day preferences management
-│   │       └── SettingsUiState.kt            ✅ BankToggle + PIN/biometric/timeout + monthStartDay state
+│   │       ├── SettingsScreen.kt             ✅ Security (PIN, biometric, timeout) + Category mgmt + Budget mgmt + **Month start day picker** + Bank SMS toggles + **Notifications section (recurring reminders)**
+│   │       ├── SettingsViewModel.kt          ✅ Bank + PIN/biometric + month start day + **recurring reminders** preferences management
+│   │       └── SettingsUiState.kt            ✅ BankToggle + PIN/biometric/timeout + monthStartDay + **recurringRemindersEnabled** state
 │   ├── components/
 │   │   ├── ExpenseCard.kt                   ✅ Payment type icons, category title
 │   │   ├── CategoryChip.kt                  ✅ Selection chip
@@ -525,8 +532,10 @@ app/src/main/java/com/pesatrack/
 │   ├── AiCategorizationService.kt           ✅ CategorizationService — two-pass: user rules first, then built-in engine
 │   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
 │   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save + **forecast checking** (checkForecastsAfterExpense)
-│   ├── ForecastService.kt                   ✅ Linear burn rate forecasting — getForecastsForActiveBudgets, getForecastForBudget, getForecastsForPeriod, shouldSendForecastNotification
-│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel (80%/100% thresholds) + **forecast notifications**
+│   ├── ForecastService.kt                   ✅ Linear burn rate forecasting + **recurring-aware projections** (splits recurring vs discretionary spending)
+│   ├── RecurringExpenseService.kt           ✅ Recurring expense detection engine (interval analysis, 4 cycle types, 15-min cache, period info for forecasting)
+│   ├── RecurringReminderWorker.kt           ✅ Daily WorkManager worker — upcoming/overdue recurring expense notifications (@HiltWorker)
+│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel**
 │   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
 │   └── AppLockLifecycleObserver.kt          ✅ ProcessLifecycleOwner observer — background/foreground lock management
 └── utils/
@@ -611,6 +620,7 @@ backend/
 22. **Onboarding "Import Now" Navigation Fix** — Fixed the "Import Now" button on onboarding page 4 navigating to the Home screen instead of the Import screen. Root cause: `onImportNow` callback called both `onImportHistory()` (no-op) and `onComplete()` (which finishes onboarding and shows Home). Fix: `onImportHistory` now sets a `pendingImportNavigation` flag in `AppEntryPoint`; after onboarding completes and `MainScreen` loads, a `LaunchedEffect` navigates to `Screen.ImportHistory` and clears the flag.
 23. **SMS Permission Recovery (Home Banner + Import Gate)** — Added two surfaces to recover users who skipped onboarding SMS permission or later revoked it. **(a) Home Screen banner**: shown when SMS permission is missing and not permanently dismissed; three actions — "Enable" (launches permission request), "Not now" (session dismiss), "Don't ask again" (permanent dismiss via `KEY_SMS_BANNER_DISMISSED` in DataStore — respects manual-only users). Permission status rechecked on every `Lifecycle.RESUMED` event (catches returns from App Settings). **(b) Import Screen gate**: when `READ_SMS` is not granted, the SMS import UI is replaced with a full-screen explanation card + "Grant SMS Permission" / "Open App Settings" buttons; Excel import remains accessible below the gate. `AppPreferences` gains `smsBannerDismissed` Flow + snapshot + setter.
 24. **Budget Forecasting (4 Phases)** — Linear burn rate forecasting across the entire budget system. **Phase A (Home Forecast Card):** New `ForecastService` (`@Singleton`, Hilt-injected, pure Kotlin — no DB tables, no schema migration) computes `BudgetForecast` objects (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget) from existing budget/spending data. `HomeScreen` shows a `ForecastCard` with top 5 at-risk budgets, color-coded status (🔴 exhaustion imminent / 🟡 projected over / 🟢 on track), safe daily spend, and "View →" navigation to budget screen. Minimum 5-day data guard prevents noisy projections. **Phase B (Budget Per-Card Forecast):** Each `BudgetProgressCard` on the budget screen shows a forecast subtitle: projected % by period-end, exhaustion date warning, and safe daily spend — all period-aware (weekly/monthly/yearly). `BudgetUiState.forecastMap` maps budget IDs to forecasts. **Phase C (Forecast Notifications):** `SmsReceiver` triggers `BudgetService.checkForecastsAfterExpense()` after each SMS expense save. Notifications fire when projected ≥110% with ≥7 days remaining OR exhaustion <5 days. 24-hour per-budget throttle via `AppPreferences` DataStore keys prevents notification spam. **Phase D (Analytics Projection Chart):** `ForecastProjectionChart` in analytics shows cumulative actual spending (solid line) + projected extension to month-end (second series) + horizontal budget ceiling reference line. Uses Vico 2-series line chart. Only shown for current month with spending data.
+25. **Recurring Expense Detection (4 Phases)** — Pattern-based detection of recurring expenses with no new DB tables or schema changes. **Phase A (Detection Engine):** New `RecurringExpenseService` (`@Singleton`, Hilt-injected, 15-minute in-memory cache) analyses interval patterns between payments to the same recipient. Detects 4 cycle types: WEEKLY (5–9 day gaps), BIWEEKLY (12–16 days), MONTHLY (26–35 days), QUARTERLY (80–100 days). Requires ≥3 occurrences. Amount classified as FIXED (CV ≤25%, ±10% tolerance) or VARIABLE. New DAO query `getExpensesForRecurrenceDetection()` groups candidates with ≥3 payments in the last 12 months. **Phase B (Analytics Split):** `AnalyticsScreen` monthly tab shows a `RecurringBreakdownCard` with two progress bars (recurring vs one-time spending) and top 3 recurring expense names. Injected via `AnalyticsViewModel.loadRecurringBreakdown()`. **Phase C (Recurring-Aware Forecasting):** `ForecastService.computeForecast()` splits spending into recurring (known) + discretionary (extrapolated) components. Only discretionary spending is projected via burn rate; upcoming recurring expenses are added as known amounts. Eliminates absurd projections caused by large one-time recurring payments (e.g. rent on day 1). `ForecastService` fetches recurring info internally — no caller changes needed. **Phase D (Notifications):** Daily `RecurringReminderWorker` (WorkManager, `@HiltWorker`) checks for upcoming (within 2 days) and overdue (3+ days late) recurring expenses. Shows reminder notifications via dedicated "Recurring Reminders" notification channel. Toggleable in Settings via `recurringRemindersEnabled` preference. Per-expense notification throttle prevents spam (cycle-duration-based cooldown).
 
 ---
 
@@ -670,7 +680,7 @@ backend/
 | — | Forecasting | ✅ Complete | Budget burn rate projections — 4 phases: Home forecast card, Budget screen per-card forecast, Forecast notifications (24h throttle), Analytics projection chart |
 | — | Database Backup/Restore | ✅ Complete | .zip backup via SAF (database + settings.json); restore with SQLite validation + app restart |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
-| — | Recurring expense tracking | ⏳ Pending | Detect repeating patterns |
+| — | Recurring expense tracking | ✅ Complete | Detection engine + analytics split + recurring-aware forecasting + daily reminder notifications |
 
 ---
 
@@ -683,7 +693,7 @@ backend/
 - [x] Generate signed AAB for Play Store distribution — `app-release.aab` (13.9 MB), signed by CN=Joel Ngei, valid until 2053
 - [x] Submit to Google Play Store — v1.0.0 published to Production track (under review) + Internal Testing (live for testers)
 - [x] Complete SMS Permission Declaration
-- [ ] Monitor Production review status (1–7 days for new apps)
+- [x] Monitor Production review status — app live on Google Play
 
 ### Medium Priority — Phase 2 Milestone 5
 - [x] About section (app version, privacy policy link, contact, data practices summary)

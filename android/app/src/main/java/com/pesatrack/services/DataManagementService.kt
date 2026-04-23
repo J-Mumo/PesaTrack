@@ -112,6 +112,9 @@ class DataManagementService @Inject constructor(
                 }
             }
 
+            // Track export counter (fire-and-forget — already in suspend context)
+            appPreferences.incrementExportsCount()
+
             csvFile
         } catch (e: Exception) {
             e.printStackTrace()
@@ -221,6 +224,10 @@ class DataManagementService @Inject constructor(
 
             tempFile.delete()
             Log.i(TAG, "Backup completed successfully to $destinationUri (raw .db)")
+
+            // Track backup counter (fire-and-forget — already in suspend context)
+            appPreferences.incrementBackupsCount()
+
             true
         } catch (e: Exception) {
             Log.e(TAG, "Backup failed", e)

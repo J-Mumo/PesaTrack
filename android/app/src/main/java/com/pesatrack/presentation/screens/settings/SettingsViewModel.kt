@@ -55,7 +55,8 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.pinEnabled,
                 appPreferences.biometricEnabled,
                 appPreferences.lockTimeoutSeconds,
-                appPreferences.monthStartDay
+                appPreferences.monthStartDay,
+                appPreferences.recurringRemindersEnabled
             ) { values ->
                 val trackingEnabled = values[0] as Boolean
                 val enabledBanks = @Suppress("UNCHECKED_CAST") (values[1] as Set<String>)
@@ -63,6 +64,7 @@ class SettingsViewModel @Inject constructor(
                 val biometricEnabled = values[3] as Boolean
                 val lockTimeout = values[4] as Int
                 val monthStartDay = values[5] as Int
+                val recurringReminders = values[6] as Boolean
 
                 // Get all non-MPESA parser names from the registry
                 val bankNames = SmsParserRegistry.getAllParserNames()
@@ -82,7 +84,8 @@ class SettingsViewModel @Inject constructor(
                     pinEnabled = pinEnabled,
                     biometricEnabled = biometricEnabled,
                     lockTimeoutSeconds = lockTimeout,
-                    monthStartDay = monthStartDay
+                    monthStartDay = monthStartDay,
+                    recurringRemindersEnabled = recurringReminders
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -145,6 +148,17 @@ class SettingsViewModel @Inject constructor(
     fun setMonthStartDay(day: Int) {
         viewModelScope.launch {
             appPreferences.setMonthStartDay(day)
+        }
+    }
+
+    // ==================== Notifications ====================
+
+    /**
+     * Toggle recurring expense reminder notifications.
+     */
+    fun setRecurringRemindersEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appPreferences.setRecurringRemindersEnabled(enabled)
         }
     }
 

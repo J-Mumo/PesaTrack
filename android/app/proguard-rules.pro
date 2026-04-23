@@ -28,6 +28,8 @@
 -dontwarn org.slf4j.**
 -dontwarn schemaorg_apache_xmlbeans.**
 -dontwarn com.microsoft.schemas.**
+-dontwarn org.etsi.uri.**
+-dontwarn org.w3.x2000.**
 
 # Handle missing Java Desktop classes (AWT)
 # POI references java.awt.geom.Rectangle2D in XSLF/SVG code (unused on Android)

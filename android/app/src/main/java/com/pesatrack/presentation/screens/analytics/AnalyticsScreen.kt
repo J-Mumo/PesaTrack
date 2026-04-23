@@ -282,6 +282,21 @@ fun MonthlyTabContent(
             }
         }
 
+        // Recurring vs One-time Spending Breakdown
+        if (uiState.hasRecurringData && uiState.totalForMonth > 0) {
+            item {
+                SectionHeader(title = "Spending Breakdown")
+            }
+            item {
+                RecurringBreakdownCard(
+                    recurringTotal = uiState.recurringTotal,
+                    oneTimeTotal = uiState.oneTimeTotal,
+                    totalForMonth = uiState.totalForMonth,
+                    topRecurringNames = uiState.topRecurringNames
+                )
+            }
+        }
+
         // Bottom spacer for navigation bar
         item {
             Spacer(modifier = Modifier.height(16.dp))
@@ -1584,6 +1599,113 @@ fun BudgetSetupBanner(
                 )
             ) {
                 Text("Set Up")
+            }
+        }
+    }
+}
+
+// ==================== Recurring vs One-time Spending Breakdown ====================
+
+@Composable
+fun RecurringBreakdownCard(
+    recurringTotal: Double,
+    oneTimeTotal: Double,
+    totalForMonth: Double,
+    topRecurringNames: String
+) {
+    val recurringPct = if (totalForMonth > 0) (recurringTotal / totalForMonth * 100).toInt() else 0
+    val oneTimePct = if (totalForMonth > 0) (oneTimeTotal / totalForMonth * 100).toInt() else 0
+    val recurringFraction = if (totalForMonth > 0) (recurringTotal / totalForMonth).toFloat().coerceIn(0f, 1f) else 0f
+    val oneTimeFraction = if (totalForMonth > 0) (oneTimeTotal / totalForMonth).toFloat().coerceIn(0f, 1f) else 0f
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Repeat,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Recurring vs One-time",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            // Recurring bar
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Recurring",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "${recurringTotal.formatAsCurrency()} ($recurringPct%)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { recurringFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+
+            // One-time bar
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "One-time",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "${oneTimeTotal.formatAsCurrency()} ($oneTimePct%)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { oneTimeFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
+
+            // Top recurring names
+            if (topRecurringNames.isNotBlank()) {
+                Text(
+                    text = "Top recurring: $topRecurringNames",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
             }
         }
     }

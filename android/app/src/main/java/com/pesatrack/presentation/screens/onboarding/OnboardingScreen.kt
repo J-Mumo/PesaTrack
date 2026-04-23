@@ -38,7 +38,9 @@ import kotlinx.coroutines.launch
 fun OnboardingScreen(
     onComplete: () -> Unit,
     onRequestSmsPermission: () -> Unit,
-    onImportHistory: () -> Unit
+    onImportHistory: () -> Unit,
+    onSmsPermissionGranted: () -> Unit = {},
+    onSmsPermissionSkipped: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val pagerState = rememberPagerState(pageCount = { 4 })
@@ -58,7 +60,11 @@ fun OnboardingScreen(
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        smsPermissionGranted = permissions.values.all { it }
+        val allGranted = permissions.values.all { it }
+        smsPermissionGranted = allGranted
+        if (allGranted) {
+            onSmsPermissionGranted()
+        }
     }
 
     // Notification permission launcher (Android 13+)
@@ -79,7 +85,12 @@ fun OnboardingScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onComplete) {
+                TextButton(onClick = {
+                    if (!smsPermissionGranted) {
+                        onSmsPermissionSkipped()
+                    }
+                    onComplete()
+                }) {
                     Text("Skip")
                 }
             }
@@ -163,6 +174,10 @@ fun OnboardingScreen(
                 if (pagerState.currentPage < 3) {
                     Button(
                         onClick = {
+                            // Record SMS skipped if leaving page 2 without granting
+                            if (pagerState.currentPage == 2 && !smsPermissionGranted) {
+                                onSmsPermissionSkipped()
+                            }
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
@@ -177,7 +192,12 @@ fun OnboardingScreen(
                         Text("Next")
                     }
                 } else {
-                    Button(onClick = onComplete) {
+                    Button(onClick = {
+                        if (!smsPermissionGranted) {
+                            onSmsPermissionSkipped()
+                        }
+                        onComplete()
+                    }) {
                         Text("Get Started")
                     }
                 }

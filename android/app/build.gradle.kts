@@ -23,8 +23,8 @@ android {
         applicationId = "com.pesatrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -76,6 +76,9 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             // Exclude duplicate files from Apache POI dependencies
@@ -133,6 +136,11 @@ dependencies {
 
     // ProcessLifecycleOwner for app background/foreground detection
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+
+    // WorkManager for periodic background tasks (recurring expense reminders)
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

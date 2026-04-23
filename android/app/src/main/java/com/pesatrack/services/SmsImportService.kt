@@ -200,6 +200,12 @@ class SmsImportService @Inject constructor(
             errors = errors
         )
 
+        // Track import milestone and counter (fire-and-forget)
+        if (newExpensesImported > 0) {
+            appPreferences.recordFirstImportCompleted()
+            appPreferences.incrementImportsCount()
+        }
+
         Log.d(TAG, "Import complete: $result")
         return result
     }

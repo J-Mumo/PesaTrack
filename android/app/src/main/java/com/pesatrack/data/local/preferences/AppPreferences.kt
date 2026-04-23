@@ -35,6 +35,8 @@ class AppPreferences @Inject constructor(
 ) {
 
     companion object {
+        private const val QUALIFIED_SESSION_GAP_MS = 5 * 60 * 1000L
+
         /**
          * Set of enabled bank parser display names (e.g., "NCBA Bank").
          * M-PESA is always enabled and not stored here.
@@ -100,6 +102,60 @@ class AppPreferences @Inject constructor(
          * Dynamic key: "forecast_notif_{budgetId}"
          */
         private const val FORECAST_NOTIF_PREFIX = "forecast_notif_"
+
+        // ── Recurring Expense Reminders ──
+
+        /**
+         * Whether recurring expense reminder notifications are enabled.
+         * Default: true — users can disable in Settings.
+         */
+        private val KEY_RECURRING_REMINDERS_ENABLED = booleanPreferencesKey("recurring_reminders_enabled")
+
+        /**
+         * Key prefix for recurring notification throttle.
+         * Stores the last timestamp (epoch millis) a recurring reminder was sent for each expense.
+         * Dynamic key: "recurring_notif_{throttleKey}"
+         */
+        private const val RECURRING_NOTIF_PREFIX = "recurring_notif_"
+
+        // ── Usage Milestones (Funnel) ──
+
+        /** Epoch millis of first install. Set once, never overwritten. */
+        val KEY_INSTALL_TIMESTAMP = longPreferencesKey("install_timestamp")
+
+        val KEY_ONBOARDING_STARTED = longPreferencesKey("onboarding_started")
+        val KEY_ONBOARDING_SMS_GRANTED = longPreferencesKey("onboarding_sms_granted")
+        val KEY_ONBOARDING_SMS_SKIPPED = longPreferencesKey("onboarding_sms_skipped")
+        val KEY_ONBOARDING_IMPORT_CHOSEN = longPreferencesKey("onboarding_import_chosen")
+        val KEY_ONBOARDING_IMPORT_SKIPPED = longPreferencesKey("onboarding_import_skipped")
+        val KEY_FIRST_SMS_PARSED = longPreferencesKey("first_sms_parsed")
+        val KEY_FIRST_IMPORT_COMPLETED = longPreferencesKey("first_import_completed")
+        val KEY_FIRST_MANUAL_ENTRY = longPreferencesKey("first_manual_entry")
+        val KEY_FIRST_CATEGORIZATION = longPreferencesKey("first_categorization")
+        val KEY_FIRST_BUDGET_CREATED = longPreferencesKey("first_budget_created")
+        val KEY_FIRST_ANALYTICS_VIEWED = longPreferencesKey("first_analytics_viewed")
+
+        // ── Re-engagement Markers ──
+
+        val KEY_LAST_APP_OPEN = longPreferencesKey("last_app_open")
+        val KEY_QUALIFIED_SESSION_COUNT = intPreferencesKey("qualified_session_count")
+        val KEY_RAW_LAUNCH_COUNT = intPreferencesKey("raw_launch_count")
+        val KEY_RETURN_DAY_1 = longPreferencesKey("return_day_1")
+        val KEY_RETURN_DAY_7 = longPreferencesKey("return_day_7")
+        val KEY_RETURN_DAY_30 = longPreferencesKey("return_day_30")
+
+        // ── Feature Usage Counters ──
+
+        val KEY_COUNT_SMS_PARSED = intPreferencesKey("count_sms_parsed")
+        val KEY_COUNT_IMPORTS = intPreferencesKey("count_imports")
+        val KEY_COUNT_MANUAL_ENTRIES = intPreferencesKey("count_manual_entries")
+        val KEY_COUNT_CATEGORIZATIONS = intPreferencesKey("count_categorizations")
+        val KEY_COUNT_BUDGETS_CREATED = intPreferencesKey("count_budgets_created")
+        val KEY_COUNT_ANALYTICS_VIEWS = intPreferencesKey("count_analytics_views")
+        val KEY_COUNT_FORECAST_VIEWS = intPreferencesKey("count_forecast_views")
+        val KEY_COUNT_EXCEL_IMPORTS = intPreferencesKey("count_excel_imports")
+        val KEY_COUNT_EXPORTS = intPreferencesKey("count_exports")
+        val KEY_COUNT_BACKUPS = intPreferencesKey("count_backups")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -371,6 +427,162 @@ class AppPreferences @Inject constructor(
         val elapsed = System.currentTimeMillis() - lastSent
         return elapsed >= 24 * 60 * 60 * 1000L // 24 hours
     }
+
+    // ==================== Recurring Expense Reminders ====================
+
+    /**
+     * Whether recurring expense reminder notifications are enabled.
+     * Default: true — users can disable via Settings toggle.
+     */
+    val recurringRemindersEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_RECURRING_REMINDERS_ENABLED] ?: true
+    }
+
+    /** Snapshot: are recurring reminders enabled? */
+    suspend fun getRecurringRemindersEnabled(): Boolean {
+        return context.dataStore.data.first()[KEY_RECURRING_REMINDERS_ENABLED] ?: true
+    }
+
+    /** Toggle recurring reminders on/off. */
+    suspend fun setRecurringRemindersEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_RECURRING_REMINDERS_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Check if a recurring notification can be sent for a specific expense (throttle).
+     * Max 1 notification per recurring expense per cycle (approximated as cycleDays minus 2 days).
+     *
+     * @param throttleKey Unique key for this notification type + recipient
+     * @param cycleDays Expected cycle length in days (7 for weekly, 30 for monthly, etc.)
+     */
+    suspend fun canSendRecurringNotification(throttleKey: String, cycleDays: Int): Boolean {
+        val key = longPreferencesKey("${RECURRING_NOTIF_PREFIX}$throttleKey")
+        val lastSent = context.dataStore.data.first()[key] ?: 0L
+        val elapsed = System.currentTimeMillis() - lastSent
+        // Throttle: at least (cycleDays - 2) days between notifications for the same expense
+        val cooldownMs = (cycleDays - 2).coerceAtLeast(1) * 24 * 60 * 60 * 1000L
+        return elapsed >= cooldownMs
+    }
+
+    /**
+     * Record the timestamp when a recurring notification was sent.
+     */
+    suspend fun setLastRecurringNotifTime(throttleKey: String, timestamp: Long = System.currentTimeMillis()) {
+        val key = longPreferencesKey("${RECURRING_NOTIF_PREFIX}$throttleKey")
+        context.dataStore.edit { prefs ->
+            prefs[key] = timestamp
+        }
+    }
+
+    // ==================== Usage Milestones ====================
+
+    /**
+     * Record the install timestamp. Only sets the value once (if currently 0L).
+     * Fire-and-forget — callers just call this and move on.
+     */
+    suspend fun recordInstallTimestamp() {
+        context.dataStore.edit { prefs ->
+            if ((prefs[KEY_INSTALL_TIMESTAMP] ?: 0L) == 0L) {
+                prefs[KEY_INSTALL_TIMESTAMP] = System.currentTimeMillis()
+            }
+        }
+    }
+
+    /** Snapshot: get install timestamp (0L if not set). */
+    suspend fun getInstallTimestamp(): Long {
+        return context.dataStore.data.first()[KEY_INSTALL_TIMESTAMP] ?: 0L
+    }
+
+    /**
+     * Generic helper: record a first-time milestone timestamp.
+     * Only sets the value if currently 0L (unset). Fire-and-forget.
+     */
+    suspend fun recordMilestone(key: Preferences.Key<Long>) {
+        context.dataStore.edit { prefs ->
+            if ((prefs[key] ?: 0L) == 0L) {
+                prefs[key] = System.currentTimeMillis()
+            }
+        }
+    }
+
+    /**
+     * Atomically increment an integer counter key.
+     * Fire-and-forget — callers just call this and move on.
+     */
+    suspend fun incrementCounter(key: Preferences.Key<Int>) {
+        context.dataStore.edit { prefs ->
+            prefs[key] = (prefs[key] ?: 0) + 1
+        }
+    }
+
+    /**
+     * Record an app open event:
+     * - Increments raw_launch_count on every call
+     * - Increments qualified_session_count only if the previous open is >= 5 minutes ago
+     * - Sets last_app_open timestamp
+     * - Checks and sets return day markers (D1, D7, D30) based on install_timestamp
+     */
+    suspend fun recordAppOpen() {
+        context.dataStore.edit { prefs ->
+            val now = System.currentTimeMillis()
+            val lastOpen = prefs[KEY_LAST_APP_OPEN] ?: 0L
+
+            // Debug/diagnostic metric: every Activity creation.
+            prefs[KEY_RAW_LAUNCH_COUNT] = (prefs[KEY_RAW_LAUNCH_COUNT] ?: 0) + 1
+
+            // Product metric: only count launches separated by a meaningful gap.
+            if (lastOpen == 0L || (now - lastOpen) >= QUALIFIED_SESSION_GAP_MS) {
+                prefs[KEY_QUALIFIED_SESSION_COUNT] =
+                    (prefs[KEY_QUALIFIED_SESSION_COUNT] ?: 0) + 1
+            }
+
+            prefs[KEY_LAST_APP_OPEN] = now
+
+            val installTs = prefs[KEY_INSTALL_TIMESTAMP] ?: 0L
+            if (installTs > 0L) {
+                val elapsed = now - installTs
+                val dayMs = 24 * 60 * 60 * 1000L
+                if (elapsed >= 1 * dayMs && (prefs[KEY_RETURN_DAY_1] ?: 0L) == 0L) {
+                    prefs[KEY_RETURN_DAY_1] = now
+                }
+                if (elapsed >= 7 * dayMs && (prefs[KEY_RETURN_DAY_7] ?: 0L) == 0L) {
+                    prefs[KEY_RETURN_DAY_7] = now
+                }
+                if (elapsed >= 30 * dayMs && (prefs[KEY_RETURN_DAY_30] ?: 0L) == 0L) {
+                    prefs[KEY_RETURN_DAY_30] = now
+                }
+            }
+        }
+    }
+
+    // ── Milestone convenience methods (delegate to recordMilestone) ──
+
+    suspend fun recordOnboardingStarted() = recordMilestone(KEY_ONBOARDING_STARTED)
+    suspend fun recordOnboardingSmsGranted() = recordMilestone(KEY_ONBOARDING_SMS_GRANTED)
+    suspend fun recordOnboardingSmsSkipped() = recordMilestone(KEY_ONBOARDING_SMS_SKIPPED)
+    suspend fun recordOnboardingImportChosen() = recordMilestone(KEY_ONBOARDING_IMPORT_CHOSEN)
+    suspend fun recordOnboardingImportSkipped() = recordMilestone(KEY_ONBOARDING_IMPORT_SKIPPED)
+    suspend fun recordFirstSmsParsed() = recordMilestone(KEY_FIRST_SMS_PARSED)
+    suspend fun recordFirstImportCompleted() = recordMilestone(KEY_FIRST_IMPORT_COMPLETED)
+    suspend fun recordFirstManualEntry() = recordMilestone(KEY_FIRST_MANUAL_ENTRY)
+    suspend fun recordFirstCategorization() = recordMilestone(KEY_FIRST_CATEGORIZATION)
+    suspend fun recordFirstBudgetCreated() = recordMilestone(KEY_FIRST_BUDGET_CREATED)
+    suspend fun recordFirstAnalyticsViewed() = recordMilestone(KEY_FIRST_ANALYTICS_VIEWED)
+
+    // ── Counter convenience methods (delegate to incrementCounter) ──
+
+    suspend fun incrementSmsParsedCount() = incrementCounter(KEY_COUNT_SMS_PARSED)
+    suspend fun incrementImportsCount() = incrementCounter(KEY_COUNT_IMPORTS)
+    suspend fun incrementManualEntriesCount() = incrementCounter(KEY_COUNT_MANUAL_ENTRIES)
+    suspend fun incrementCategorizationsCount() = incrementCounter(KEY_COUNT_CATEGORIZATIONS)
+    suspend fun incrementBudgetsCreatedCount() = incrementCounter(KEY_COUNT_BUDGETS_CREATED)
+    suspend fun incrementAnalyticsViewsCount() = incrementCounter(KEY_COUNT_ANALYTICS_VIEWS)
+    suspend fun incrementForecastViewsCount() = incrementCounter(KEY_COUNT_FORECAST_VIEWS)
+    suspend fun incrementExcelImportsCount() = incrementCounter(KEY_COUNT_EXCEL_IMPORTS)
+    suspend fun incrementExportsCount() = incrementCounter(KEY_COUNT_EXPORTS)
+    suspend fun incrementBackupsCount() = incrementCounter(KEY_COUNT_BACKUPS)
 
     /**
      * Default set of enabled banks — all non-M-PESA parsers from the registry.

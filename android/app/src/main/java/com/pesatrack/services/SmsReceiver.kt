@@ -135,6 +135,10 @@ class SmsReceiver : BroadcastReceiver() {
                         " [${mainExpense.source}]" +
                         if (mainExpense.isCategorized) " (auto-categorized)" else "")
 
+                // Track SMS parsed milestone and counter (fire-and-forget)
+                appPreferences.recordFirstSmsParsed()
+                appPreferences.incrementSmsParsedCount()
+
                 // Show notification to categorize (only if not auto-categorized)
                 if (expenseId > 0 && !mainExpense.isCategorized) {
                     val recipient = mainExpense.recipientName ?: mainExpense.recipient

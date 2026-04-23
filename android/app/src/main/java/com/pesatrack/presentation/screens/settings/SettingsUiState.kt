@@ -25,6 +25,9 @@ data class SettingsUiState(
     // Budget
     /** Day of the month when budget periods start (1–28, default 1). */
     val monthStartDay: Int = 1,
+    // Notifications
+    /** Whether recurring expense reminder notifications are enabled. */
+    val recurringRemindersEnabled: Boolean = true,
     // Data Management
     val isExporting: Boolean = false,
     val isBackingUp: Boolean = false,

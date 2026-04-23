@@ -2,6 +2,7 @@ package com.pesatrack.presentation.screens.manual_entry
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
@@ -21,7 +22,8 @@ import javax.inject.Inject
 class ManualEntryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
-    private val recipientMappingRepository: RecipientMappingRepository
+    private val recipientMappingRepository: RecipientMappingRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ManualEntryUiState())
@@ -152,6 +154,12 @@ class ManualEntryViewModel @Inject constructor(
                 }
 
                 _uiState.update { it.copy(isSaving = false, isSaved = true) }
+
+                // Track manual entry milestone and counter (fire-and-forget)
+                launch {
+                    appPreferences.recordFirstManualEntry()
+                    appPreferences.incrementManualEntriesCount()
+                }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

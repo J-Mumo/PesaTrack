@@ -59,6 +59,12 @@ interface CategoryDao {
      */
     @Query("SELECT * FROM categories ORDER BY sortOrder ASC, name ASC")
     fun getAllCategories(): Flow<List<CategoryEntity>>
+
+    /**
+     * Get all categories (suspend, for one-shot queries like recurring expense detection)
+     */
+    @Query("SELECT * FROM categories ORDER BY sortOrder ASC, name ASC")
+    suspend fun getAllCategoriesSync(): List<CategoryEntity>
     
     /**
      * Get only group (parent) categories
