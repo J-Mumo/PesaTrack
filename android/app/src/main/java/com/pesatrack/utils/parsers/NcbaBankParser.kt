@@ -17,15 +17,24 @@ import java.util.regex.Pattern
  *
  * NCBA sends **paired SMS** for each transaction:
  * 1. Generic debit notification: "Your account 763****018 has been debited..." → SKIPPED
- * 2. Detailed confirmation: "Dear NAME, your MPESA transfer..." → PARSED
+ * 2. Detailed confirmation: "Dear NAME, your MPESA transfer..." or "Mpesa Till/Paybill transfer..." → PARSED
  *
  * Only the detailed confirmation is parsed (has recipient info + M-PESA ref).
  * The generic debit is skipped (duplicate, less info).
  *
  * Supported SMS types:
- * - Send Money: "MPESA transfer of KES. 20000.00 to Mary Nduta Kungu (254790518661)"
- * - Buy Goods (Till): "Mpesa Till transfer of KES 3660 to 8933372 THE FIG AND OLIVE"
- * - Pay Bill: "Mpesa Paybill transfer of KES 1000 to AFRICAN INLAND CHURCH 87 account..."
+ *
+ * **Send Money:**
+ * - "MPESA transfer of KES. 20000.00 to Mary Nduta Kungu (254790518661)...MPESA ref number UCCOO8W1AW"
+ *
+ * **Buy Goods (Till):**
+ * - Format A (with till number): "Mpesa Till transfer of KES 3660 to 8933372 THE FIG AND OLIVE LIMITED 1 BANK REF. FTX26067ECFBF MPESA REF. UC8SG99R4R"
+ * - Format B (name only):        "Mpesa Till transfer of KES 1737.00 to JAZA MUTHIGA BANK REF. FTX26115UARQT MPESA REF. UDPSGBHAML was successful..."
+ *
+ * **Pay Bill:**
+ * - Format A (paybill + account): "Mpesa Paybill transfer of KES 1000 to AFRICAN INLAND CHURCH KINOO 87 account number Offering BANK REF. ... MPESA REF. ..."
+ * - Format B (account only):      "Mpesa Paybill transfer of KES 3150 to Lipa na KCB account number 7575077 BANK REF. ... MPESA REF. UCMSG9YPUB was successful..."
+ * - Format C (name only):         "Mpesa Paybill transfer of KES 50000.00 to BACK TO THE ROOT OF WORSHIP MINISTRY BANK REF. FTX26115UALPI MPESA REF. UDPSGBH4Z2 was successful..."
  *
  * Skipped (not expenses):
  * - Self-transfer: "MPESA transfer of KES. 15000.00 has been processed" (no recipient = bank→M-PESA)
@@ -72,17 +81,25 @@ class NcbaBankParser : SmsParserStrategy {
         Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
-    // Till payment: "Mpesa Till transfer of KES 3660 to 8933372 THE FIG AND OLIVE LIMITED 1 BANK REF. FTX26067ECFBF MPESA REF. UC8SG99R4R"
-    private val tillPaymentPattern = Pattern.compile(
+    // Till payment Format A (with till number): "Mpesa Till transfer of KES 3660 to 8933372 THE FIG AND OLIVE LIMITED 1 BANK REF. FTX26067ECFBF MPESA REF. UC8SG99R4R"
+    private val tillPaymentPatternA = Pattern.compile(
         "Mpesa Till transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(\\d+)\\s+(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
         Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
-    // Paybill payment — two known NCBA formats:
+    // Till payment Format B (name only, no till number): "Mpesa Till transfer of KES 1737.00 to JAZA MUTHIGA BANK REF. FTX26115UARQT MPESA REF. UDPSGBHAML was successful..."
+    private val tillPaymentPatternB = Pattern.compile(
+        "Mpesa Till transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
+        Pattern.CASE_INSENSITIVE or Pattern.DOTALL
+    )
+
+    // Paybill payment — three known NCBA formats:
     // Format A: "Mpesa Paybill transfer of KES 1000 to AFRICAN INLAND CHURCH KINOO 87 account number Offering BANK REF. ... MPESA REF. ..."
     //   → recipientName = "AFRICAN INLAND CHURCH KINOO", paybillNumber = "87", accountNumber = "Offering"
     // Format B: "Mpesa Paybill transfer of KES 3150 to Lipa na KCB account number 7575077 BANK REF. ... MPESA REF. UCMSG9YPUB was successful..."
     //   → recipientName = "Lipa na KCB", paybillNumber = N/A, accountNumber = "7575077"
+    // Format C: "Mpesa Paybill transfer of KES 50000.00 to BACK TO THE ROOT OF WORSHIP MINISTRY BANK REF. FTX26115UALPI MPESA REF. UDPSGBH4Z2 was successful..."
+    //   → recipientName = "BACK TO THE ROOT OF WORSHIP MINISTRY", no paybill/account
 
     // Format A: business name followed by a standalone paybill number (digits) before "account"
     private val paybillPatternA = Pattern.compile(
@@ -93,6 +110,12 @@ class NcbaBankParser : SmsParserStrategy {
     // Format B: business name directly followed by "account number" (no separate paybill number)
     private val paybillPatternB = Pattern.compile(
         "Mpesa Paybill transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(.+?)\\s+account\\s+(?:number\\s+)?(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
+        Pattern.CASE_INSENSITIVE or Pattern.DOTALL
+    )
+
+    // Format C: business name directly followed by BANK REF (no account keyword at all)
+    private val paybillPatternC = Pattern.compile(
+        "Mpesa Paybill transfer of KES\\s*([\\d,]+(?:\\.\\d{2})?)\\s+to\\s+(.+?)\\s+BANK REF\\.\\s*(\\S+)\\s+MPESA REF\\.\\s*([A-Z0-9]+)",
         Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
@@ -138,10 +161,10 @@ class NcbaBankParser : SmsParserStrategy {
         }
 
         try {
-            // Try each pattern in order of specificity
+            // Try each pattern in order of specificity (most specific first)
 
-            // 1. Till payment (Buy Goods)
-            tillPaymentPattern.matcher(body).let { m ->
+            // 1a. Till payment Format A (with till number — more specific, try first)
+            tillPaymentPatternA.matcher(body).let { m ->
                 if (m.find()) {
                     val amount = parseAmount(m.group(1))
                     val tillNumber = m.group(2)?.trim() ?: ""
@@ -162,6 +185,32 @@ class NcbaBankParser : SmsParserStrategy {
                                 isCategorized = false
                             ),
                             transactionCost = null // NCBA doesn't report M-PESA costs
+                        )
+                    }
+                }
+            }
+
+            // 1b. Till payment Format B (name only, no till number)
+            tillPaymentPatternB.matcher(body).let { m ->
+                if (m.find()) {
+                    val amount = parseAmount(m.group(1))
+                    val recipientName = m.group(2)?.trim()
+                    val bankRef = m.group(3)?.trim()
+                    val mpesaRef = m.group(4)?.trim()
+
+                    if (amount != null) {
+                        return SmsParser.ParsedTransaction(
+                            expense = Expense(
+                                transactionId = mpesaRef ?: bankRef,
+                                amount = amount,
+                                recipient = recipientName ?: "",
+                                recipientName = recipientName,
+                                paymentType = PaymentType.BUY_GOODS,
+                                source = expenseSource,
+                                timestamp = smsDate,
+                                isCategorized = false
+                            ),
+                            transactionCost = null
                         )
                     }
                 }
@@ -215,6 +264,32 @@ class NcbaBankParser : SmsParserStrategy {
                                 paymentType = PaymentType.PAY_BILL,
                                 source = expenseSource,
                                 notes = "Account: $accountNumber",
+                                timestamp = smsDate,
+                                isCategorized = false
+                            ),
+                            transactionCost = null
+                        )
+                    }
+                }
+            }
+
+            // 2c. Paybill payment — Format C (name only, no account keyword at all)
+            paybillPatternC.matcher(body).let { m ->
+                if (m.find()) {
+                    val amount = parseAmount(m.group(1))
+                    val recipientName = m.group(2)?.trim()
+                    val bankRef = m.group(3)?.trim()
+                    val mpesaRef = m.group(4)?.trim()
+
+                    if (amount != null) {
+                        return SmsParser.ParsedTransaction(
+                            expense = Expense(
+                                transactionId = mpesaRef ?: bankRef,
+                                amount = amount,
+                                recipient = recipientName ?: "",
+                                recipientName = recipientName,
+                                paymentType = PaymentType.PAY_BILL,
+                                source = expenseSource,
                                 timestamp = smsDate,
                                 isCategorized = false
                             ),
