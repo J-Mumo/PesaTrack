@@ -161,10 +161,10 @@ object NotificationHelper {
         val formattedSpent = String.format("KES %,.0f", spent)
         val formattedBudget = String.format("KES %,.0f", budgetAmount)
 
-        val (icon, title) = if (threshold >= 100) {
-            "🚨" to "$categoryName: Budget exceeded!"
-        } else {
-            "⚠\uFE0F" to "$categoryName: ${threshold}% of budget used"
+        val (icon, title) = when {
+            percentage > 100 -> "🚨" to "$categoryName: Budget exceeded!"
+            threshold >= 100 -> "🚨" to "$categoryName: Budget fully used!"
+            else -> "⚠\uFE0F" to "$categoryName: ${threshold}% of budget used"
         }
 
         val notification = NotificationCompat.Builder(context, BUDGET_CHANNEL_ID)
