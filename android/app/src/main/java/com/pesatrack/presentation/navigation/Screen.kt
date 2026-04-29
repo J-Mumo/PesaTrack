@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     }
     object ImportHistory : Screen("import_history")
     object ExcelImport : Screen("excel_import")
+    object StatementImport : Screen("statement_import")
     object BatchCategorize : Screen("batch_categorize")
     object Settings : Screen("settings")
     object ManualEntry : Screen("manual_entry")

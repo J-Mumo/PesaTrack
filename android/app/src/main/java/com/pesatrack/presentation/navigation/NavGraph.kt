@@ -14,6 +14,7 @@ import com.pesatrack.presentation.screens.expenses.ExpenseListScreen
 import com.pesatrack.presentation.screens.home.HomeScreen
 import com.pesatrack.presentation.screens.excel_import.ExcelImportScreen
 import com.pesatrack.presentation.screens.import_history.ImportScreen
+import com.pesatrack.presentation.screens.statement_import.StatementImportScreen
 import com.pesatrack.presentation.screens.budget.BudgetScreen
 import com.pesatrack.presentation.screens.category_management.CategoryManagementScreen
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
@@ -118,6 +119,9 @@ fun NavGraph(
                 },
                 onNavigateToExcelImport = {
                     navController.navigate(Screen.ExcelImport.route)
+                },
+                onNavigateToStatementImport = {
+                    navController.navigate(Screen.StatementImport.route)
                 }
             )
         }
@@ -125,6 +129,18 @@ fun NavGraph(
         // Excel Import Screen
         composable(route = Screen.ExcelImport.route) {
             ExcelImportScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToBatchCategorize = {
+                    navController.navigate(Screen.BatchCategorize.route)
+                }
+            )
+        }
+
+        // M-PESA Statement Import Screen
+        composable(route = Screen.StatementImport.route) {
+            StatementImportScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 },

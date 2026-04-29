@@ -73,6 +73,15 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Get total expenses for the last 7 days (rolling window).
+     * Uses a reactive Flow so the card updates in real time.
+     */
+    fun getTotalLast7Days(): Flow<Double> {
+        val sevenDaysAgoMs = System.currentTimeMillis() - (7L * 24 * 60 * 60 * 1000)
+        return expenseDao.getTotalSince(sevenDaysAgoMs)
+    }
+
+    /**
      * Save a new expense
      */
     suspend fun saveExpense(expense: Expense): Long {

@@ -128,6 +128,9 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:5.2.5")
     // Note: Removed exclusions and manual commons-compress to avoid NoClassDefFoundError
 
+    // Apache PDFBox for M-PESA statement PDF parsing (text extraction from password-protected PDFs)
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
     // Vico charting library (Compose + Material 3)
     implementation("com.patrykandpatrick.vico:compose-m3:2.0.0-beta.3")
 

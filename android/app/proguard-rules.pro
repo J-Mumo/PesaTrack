@@ -38,3 +38,10 @@
 -dontwarn com.graphbuilder.**
 -dontwarn org.apache.batik.**
 -dontwarn org.apache.poi.xslf.**
+
+# Apache PDFBox (M-PESA Statement PDF parsing)
+-keep class com.tom_roush.pdfbox.** { *; }
+-keep class org.bouncycastle.** { *; }
+-dontwarn com.tom_roush.pdfbox.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.apache.fontbox.**

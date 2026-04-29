@@ -83,6 +83,17 @@ interface ExpenseDao {
         AND isExcluded = 0
     """)
     fun getTotalForMonth(startOfMonth: Long, endOfMonth: Long): Flow<Double>
+
+    /**
+     * Get total expenses since a given timestamp (excludes pass-through money).
+     * Used for "last 7 days" rolling total on Home screen.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0.0) FROM expenses
+        WHERE timestamp >= :sinceMs
+        AND isExcluded = 0
+    """)
+    fun getTotalSince(sinceMs: Long): Flow<Double>
     
     /**
      * Get total expenses by category for a month (excludes pass-through money)

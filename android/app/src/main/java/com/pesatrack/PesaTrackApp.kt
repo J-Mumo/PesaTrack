@@ -5,6 +5,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.AppLockLifecycleObserver
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,9 @@ class PesaTrackApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Initialize PDFBox for M-PESA statement PDF parsing
+        PDFBoxResourceLoader.init(applicationContext)
 
         // Set initial lock state before any Activity starts
         appLockLifecycleObserver.initLockState()

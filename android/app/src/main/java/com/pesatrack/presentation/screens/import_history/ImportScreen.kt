@@ -36,6 +36,7 @@ fun ImportScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBatchCategorize: () -> Unit,
     onNavigateToExcelImport: () -> Unit = {},
+    onNavigateToStatementImport: () -> Unit = {},
     viewModel: ImportViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -101,6 +102,19 @@ fun ImportScreen(
                             )
                         }
 
+                        // M-PESA Statement PDF import
+                        item {
+                            OutlinedButton(
+                                onClick = onNavigateToStatementImport,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.Description, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import M-PESA Statement")
+                            }
+                        }
+
                         // Excel import still available without SMS permission
                         item {
                             OutlinedButton(
@@ -137,6 +151,19 @@ fun ImportScreen(
                                 Icon(Icons.Filled.FileDownload, null)
                                 Spacer(Modifier.width(8.dp))
                                 Text("Import M-PESA History")
+                            }
+                        }
+
+                        // M-PESA Statement PDF import
+                        item {
+                            OutlinedButton(
+                                onClick = onNavigateToStatementImport,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(16.dp)
+                            ) {
+                                Icon(Icons.Filled.Description, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Import M-PESA Statement")
                             }
                         }
 

@@ -24,6 +24,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M2: Bank SMS Tracking (NCBA)** | ✅ Complete | 100% |
 | **Phase 2 M3: Smart Categorization (Rules Engine)** | ✅ Complete | 100% |
 | **Excel Import (match + standalone)** | ✅ Complete | 100% |
+| **M-PESA Statement PDF Import** | ✅ Complete | 100% |
 | **Phase 2 M4: Manual Expense Entry** | ✅ Complete | 100% |
 | **Phase 2 M5: Settings & Configuration** | ✅ Complete | 100% |
 | **About Screen + Privacy Policy** | ✅ Complete | 100% |
@@ -249,6 +250,12 @@ SMS Sources ──────────────────────�
 | ExcelImportScreen | [`ExcelImportScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportScreen.kt:26) | File picker, progress, results summary |
 | ExcelImportViewModel | [`ExcelImportViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportViewModel.kt:29) | Multi-file URI handling, import orchestration |
 | ExcelImportUiState | [`ExcelImportUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/excel_import/ExcelImportUiState.kt:8) | READY, FILES_SELECTED, IMPORTING, COMPLETED, ERROR |
+| **M-PESA Statement PDF Import** | | |
+| MpesaStatementParser | [`MpesaStatementParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaStatementParser.kt:37) | PDF text extraction via PDFBox, 13+ transaction type regex patterns, charge linking, password-protected PDF support |
+| StatementImportService | [`StatementImportService.kt`](../android/app/src/main/java/com/pesatrack/services/StatementImportService.kt:1) | Orchestrates PDF unlock, parse, deduplicate, auto-categorize, batch save |
+| StatementImportScreen | [`StatementImportScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/statement_import/StatementImportScreen.kt:1) | File picker for PDFs, password dialog, progress indicator, results summary |
+| StatementImportViewModel | [`StatementImportViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/statement_import/StatementImportViewModel.kt:1) | File selection, password input, import execution on IO dispatcher |
+| StatementImportUiState | [`StatementImportUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/statement_import/StatementImportUiState.kt:1) | READY, PASSWORD_REQUIRED, IMPORTING, COMPLETED, ERROR |
 
 | **Manual Entry Screen** | | |
 | ManualEntryScreen | [`ManualEntryScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryScreen.kt:26) | Form: amount, recipient, name, payment type, date picker, category picker, notes |
@@ -605,6 +612,7 @@ backend/
 6. **Dual expense saving** — Each SMS can produce main expense + transaction cost (both saved).
 7. **Duplicate detection** — transactionId checked before saving to avoid double entries.
 8. **Excel Import** — Match Excel rows to uncategorized SMS expenses by amount±1 KES / date±1 day; apply categories via 55+ hardcoded mappings; import unmatched rows as standalone expenses; save recipient→category mappings for future auto-categorization; multi-file support via SAF file picker.
+9. **M-PESA Statement PDF Import** — Parse password-protected M-PESA statement PDFs via Apache PDFBox; regex-based extraction of 13+ transaction types (Send Money, Pay Bill, Buy Goods, Airtime, Bundles, Withdrawal, M-Shwari, GlobalPay, etc.); transaction charges linked to parent via Receipt No.; deduplication against existing DB; auto-categorization via CategorizationService + recipient mappings; income/reversals skipped; progress callback during import; accessible from Import History screen.
 9. **Investment % on Home Screen** — MonthlySummaryCard now shows a muted secondary line with the investment total and percentage (e.g. "📈 KES 50,000 (42%) invested") when any expenses are categorized under Investment & Savings (group 18). Uses a dedicated DAO query joining expenses with categories where `parentId = 18`. Displayed at `alpha = 0.5` to keep focus on the main expense total.
 10. **Custom Categories & Auto-Rules (M8)** — Full category management UI: add/edit/delete custom groups and sub-categories with icon/color pickers; user-defined auto-categorization rules (EXACT/CONTAINS/STARTS_WITH match types) checked before built-in KeywordRulesEngine; DB migration v9→v10 adds `category_rules` table; Settings entry point "Manage Categories" with tab-based screen (Categories + Auto-Rules); default categories protected from deletion; categories with expenses cannot be deleted.
 11. **Sub-category Budgets (M7 enhancement)** — Extended budgets from group-level to sub-category-level. Three tiers: Total Spending, Group (e.g. "Food & Dining ≤ 15K"), Sub-category (e.g. "Eating Out ≤ 5K"). DB migration v11→v12 renames `categoryGroupId`→`categoryId` and adds `isGroupBudget` column. Both group and sub-category budgets are tracked independently — an eating-out expense counts toward both "Food & Dining" and "Eating Out" budgets. Hierarchical category picker in add/edit dialog shows groups (bold) and indented sub-categories. Budget alerts fire for whichever threshold is reached first.
@@ -670,6 +678,7 @@ backend/
 | — | Exclude pass-through expenses | ✅ Complete | `isExcluded` flag, long-press toggle, dimmed + strikethrough UI |
 | **M3** | Smart Categorization (Rules Engine) | ✅ Complete | On-device KeywordRulesEngine (replaced Gemini AI) — 100+ business names, keyword rules, PaymentType heuristics; zero cost, offline, always-on |
 | — | Excel Import (match + standalone) | ✅ Complete | Apache POI parser, 55+ category mappings, multi-file, SMS matching |
+| — | M-PESA Statement PDF Import | ✅ Complete | PDFBox parser, 13+ transaction types, password-protected PDFs, charge linking, dedup, auto-categorize |
 | **M4** | Manual expense entry screen | ✅ Complete | Form: amount, recipient, payment type, date, category, notes; saves with recipient mapping |
 | **M5** | Settings & Configuration | ✅ Complete | Bank toggles (M2); Category management (M8); About screen; Privacy policy (GitHub Pages); Data management (export CSV + reset categories); First-launch onboarding flow |
 | — | Expense charts and analytics | ✅ Complete | Vico charts: monthly trend, **variable-spend category trends (CV detection, ≥3 months, KES 100 min)**, daily spending, category breakdown, top spenders, payment type breakdown, MoM comparison |
