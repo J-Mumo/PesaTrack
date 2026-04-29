@@ -1,5 +1,6 @@
 package com.pesatrack.presentation.screens.settings
 
+import android.content.Intent
 import android.net.Uri
 import com.pesatrack.BuildConfig
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -145,7 +146,18 @@ fun SettingsScreen(
                 )
 
                 // Section: About
-                AboutSection(onNavigateToAbout = onNavigateToAbout)
+                AboutSection(
+                    onNavigateToAbout = onNavigateToAbout,
+                    onSharePesaTrack = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, SETTINGS_SHARE_MESSAGE)
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "Share PesaTrack")
+                        )
+                    }
+                )
             }
         }
     }
@@ -579,21 +591,57 @@ private fun MonthStartDaySection(
 }
 
 @Composable
-private fun AboutSection(onNavigateToAbout: () -> Unit) {
+private fun AboutSection(
+    onNavigateToAbout: () -> Unit,
+    onSharePesaTrack: () -> Unit
+) {
     Text(text = "About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-    Card(onClick = onNavigateToAbout, modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Column {
-                    Text(text = "About PesaTrack", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                    Text(text = "Version info, privacy policy & contact", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToAbout)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text(text = "About PesaTrack", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Version info, privacy policy & contact", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to About", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to About", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            HorizontalDivider()
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSharePesaTrack)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column {
+                        Text(text = "Share PesaTrack", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "Tell friends about PesaTrack", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Share PesaTrack", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
+
+private const val SETTINGS_SHARE_MESSAGE =
+    "I use PesaTrack to automatically track my M-PESA expenses - it reads SMS and categorizes " +
+    "everything offline. Free on Play Store: https://play.google.com/store/apps/details?id=com.pesatrack"
 
 @Composable
 private fun DataManagementSection(

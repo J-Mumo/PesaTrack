@@ -1,6 +1,7 @@
 package com.pesatrack.presentation.screens.home
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -43,6 +44,7 @@ import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLa
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
+import com.google.android.play.core.review.ReviewManagerFactory
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.BudgetForecast
@@ -70,6 +72,38 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Stage 1B: trigger Google Play in-app review when eligibility conditions are met.
+    LaunchedEffect(uiState.shouldShowReview) {
+        if (!uiState.shouldShowReview) return@LaunchedEffect
+
+        val activity = context.findActivity()
+        if (activity == null) {
+            viewModel.onReviewPromptHandled()
+            return@LaunchedEffect
+        }
+
+        val manager = ReviewManagerFactory.create(context)
+        manager.requestReviewFlow().addOnCompleteListener { requestTask ->
+            if (requestTask.isSuccessful) {
+                val reviewInfo = requestTask.result
+                manager.launchReviewFlow(activity, reviewInfo).addOnCompleteListener {
+                    viewModel.recordReviewPromptShown()
+                    viewModel.onReviewPromptHandled()
+                }
+            } else {
+                viewModel.onReviewPromptHandled()
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.pendingFeedbackEmailBody, uiState.pendingFeedbackEmailSubject) {
+        val body = uiState.pendingFeedbackEmailBody ?: return@LaunchedEffect
+        val subject = uiState.pendingFeedbackEmailSubject ?: "PesaTrack Feedback"
+        val intent = createFeedbackEmailIntent(subject = subject, body = body)
+        context.startActivity(intent)
+        viewModel.onFeedbackEmailHandled()
+    }
 
     // Check SMS permission status on every resume (e.g. returning from App Settings)
     LaunchedEffect(lifecycleOwner) {
@@ -195,6 +229,30 @@ fun HomeScreen(
             }
         }
 
+        // Structured feedback prompt (Stage 1D)
+        if (uiState.showStructuredFeedbackPrompt) {
+            item {
+                StructuredFeedbackPromptCard(
+                    onSubmit = { option, other ->
+                        viewModel.submitStructuredFeedback(option, other)
+                    },
+                    onDismiss = { viewModel.dismissStructuredFeedbackPrompt() }
+                )
+            }
+        }
+
+        // Low-engagement friction prompt (Stage 1E)
+        if (uiState.showLowEngagementFeedbackPrompt) {
+            item {
+                LowEngagementFeedbackCard(
+                    onSubmit = { reason, other ->
+                        viewModel.submitLowEngagementFeedback(reason, other)
+                    },
+                    onDismiss = { viewModel.dismissLowEngagementPrompt() }
+                )
+            }
+        }
+
         // Spending Trend Card (mini chart)
         if (uiState.monthlyTrend.isNotEmpty()) {
             item {
@@ -268,6 +326,220 @@ fun HomeScreen(
             }
         }
     }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? {
+    return when (this) {
+        is Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+}
+
+private fun createFeedbackEmailIntent(subject: String, body: String): Intent {
+    return Intent(Intent.ACTION_SENDTO).apply {
+        data = Uri.parse("mailto:joelmumo.jm@gmail.com")
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, body)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StructuredFeedbackPromptCard(
+    onSubmit: (option: String, otherText: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(
+        "Smarter spending advice",
+        "Track income, not just expenses",
+        "Share reports with someone",
+        "Sync across devices",
+        "Track more banks",
+        "Something else"
+    )
+    var selected by remember { mutableStateOf<String?>(null) }
+    var otherText by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "What would make PesaTrack more useful to you?",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selected ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select one") },
+                    placeholder = { Text("Choose an option") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                selected = option
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (selected == "Something else") {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = otherText,
+                    onValueChange = { otherText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tell us more") },
+                    minLines = 2
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        val choice = selected ?: return@Button
+                        val freeText = otherText.takeIf { choice == "Something else" }
+                        onSubmit(choice, freeText)
+                    },
+                    enabled = selected != null,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Submit")
+                }
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Not now")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LowEngagementFeedbackCard(
+    onSubmit: (reason: String, otherText: String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val options = listOf(
+        "I do not want to grant SMS permission",
+        "I did not understand what to do next",
+        "I expected different features",
+        "The app felt too complex",
+        "Technical issue/bug",
+        "Other"
+    )
+    var selected by remember { mutableStateOf<String?>(null) }
+    var otherText by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "What blocked setup for you?",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selected ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select one") },
+                    placeholder = { Text("Choose an option") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                selected = option
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (selected == "Other") {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = otherText,
+                    onValueChange = { otherText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tell us more") },
+                    minLines = 2
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        val choice = selected ?: return@Button
+                        val freeText = otherText.takeIf { choice == "Other" }
+                        onSubmit(choice, freeText)
+                    },
+                    enabled = selected != null,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Submit")
+                }
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Not now")
+                }
+            }
+        }
     }
 }
 

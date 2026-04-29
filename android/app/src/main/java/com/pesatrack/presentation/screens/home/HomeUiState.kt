@@ -46,5 +46,26 @@ data class HomeUiState(
     /** Budget forecasts for active budgets (sorted by projected overspend, max 4) */
     val budgetForecasts: List<BudgetForecast> = emptyList(),
     /** Whether to show the forecast card (≥1 budget + ≥5 days elapsed in period) */
-    val showForecastCard: Boolean = false
+    val showForecastCard: Boolean = false,
+
+    // ==================== In-App Review ====================
+
+    /** One-shot flag to trigger Google Play in-app review request. */
+    val shouldShowReview: Boolean = false,
+
+    // ==================== Stage 1D: Structured Feedback ====================
+
+    /** Whether to show the value-based structured feedback prompt card. */
+    val showStructuredFeedbackPrompt: Boolean = false,
+
+    // ==================== Stage 1E: Low-Engagement Feedback ====================
+
+    /** Whether to show the low-engagement friction feedback prompt card. */
+    val showLowEngagementFeedbackPrompt: Boolean = false,
+
+    /** One-shot draft body for launching editable feedback email. */
+    val pendingFeedbackEmailBody: String? = null,
+
+    /** One-shot draft subject for launching editable feedback email. */
+    val pendingFeedbackEmailSubject: String? = null
 )

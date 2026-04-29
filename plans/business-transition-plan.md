@@ -68,6 +68,20 @@ flowchart TD
 
 ---
 
+## Current Implementation Progress (As of 2026-04-24)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Stage 0: Trust and Measurement Reset | ✅ Implemented | Trust language updated in policy/About; metric precision model documented |
+| Stage 1A: Local Milestone Tracking | ✅ Implemented | Milestones/counters wired into preferences + key flows |
+| Stage 1G: Share PesaTrack | ✅ Implemented | Share CTA added in About screen |
+| Stage 1B: In-App Review Prompt | ✅ Implemented | Play In-App Review wired with eligibility/throttling |
+| Stage 1C: Usage Summary Piggybacking | ✅ Implemented | `UsageSummaryGenerator` + About email + backup metadata integration |
+| Stage 1D: Structured Feedback Prompt | ✅ Implemented | Home inline prompt card + prefilled editable email draft |
+| Stage 1E: Low-Engagement Feedback Lane | ✅ Implemented | Home friction prompt + local reason capture + email draft |
+
+---
+
 ## Stage 0: Trust and Measurement Reset
 
 **Goal:** Make sure the product story and measurement model are honest before adding any instrumentation.
@@ -114,10 +128,10 @@ Every metric referenced later in this plan carries a precision label:
 
 ### Exit Criteria for Stage 0
 
-- [ ] No internal contradiction between product behavior and privacy/trust claims
-- [ ] All surfaces audited and revision language drafted
-- [ ] Key terms defined and documented
-- [ ] No metric in the plan pretends to be more precise than its source allows
+- [x] No internal contradiction between product behavior and privacy/trust claims
+- [x] All surfaces audited and revision language drafted
+- [x] Key terms defined and documented
+- [x] No metric in the plan pretends to be more precise than its source allows
 
 ---
 
@@ -536,17 +550,19 @@ To maintain discipline, these items are explicitly deferred:
 
 ### What Ships Now
 
-Stages 0 + 1 code changes:
+Completed code changes in this stage rollout:
 
 ```mermaid
 flowchart TD
-    subgraph v1.2.0 [v1.2.0 — Trust Reset + Feedback Loops]
+    subgraph v1.2.0 [v1.2.0 — Implemented]
         A[Trust language audit: privacy policy + About screen] --> B[Local milestone tracking in AppPreferences]
-        B --> C[Wire events into 12 existing files]
-        C --> D[In-App Rating prompt via Play Review API]
-        D --> E[Usage summary piggybacking: emails + backup]
-        E --> F[Structured feedback prompt card on Home]
-        F --> G[Share PesaTrack button in About]
+        B --> C[Wire milestones/counters into app flows]
+        C --> D[Qualified session vs raw launch tracking]
+        D --> E[Onboarding SMS-skip capture on all exits]
+        E --> F[Share PesaTrack button in About]
+        F --> G[In-app review prompt with Stage 1B gating]
+        G --> H[Usage summary piggybacking in About and backup]
+        H --> I[Structured + low-engagement feedback cards on Home]
     end
 
     style v1.2.0 fill:#e8f5e9,stroke:#4caf50
@@ -556,22 +572,22 @@ flowchart TD
 
 | File | Type | Changes |
 |------|------|---------|
-| `AppPreferences.kt` | Modified | ~25 new DataStore keys for milestones, counters, re-engagement markers, review prompt state, feedback state |
+| `AppPreferences.kt` | Modified | Milestones + counters + re-engagement keys; qualified sessions and raw launches tracked separately |
+| `UsageSummaryGenerator.kt` | Added | Generates compact local usage context block + JSON payload |
+| `PesaTrackApp.kt` | Modified | Install timestamp recorded once on app startup |
 | `MainActivity.kt` | Modified | Track `last_app_open`, `qualified_session_count` (>=5 min gap), `raw_launch_count` (diagnostic), re-engagement day markers |
 | `SmsReceiver.kt` | Modified | +1 line: increment `count_sms_parsed`, set `first_sms_parsed` |
 | `SmsImportService.kt` | Modified | +1 line: increment `count_imports`, set `first_import_completed` |
-| `OnboardingScreen.kt` | Modified | +4 lines: set onboarding funnel timestamps |
+| `OnboardingScreen.kt` | Modified | Onboarding milestone hooks + SMS-skip capture on Next/Skip/Get Started paths |
 | `CategorizeViewModel.kt` | Modified | +1 line: increment counter, set first timestamp |
 | `BudgetViewModel.kt` | Modified | +1 line: increment counter, set first timestamp |
 | `AnalyticsViewModel.kt` | Modified | +1 line: increment counter, set first timestamp |
 | `ManualEntryViewModel.kt` | Modified | +1 line: increment counter |
-| `HomeViewModel.kt` | Modified | +1 line: increment forecast views; review prompt logic; feedback prompt logic |
+| `HomeViewModel.kt` | Modified | Forecast counter + Stage 1B review gating + Stage 1D/1E feedback eligibility and draft handling |
+| `HomeScreen.kt` | Modified | Stage 1B review launch + Stage 1D structured card + Stage 1E low-engagement card + email draft launcher |
 | `ExcelImportViewModel.kt` | Modified | +1 line: increment counter |
-| `DataManagementService.kt` | Modified | +2 lines: increment export/backup counters; add usageMetrics to backup JSON |
-| `HomeScreen.kt` | Modified | Review prompt trigger, feedback card, post-review follow-up card |
-| `AboutScreen.kt` | Modified | "Share PesaTrack" button; modify feedback email to include usage summary |
-| `UsageSummaryGenerator.kt` | **New** | Utility object: reads DataStore funnel keys, formats compact text block |
-| `build.gradle.kts` | Modified | Add Play In-App Review dependency |
+| `DataManagementService.kt` | Modified | Export/backup counters + embed `usageMetrics` JSON in backup metadata |
+| `AboutScreen.kt` | Modified | "Share PesaTrack" + contact email now prefilled with editable usage summary |
 | `docs/privacy-policy.html` | Modified | Trust language revision: distinguish collection vs transmission |
 
 ### What Ships in v1.3.0 (Stage 2)
@@ -580,6 +596,11 @@ flowchart TD
 |------|------|---------|
 | `AppPreferences.kt` | Modified | Add `pro_teaser_tap_count` |
 | `HomeScreen.kt` | Modified | Add `ProTeaserCard` — single value prop fake-door test |
+
+### Still Pending from Stage 1
+
+- No code items pending.
+- Remaining Stage 1 work is operational: run the 30-day checklist, collect interviews, and synthesize top themes.
 
 ### What Is NOT Changed in Any Near-Term Release
 

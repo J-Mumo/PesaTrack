@@ -11,6 +11,7 @@ import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.entities.DefaultCategories
 import com.pesatrack.data.local.preferences.AppPreferences
+import com.pesatrack.utils.UsageSummaryGenerator
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -34,7 +35,8 @@ class DataManagementService @Inject constructor(
     private val appPreferences: AppPreferences,
     private val expenseDao: ExpenseDao,
     private val categoryDao: CategoryDao,
-    private val categoryRuleDao: CategoryRuleDao
+    private val categoryRuleDao: CategoryRuleDao,
+    private val usageSummaryGenerator: UsageSummaryGenerator
 ) {
 
     companion object {
@@ -180,6 +182,8 @@ class DataManagementService @Inject constructor(
             db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('monthStartDay', '$monthStartDay')")
             db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('bankTrackingEnabled', '$bankTrackingEnabled')")
             db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('enabledBanks', '${JSONArray(enabledBanks.toList())}')")
+            val usageMetricsJson = usageSummaryGenerator.asJson().toString().replace("'", "''")
+            db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('usageMetrics', '$usageMetricsJson')")
             Log.d(TAG, "Settings written to metadata table: monthStartDay=$monthStartDay, bankTrackingEnabled=$bankTrackingEnabled, enabledBanks=$enabledBanks")
 
             // 2. WAL checkpoint to merge all writes into the main .db file

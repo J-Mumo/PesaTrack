@@ -144,6 +144,22 @@ class AppPreferences @Inject constructor(
         val KEY_RETURN_DAY_7 = longPreferencesKey("return_day_7")
         val KEY_RETURN_DAY_30 = longPreferencesKey("return_day_30")
 
+        // ── In-App Review Prompt Throttle ──
+
+        val KEY_LAST_REVIEW_PROMPT_TIMESTAMP = longPreferencesKey("last_review_prompt_timestamp")
+        val KEY_REVIEW_PROMPT_COUNT = intPreferencesKey("review_prompt_count")
+
+        // ── Stage 1D: Structured Feedback ──
+
+        val KEY_FEEDBACK_PROMPT_SHOWN = booleanPreferencesKey("feedback_prompt_shown")
+        val KEY_FEEDBACK_RESPONSE = stringPreferencesKey("feedback_response")
+
+        // ── Stage 1E: Low-Engagement Feedback ──
+
+        val KEY_LOW_ENGAGEMENT_PROMPT_SHOWN = booleanPreferencesKey("low_engagement_prompt_shown")
+        val KEY_LOW_ENGAGEMENT_REASON = stringPreferencesKey("low_engagement_reason")
+        val KEY_FIRST_VALUE_DEADLINE_CHECKED = booleanPreferencesKey("first_value_deadline_checked")
+
         // ── Feature Usage Counters ──
 
         val KEY_COUNT_SMS_PARSED = intPreferencesKey("count_sms_parsed")
@@ -555,6 +571,137 @@ class AppPreferences @Inject constructor(
                 }
             }
         }
+    }
+
+    /** Snapshot: last review prompt timestamp (0L if never prompted). */
+    suspend fun getLastReviewPromptTimestamp(): Long {
+        return context.dataStore.data.first()[KEY_LAST_REVIEW_PROMPT_TIMESTAMP] ?: 0L
+    }
+
+    /** Snapshot: total number of review prompt attempts. */
+    suspend fun getReviewPromptCount(): Int {
+        return context.dataStore.data.first()[KEY_REVIEW_PROMPT_COUNT] ?: 0
+    }
+
+    /** Snapshot: qualified session count. */
+    suspend fun getQualifiedSessionCount(): Int {
+        return context.dataStore.data.first()[KEY_QUALIFIED_SESSION_COUNT] ?: 0
+    }
+
+    /**
+     * Mark that a review prompt attempt occurred.
+     * This is used for coarse throttling because Google controls whether UI is actually shown.
+     */
+    suspend fun markReviewPromptShown() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_REVIEW_PROMPT_TIMESTAMP] = System.currentTimeMillis()
+            prefs[KEY_REVIEW_PROMPT_COUNT] = (prefs[KEY_REVIEW_PROMPT_COUNT] ?: 0) + 1
+        }
+    }
+
+    // ==================== Stage 1D / 1E Feedback Flags ====================
+
+    suspend fun isFeedbackPromptShown(): Boolean {
+        return context.dataStore.data.first()[KEY_FEEDBACK_PROMPT_SHOWN] ?: false
+    }
+
+    suspend fun markFeedbackPromptShown() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FEEDBACK_PROMPT_SHOWN] = true
+        }
+    }
+
+    suspend fun saveFeedbackResponse(response: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FEEDBACK_RESPONSE] = response
+        }
+    }
+
+    suspend fun isLowEngagementPromptShown(): Boolean {
+        return context.dataStore.data.first()[KEY_LOW_ENGAGEMENT_PROMPT_SHOWN] ?: false
+    }
+
+    suspend fun markLowEngagementPromptShown() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LOW_ENGAGEMENT_PROMPT_SHOWN] = true
+        }
+    }
+
+    suspend fun saveLowEngagementReason(reason: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LOW_ENGAGEMENT_REASON] = reason
+        }
+    }
+
+    suspend fun isFirstValueDeadlineChecked(): Boolean {
+        return context.dataStore.data.first()[KEY_FIRST_VALUE_DEADLINE_CHECKED] ?: false
+    }
+
+    suspend fun markFirstValueDeadlineChecked() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FIRST_VALUE_DEADLINE_CHECKED] = true
+        }
+    }
+
+    // ==================== Usage Snapshot (Stage 1C) ====================
+
+    data class UsageMetricsSnapshot(
+        val installTimestamp: Long,
+        val qualifiedSessions: Int,
+        val onboardingSmsGranted: Boolean,
+        val onboardingSmsSkipped: Boolean,
+        val onboardingImportChosen: Boolean,
+        val onboardingImportSkipped: Boolean,
+        val firstSmsParsed: Boolean,
+        val firstImportCompleted: Boolean,
+        val firstManualEntry: Boolean,
+        val firstCategorization: Boolean,
+        val firstBudgetCreated: Boolean,
+        val firstAnalyticsViewed: Boolean,
+        val returnDay1: Boolean,
+        val returnDay7: Boolean,
+        val returnDay30: Boolean,
+        val countSmsParsed: Int,
+        val countImports: Int,
+        val countManualEntries: Int,
+        val countCategorizations: Int,
+        val countBudgetsCreated: Int,
+        val countAnalyticsViews: Int,
+        val countForecastViews: Int,
+        val countExcelImports: Int,
+        val countExports: Int,
+        val countBackups: Int
+    )
+
+    suspend fun getUsageMetricsSnapshot(): UsageMetricsSnapshot {
+        val prefs = context.dataStore.data.first()
+        return UsageMetricsSnapshot(
+            installTimestamp = prefs[KEY_INSTALL_TIMESTAMP] ?: 0L,
+            qualifiedSessions = prefs[KEY_QUALIFIED_SESSION_COUNT] ?: 0,
+            onboardingSmsGranted = (prefs[KEY_ONBOARDING_SMS_GRANTED] ?: 0L) > 0L,
+            onboardingSmsSkipped = (prefs[KEY_ONBOARDING_SMS_SKIPPED] ?: 0L) > 0L,
+            onboardingImportChosen = (prefs[KEY_ONBOARDING_IMPORT_CHOSEN] ?: 0L) > 0L,
+            onboardingImportSkipped = (prefs[KEY_ONBOARDING_IMPORT_SKIPPED] ?: 0L) > 0L,
+            firstSmsParsed = (prefs[KEY_FIRST_SMS_PARSED] ?: 0L) > 0L,
+            firstImportCompleted = (prefs[KEY_FIRST_IMPORT_COMPLETED] ?: 0L) > 0L,
+            firstManualEntry = (prefs[KEY_FIRST_MANUAL_ENTRY] ?: 0L) > 0L,
+            firstCategorization = (prefs[KEY_FIRST_CATEGORIZATION] ?: 0L) > 0L,
+            firstBudgetCreated = (prefs[KEY_FIRST_BUDGET_CREATED] ?: 0L) > 0L,
+            firstAnalyticsViewed = (prefs[KEY_FIRST_ANALYTICS_VIEWED] ?: 0L) > 0L,
+            returnDay1 = (prefs[KEY_RETURN_DAY_1] ?: 0L) > 0L,
+            returnDay7 = (prefs[KEY_RETURN_DAY_7] ?: 0L) > 0L,
+            returnDay30 = (prefs[KEY_RETURN_DAY_30] ?: 0L) > 0L,
+            countSmsParsed = prefs[KEY_COUNT_SMS_PARSED] ?: 0,
+            countImports = prefs[KEY_COUNT_IMPORTS] ?: 0,
+            countManualEntries = prefs[KEY_COUNT_MANUAL_ENTRIES] ?: 0,
+            countCategorizations = prefs[KEY_COUNT_CATEGORIZATIONS] ?: 0,
+            countBudgetsCreated = prefs[KEY_COUNT_BUDGETS_CREATED] ?: 0,
+            countAnalyticsViews = prefs[KEY_COUNT_ANALYTICS_VIEWS] ?: 0,
+            countForecastViews = prefs[KEY_COUNT_FORECAST_VIEWS] ?: 0,
+            countExcelImports = prefs[KEY_COUNT_EXCEL_IMPORTS] ?: 0,
+            countExports = prefs[KEY_COUNT_EXPORTS] ?: 0,
+            countBackups = prefs[KEY_COUNT_BACKUPS] ?: 0
+        )
     }
 
     // ── Milestone convenience methods (delegate to recordMilestone) ──

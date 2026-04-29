@@ -7,32 +7,34 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Policy
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.pesatrack.BuildConfig
+import kotlinx.coroutines.launch
 
 /**
  * About screen — static informational screen showing app version,
  * description, privacy policy link, and contact info.
- *
- * No ViewModel needed — all content is static.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    viewModel: AboutViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val usageSummaryGenerator = viewModel.usageSummaryGenerator
 
     Scaffold(
         topBar = {
@@ -129,56 +131,31 @@ fun AboutScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    // GitHub
-                    LinkRow(
-                        icon = Icons.Default.Code,
-                        title = "Source Code",
-                        subtitle = "github.com/J-Mumo/PesaTrack",
-                        onClick = {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(GITHUB_URL)
-                            )
-                            context.startActivity(intent)
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
                     // Contact
                     LinkRow(
                         icon = Icons.Default.Email,
                         title = "Contact & Feedback",
                         subtitle = CONTACT_EMAIL,
                         onClick = {
-                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                data = Uri.parse("mailto:$CONTACT_EMAIL")
-                                putExtra(Intent.EXTRA_SUBJECT, "PesaTrack Feedback")
+                            coroutineScope.launch {
+                                val usageSummary = usageSummaryGenerator.generate()
+                                val body = buildString {
+                                    appendLine("Feedback:")
+                                    appendLine()
+                                    appendLine("(Edit this message before sending)")
+                                    appendLine()
+                                    append(usageSummary)
+                                }
+                                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:$CONTACT_EMAIL")
+                                    putExtra(Intent.EXTRA_SUBJECT, "PesaTrack Feedback")
+                                    putExtra(Intent.EXTRA_TEXT, body)
+                                }
+                                context.startActivity(intent)
                             }
-                            context.startActivity(intent)
                         }
                     )
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // Share PesaTrack
-                    LinkRow(
-                        icon = Icons.Default.Share,
-                        title = "Share PesaTrack",
-                        subtitle = "Tell friends about PesaTrack",
-                        onClick = {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    SHARE_MESSAGE
-                                )
-                            }
-                            context.startActivity(
-                                Intent.createChooser(shareIntent, "Share PesaTrack")
-                            )
-                        }
-                    )
                 }
             }
 
@@ -281,8 +258,4 @@ private fun LinkRow(
 
 // Constants — update these when privacy policy is live
 private const val PRIVACY_POLICY_URL = "https://j-mumo.github.io/PesaTrack/privacy-policy.html"
-private const val GITHUB_URL = "https://github.com/J-Mumo/PesaTrack"
 private const val CONTACT_EMAIL = "joelmumo.jm@gmail.com"
-private const val SHARE_MESSAGE =
-    "I use PesaTrack to automatically track my M-PESA expenses — it reads SMS and categorizes " +
-    "everything offline. Free on Play Store: https://play.google.com/store/apps/details?id=com.pesatrack"
