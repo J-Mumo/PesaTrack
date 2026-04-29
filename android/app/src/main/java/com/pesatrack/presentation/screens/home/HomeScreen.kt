@@ -579,9 +579,9 @@ fun MonthlySummaryCard(
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
             )
 
-            // Investment breakdown — shown only when there's investment data
+            // Investment breakdown
+            Spacer(modifier = Modifier.height(8.dp))
             if (investmentTotal > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -593,6 +593,20 @@ fun MonthlySummaryCard(
                         text = "${investmentTotal.formatAsCurrency()} (${String.format("%.0f", investmentPct)}%) invested",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    )
+                }
+            } else if (total > 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📈 ",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "No investments this month — even a small amount counts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.4f)
                     )
                 }
             }
