@@ -43,7 +43,11 @@ class ForecastService @Inject constructor(
             val budget = progress.budget
             val (periodStart, periodEnd) = getEffectivePeriodRange(budget)
             val recurringInfo = try {
-                recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
+                recurringExpenseService.getRecurringInfoForPeriod(
+                    periodStart, periodEnd,
+                    budgetCategoryId = budget.categoryId,
+                    isGroupBudget = budget.isGroupBudget
+                )
             } catch (_: Exception) { null }
             computeForecast(budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
         }
@@ -62,12 +66,17 @@ class ForecastService @Inject constructor(
         val progressList = budgetRepository.getBudgetProgressListForPeriod(period, calendar)
         val (periodStart, periodEnd) = budgetRepository.getPeriodRange(period, calendar)
         val now = System.currentTimeMillis()
-        val recurringInfo = try {
-            recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
-        } catch (_: Exception) { null }
 
         return progressList.mapNotNull { progress ->
-            computeForecast(progress.budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
+            val budget = progress.budget
+            val recurringInfo = try {
+                recurringExpenseService.getRecurringInfoForPeriod(
+                    periodStart, periodEnd,
+                    budgetCategoryId = budget.categoryId,
+                    isGroupBudget = budget.isGroupBudget
+                )
+            } catch (_: Exception) { null }
+            computeForecast(budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
         }
     }
 
@@ -107,17 +116,35 @@ class ForecastService @Inject constructor(
 
         // Projected total at end of period — recurring-aware if available
         val projectedTotal: Double
+        val isFulfilledByRecurring: Boolean
+
         if (recurringInfo != null && recurringInfo.totalRecurringForPeriod > 0) {
-            // Recurring-aware projection:
-            // Separate recurring (known) from discretionary (extrapolated)
+            // Check if this budget is "fulfilled" — recurring payment(s) already cover the budget
+            // and no further spending is expected. This handles budgets like rent where
+            // a single payment at period start = 100% of budget and no further action needed.
             val discretionarySpent = (spent - recurringInfo.paidThisPeriod).coerceAtLeast(0.0)
             val discretionaryBurnRate = if (daysElapsed > 0) discretionarySpent / daysElapsed else 0.0
-            projectedTotal = recurringInfo.paidThisPeriod +
-                    recurringInfo.upcomingThisPeriod +
-                    (discretionaryBurnRate * daysRemaining)
+            val recurringCoversBudget = recurringInfo.paidThisPeriod >= budget.amount * 0.95
+            val noUpcoming = recurringInfo.upcomingThisPeriod < budget.amount * 0.05
+            val negligibleDiscretionary = discretionaryBurnRate * daysRemaining < budget.amount * 0.05
+
+            if (recurringCoversBudget && noUpcoming && negligibleDiscretionary) {
+                // Budget is fulfilled by recurring payment — project actual spent as total
+                // No extrapolation needed; the budget is done for this period.
+                projectedTotal = spent
+                isFulfilledByRecurring = true
+            } else {
+                // Recurring-aware projection:
+                // Separate recurring (known) from discretionary (extrapolated)
+                projectedTotal = recurringInfo.paidThisPeriod +
+                        recurringInfo.upcomingThisPeriod +
+                        (discretionaryBurnRate * daysRemaining)
+                isFulfilledByRecurring = false
+            }
         } else {
             // Fallback: pure linear projection
             projectedTotal = dailyBurnRate * totalDays
+            isFulfilledByRecurring = false
         }
 
         // Projected percentage of budget
@@ -133,7 +160,8 @@ class ForecastService @Inject constructor(
         }
 
         // Exhaustion date (when budget will be fully used up at current rate)
-        val exhaustionDate: Long? = if (dailyBurnRate > 0 && projectedTotal > budget.amount) {
+        // Suppressed for fulfilled recurring budgets — they're done, not in danger.
+        val exhaustionDate: Long? = if (!isFulfilledByRecurring && dailyBurnRate > 0 && projectedTotal > budget.amount) {
             val daysToExhaustion = budget.amount / dailyBurnRate
             periodStart + (daysToExhaustion * BudgetForecast.MS_PER_DAY).toLong()
         } else {
@@ -155,6 +183,32 @@ class ForecastService @Inject constructor(
     }
 
     /**
+     * Compute forecasts only for budgets affected by a specific expense category.
+     * Returns forecasts for: Total Spending budget + group budget + sub-category budget
+     * (at most 3 budgets). Used by BudgetService for scoped forecast notifications.
+     *
+     * @param expenseCategoryId The sub-category ID of the saved expense.
+     */
+    suspend fun getForecastsForAffectedBudgets(expenseCategoryId: Long): List<BudgetForecast> {
+        val groupId = budgetRepository.getGroupIdForCategory(expenseCategoryId) ?: return emptyList()
+        val affectedProgress = budgetRepository.getAffectedBudgetProgress(groupId, expenseCategoryId)
+        val now = System.currentTimeMillis()
+
+        return affectedProgress.mapNotNull { progress ->
+            val budget = progress.budget
+            val (periodStart, periodEnd) = getEffectivePeriodRange(budget)
+            val recurringInfo = try {
+                recurringExpenseService.getRecurringInfoForPeriod(
+                    periodStart, periodEnd,
+                    budgetCategoryId = budget.categoryId,
+                    isGroupBudget = budget.isGroupBudget
+                )
+            } catch (_: Exception) { null }
+            computeForecast(budget, progress.spent, periodStart, periodEnd, now, recurringInfo)
+        }
+    }
+
+    /**
      * Compute forecast for a specific budget by ID.
      * Used by BudgetService for targeted alert checking.
      */
@@ -163,7 +217,11 @@ class ForecastService @Inject constructor(
         val spent = budgetRepository.getSpendingForBudget(budget)
         val (periodStart, periodEnd) = getEffectivePeriodRange(budget)
         val recurringInfo = try {
-            recurringExpenseService.getRecurringInfoForPeriod(periodStart, periodEnd)
+            recurringExpenseService.getRecurringInfoForPeriod(
+                periodStart, periodEnd,
+                budgetCategoryId = budget.categoryId,
+                isGroupBudget = budget.isGroupBudget
+            )
         } catch (_: Exception) { null }
         return computeForecast(budget, spent, periodStart, periodEnd, recurringInfo = recurringInfo)
     }

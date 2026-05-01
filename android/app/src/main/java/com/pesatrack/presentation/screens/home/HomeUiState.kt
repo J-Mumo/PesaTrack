@@ -14,8 +14,6 @@ data class HomeUiState(
     val totalThisMonth: Double = 0.0,
     /** Total invested this month (Investment & Savings group 18) */
     val investmentThisMonth: Double = 0.0,
-    /** Rolling total for the last 7 days */
-    val totalLast7Days: Double = 0.0,
     val recentExpenses: List<ExpenseWithCategory> = emptyList(),
     val uncategorizedCount: Int = 0,
     val error: String? = null,

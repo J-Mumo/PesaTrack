@@ -193,8 +193,7 @@ fun HomeScreen(
         item {
             MonthlySummaryCard(
                 total = uiState.totalThisMonth,
-                investmentTotal = uiState.investmentThisMonth,
-                totalLast7Days = uiState.totalLast7Days
+                investmentTotal = uiState.investmentThisMonth
             )
         }
 
@@ -547,8 +546,7 @@ private fun LowEngagementFeedbackCard(
 @Composable
 fun MonthlySummaryCard(
     total: Double,
-    investmentTotal: Double = 0.0,
-    totalLast7Days: Double = 0.0
+    investmentTotal: Double = 0.0
 ) {
     val currentMonth = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
     val investmentPct = if (total > 0) (investmentTotal / total) * 100.0 else 0.0
@@ -580,25 +578,6 @@ fun MonthlySummaryCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
             )
-
-            // Last 7 days total
-            if (totalLast7Days > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "🗓️ ",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        text = "${totalLast7Days.formatAsCurrency()} in the last 7 days",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                }
-            }
 
             // Investment breakdown
             Spacer(modifier = Modifier.height(8.dp))
@@ -1259,10 +1238,17 @@ private fun ForecastCategoryRow(forecast: BudgetForecast) {
                 MaterialTheme.colorScheme.error
             )
         }
+        forecast.projectedPercentage >= 100 -> {
+            Triple(
+                "🔴",
+                "$name — projected ${String.format("%.0f", forecast.projectedPercentage)}% (over budget)",
+                MaterialTheme.colorScheme.error
+            )
+        }
         forecast.projectedPercentage >= 80 -> {
             Triple(
                 "🟡",
-                "$name — on track at ${String.format("%.0f", forecast.projectedPercentage)}%",
+                "$name — watch: projected ${String.format("%.0f", forecast.projectedPercentage)}%",
                 Color(0xFFFF9800)
             )
         }

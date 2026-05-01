@@ -93,13 +93,6 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Load rolling 7-day total
-        viewModelScope.launch {
-            expenseRepository.getTotalLast7Days().collect { total7d ->
-                _uiState.update { it.copy(totalLast7Days = total7d) }
-            }
-        }
-        
         // Load recent expenses with category info
         viewModelScope.launch {
             expenseRepository.getExpensesForCurrentMonth()

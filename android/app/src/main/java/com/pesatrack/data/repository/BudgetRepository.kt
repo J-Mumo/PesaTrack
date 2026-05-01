@@ -523,6 +523,31 @@ class BudgetRepository @Inject constructor(
     }
 
     /**
+     * Compute BudgetProgress for budgets affected by a specific expense category.
+     * Returns progress for: Total Spending budget (categoryId=null) + group budget + sub-category budget.
+     * Used by ForecastService for scoped forecast notifications (max ~3 budgets).
+     *
+     * @param groupId The category group ID.
+     * @param subcategoryId The sub-category ID.
+     */
+    suspend fun getAffectedBudgetProgress(groupId: Long, subcategoryId: Long): List<BudgetProgress> {
+        refreshMonthStartDay()
+        val categoryMap = buildCategoryMap()
+        val affectedEntities = budgetDao.getBudgetsAffectedByCategory(groupId, subcategoryId)
+        return affectedEntities.map { entity ->
+            val budget = entity.toDomain(categoryMap)
+            val spent = getSpendingForBudget(budget)
+            val percentage = if (budget.amount > 0) (spent / budget.amount) * 100.0 else 0.0
+            BudgetProgress(
+                budget = budget,
+                spent = spent,
+                percentage = percentage,
+                status = BudgetStatus.fromPercentage(percentage)
+            )
+        }
+    }
+
+    /**
      * Resolve the category group ID for a given sub-category ID.
      * Returns the parentId (group) if the category has a parent, or the ID itself if it's a group.
      * Returns null if the category doesn't exist.

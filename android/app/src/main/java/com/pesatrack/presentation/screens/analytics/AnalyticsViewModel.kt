@@ -55,6 +55,7 @@ class AnalyticsViewModel @Inject constructor(
         loadAllData()
         loadBudgetStatus()
         loadRecurringBreakdown()
+        loadWeeklySnapshot()
 
         // Track analytics viewed milestone and counter (fire-and-forget)
         viewModelScope.launch {
@@ -199,6 +200,55 @@ class AnalyticsViewModel @Inject constructor(
         loadMonthlyTrend()
         loadMonthData()
         loadCategoryTrends()
+    }
+
+    /**
+     * Load weekly snapshot data: this week total, last week total, WoW change,
+     * top category this week. Only relevant for the current month view.
+     */
+    private fun loadWeeklySnapshot() {
+        viewModelScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                val dayMs = 24L * 60 * 60 * 1000
+
+                // "This week" = last 7 days (today inclusive, rolling window)
+                val thisWeekStart = now - (7 * dayMs)
+                val thisWeekEnd = now
+
+                // "Last week" = 7 days before that (days 8–14 ago)
+                val lastWeekStart = now - (14 * dayMs)
+                val lastWeekEnd = thisWeekStart
+
+                val thisWeekTotal = expenseRepository.getTotalInRange(thisWeekStart, thisWeekEnd)
+                val lastWeekTotal = expenseRepository.getTotalInRange(lastWeekStart, lastWeekEnd)
+
+                val wowChange = if (lastWeekTotal > 0) {
+                    ((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100.0
+                } else if (thisWeekTotal > 0) 100.0 else 0.0
+
+                val topCategory = expenseRepository.getTopCategoryInRange(thisWeekStart, thisWeekEnd)
+
+                // Build date label (e.g. "Apr 25 – May 1")
+                val dateFmt = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+                val startLabel = dateFmt.format(java.util.Date(thisWeekStart))
+                val endLabel = dateFmt.format(java.util.Date(thisWeekEnd))
+                val weekLabel = "$startLabel – $endLabel"
+
+                _uiState.update {
+                    it.copy(
+                        weeklyTotal = thisWeekTotal,
+                        previousWeekTotal = lastWeekTotal,
+                        weekOverWeekChange = wowChange,
+                        topCategoryThisWeek = topCategory?.categoryName,
+                        topCategoryThisWeekAmount = topCategory?.total ?: 0.0,
+                        weekDateLabel = weekLabel
+                    )
+                }
+            } catch (_: Exception) {
+                // Non-critical — leave defaults
+            }
+        }
     }
 
     /**

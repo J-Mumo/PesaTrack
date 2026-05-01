@@ -417,31 +417,36 @@ class AppPreferences @Inject constructor(
     // ==================== Forecast Notification Throttle ====================
 
     /**
-     * Get the last time a forecast notification was sent for a specific budget.
-     * Returns 0L if never sent.
+     * Get the period key for which a forecast notification was already sent for a budget.
+     * Returns empty string if never sent.
+     *
+     * One-shot per period: a forecast notification fires once when a budget's projection
+     * first crosses 75%. The period key ensures it doesn't fire again in the same period.
+     * A new period (e.g. next month) automatically resets the trigger.
      */
-    suspend fun getLastForecastNotifTime(budgetId: Long): Long {
-        val key = longPreferencesKey("${FORECAST_NOTIF_PREFIX}$budgetId")
-        return context.dataStore.data.first()[key] ?: 0L
+    suspend fun getForecastNotifPeriodKey(budgetId: Long): String {
+        val key = stringPreferencesKey("${FORECAST_NOTIF_PREFIX}${budgetId}_period")
+        return context.dataStore.data.first()[key] ?: ""
     }
 
     /**
-     * Record the timestamp when a forecast notification was sent for a budget.
+     * Record that a forecast notification was sent for a budget in the given period.
+     * Prevents re-firing for the same budget in the same period.
      */
-    suspend fun setLastForecastNotifTime(budgetId: Long, timestamp: Long = System.currentTimeMillis()) {
-        val key = longPreferencesKey("${FORECAST_NOTIF_PREFIX}$budgetId")
+    suspend fun setForecastNotifPeriodKey(budgetId: Long, periodKey: String) {
+        val key = stringPreferencesKey("${FORECAST_NOTIF_PREFIX}${budgetId}_period")
         context.dataStore.edit { prefs ->
-            prefs[key] = timestamp
+            prefs[key] = periodKey
         }
     }
 
     /**
-     * Check if a forecast notification can be sent for a budget (throttle: max 1 per 24 hours).
+     * Check if a forecast notification can be sent for a budget in the given period.
+     * Returns true only if no notification has been sent for this budget in this period.
      */
-    suspend fun canSendForecastNotification(budgetId: Long): Boolean {
-        val lastSent = getLastForecastNotifTime(budgetId)
-        val elapsed = System.currentTimeMillis() - lastSent
-        return elapsed >= 24 * 60 * 60 * 1000L // 24 hours
+    suspend fun canSendForecastNotification(budgetId: Long, currentPeriodKey: String): Boolean {
+        val lastPeriodKey = getForecastNotifPeriodKey(budgetId)
+        return lastPeriodKey != currentPeriodKey
     }
 
     // ==================== Recurring Expense Reminders ====================

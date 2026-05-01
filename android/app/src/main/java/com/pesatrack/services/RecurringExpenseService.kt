@@ -100,13 +100,32 @@ class RecurringExpenseService @Inject constructor(
      *
      * @param periodStart Start timestamp of the budget period (inclusive)
      * @param periodEnd End timestamp of the budget period (exclusive)
+     * @param budgetCategoryId The budget's categoryId (null = total spending budget)
+     * @param isGroupBudget Whether the budget tracks a whole group (true) or a single sub-category (false)
      */
     suspend fun getRecurringInfoForPeriod(
         periodStart: Long,
-        periodEnd: Long
+        periodEnd: Long,
+        budgetCategoryId: Long? = null,
+        isGroupBudget: Boolean = true
     ): RecurringPeriodInfo {
         val summary = getRecurringExpenses()
         val now = System.currentTimeMillis()
+
+        // Resolve which category IDs belong to the budget's scope
+        val allowedCategoryIds: Set<Long>? = when {
+            budgetCategoryId == null -> null // Total spending — all categories
+            isGroupBudget -> {
+                // Group budget: include all sub-categories of the group
+                try {
+                    val children = categoryDao.getChildCategoriesSync(budgetCategoryId)
+                    children.map { it.id }.toSet() + budgetCategoryId
+                } catch (_: Exception) {
+                    setOf(budgetCategoryId)
+                }
+            }
+            else -> setOf(budgetCategoryId) // Sub-category budget: only this category
+        }
 
         var paidThisPeriod = 0.0
         var upcomingThisPeriod = 0.0
@@ -114,6 +133,12 @@ class RecurringExpenseService @Inject constructor(
         for (recurring in summary.recurringExpenses) {
             // Only consider high-confidence recurring expenses
             if (recurring.confidence < MIN_CONFIDENCE_FOR_FORECAST) continue
+
+            // Filter by category scope — skip recurring expenses not in this budget's scope
+            if (allowedCategoryIds != null) {
+                val recurringCatId = recurring.categoryId
+                if (recurringCatId == null || recurringCatId !in allowedCategoryIds) continue
+            }
 
             // Check if the recurring expense's expected date falls within this period
             val expectedInPeriod = isExpectedInPeriod(recurring, periodStart, periodEnd)

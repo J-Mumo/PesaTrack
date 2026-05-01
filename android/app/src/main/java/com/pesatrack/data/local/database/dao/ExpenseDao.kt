@@ -581,6 +581,28 @@ interface ExpenseDao {
     """)
     fun getInvestmentTotalForMonth(startOfMonth: Long, endOfMonth: Long): Flow<Double>
 
+    // ==================== Weekly Snapshot Queries ====================
+
+    /**
+     * Get the top spending category (by group name) within a date range.
+     * Returns the parent group name and total for the group with the highest spend.
+     * Excludes pass-through expenses.
+     */
+    @Query("""
+        SELECT
+            COALESCE(pg.name, c.name, 'Uncategorized') AS categoryName,
+            COALESCE(SUM(e.amount), 0.0) AS total
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        LEFT JOIN categories pg ON c.parentId = pg.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :startMs AND e.timestamp < :endMs
+        GROUP BY COALESCE(pg.id, c.id)
+        ORDER BY total DESC
+        LIMIT 1
+    """)
+    suspend fun getTopCategoryInRange(startMs: Long, endMs: Long): TopCategoryResult?
+
     // ==================== Budget Queries ====================
 
     /**
@@ -786,6 +808,16 @@ data class ExportExpense(
     val timestamp: Long,
     val isCategorized: Boolean,
     val isExcluded: Boolean
+)
+
+// ==================== Weekly Snapshot Result Classes ====================
+
+/**
+ * Top category result for a date range (weekly snapshot card)
+ */
+data class TopCategoryResult(
+    val categoryName: String,
+    val total: Double
 )
 
 // ==================== Recurring Expense Detection Result Classes ====================

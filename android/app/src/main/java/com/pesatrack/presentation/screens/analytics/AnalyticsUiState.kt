@@ -48,6 +48,20 @@ data class AnalyticsUiState(
     // Month-over-month comparison
     val monthComparison: MonthComparison? = null,
 
+    // Weekly snapshot (last 7 days vs previous 7 days)
+    /** Total spending in the last 7 days */
+    val weeklyTotal: Double = 0.0,
+    /** Total spending in the 7 days before that (days 8–14 ago) */
+    val previousWeekTotal: Double = 0.0,
+    /** Week-over-week percentage change */
+    val weekOverWeekChange: Double = 0.0,
+    /** Top spending category name this week */
+    val topCategoryThisWeek: String? = null,
+    /** Top spending category amount this week */
+    val topCategoryThisWeekAmount: Double = 0.0,
+    /** Date range label for the current week (e.g. "Apr 25 – May 1") */
+    val weekDateLabel: String = "",
+
     // Summary stats for selected month
     val totalForMonth: Double = 0.0,
     val transactionCountForMonth: Int = 0,

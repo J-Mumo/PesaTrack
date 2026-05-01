@@ -42,10 +42,15 @@ class BudgetService @Inject constructor(
     }
 
     /**
-     * Check forecast projections after an expense was saved and send proactive notifications.
+     * Check forecast projections after an expense was saved and send a proactive notification.
      *
-     * Throttled: max 1 forecast notification per budget per 24 hours.
-     * Skipped if the same budget already triggered an 80%/100% alert (redundant).
+     * **One-shot per period**: a forecast notification fires ONCE when a budget's projection
+     * first crosses 75% projected for the current period. It will not fire again until the
+     * next period starts (new month/week/year).
+     *
+     * Scoped: only evaluates budgets affected by this expense's category (max ~3: total, group, sub-category).
+     * Capped: sends at most 1 forecast notification per expense event (the highest-priority one).
+     * Skipped if the same budget already triggered an 80%/100% threshold alert (redundant).
      *
      * @param context Application context for showing notifications.
      * @param expenseCategoryId The sub-category ID of the saved expense.
@@ -59,39 +64,58 @@ class BudgetService @Inject constructor(
         if (expenseCategoryId == null) return
 
         try {
-            val forecasts = forecastService.getForecastsForActiveBudgets()
+            // Only compute forecasts for budgets affected by this expense's category
+            val forecasts = forecastService.getForecastsForAffectedBudgets(expenseCategoryId)
 
-            for (forecast in forecasts) {
-                val budgetId = forecast.budget.id
+            // Filter to actionable forecasts:
+            // - Not already covered by a threshold alert (80%/100% actual)
+            // - Projected ≥75% (the threshold crossing that triggers the one-shot notification)
+            // - Not already notified in this period (one-shot per period per budget)
+            val candidates = forecasts
+                .filter { it.budget.id !in budgetAlertIds }
+                .filter { it.projectedPercentage >= FORECAST_NOTIFY_THRESHOLD }
+                .filter { forecast ->
+                    val periodKey = budgetRepository.getPeriodKey(forecast.budget.period)
+                    appPreferences.canSendForecastNotification(forecast.budget.id, periodKey)
+                }
 
-                // Skip if this budget already fired a threshold alert
-                if (budgetId in budgetAlertIds) continue
-
-                // Only notify for projected overspend or imminent exhaustion
-                if (!forecast.isProjectedOverBudget && !forecast.isExhaustionImminent) continue
-
-                // Check throttle (max 1 per budget per 24h)
-                if (!appPreferences.canSendForecastNotification(budgetId)) continue
-
-                // Send notification
-                NotificationHelper.showForecastNotification(
-                    context = context,
-                    budgetId = budgetId,
-                    categoryName = forecast.budget.categoryName ?: "Total Spending",
-                    projectedTotal = forecast.projectedTotal,
-                    budgetAmount = forecast.budget.amount,
-                    projectedPercentage = forecast.projectedPercentage.toInt(),
-                    safeDailyBudget = forecast.safeDailyBudget,
-                    daysRemaining = forecast.daysRemaining,
-                    exhaustionImminent = forecast.isExhaustionImminent,
-                    remaining = forecast.budget.amount - forecast.spent
+            // Pick the single highest-priority forecast:
+            // 1. Exhaustion imminent has top priority
+            // 2. Then highest projected percentage
+            val best = candidates
+                .sortedWith(
+                    compareByDescending<BudgetForecast> { it.isExhaustionImminent }
+                        .thenByDescending { it.projectedPercentage }
                 )
+                .firstOrNull() ?: return
 
-                // Record throttle timestamp
-                appPreferences.setLastForecastNotifTime(budgetId)
-            }
+            // Send exactly 1 notification
+            NotificationHelper.showForecastNotification(
+                context = context,
+                budgetId = best.budget.id,
+                categoryName = best.budget.categoryName ?: "Total Spending",
+                projectedTotal = best.projectedTotal,
+                budgetAmount = best.budget.amount,
+                projectedPercentage = best.projectedPercentage.toInt(),
+                safeDailyBudget = best.safeDailyBudget,
+                daysRemaining = best.daysRemaining,
+                exhaustionImminent = best.isExhaustionImminent,
+                remaining = best.budget.amount - best.spent
+            )
+
+            // Mark this budget as notified for this period (one-shot — won't fire again this period)
+            val periodKey = budgetRepository.getPeriodKey(best.budget.period)
+            appPreferences.setForecastNotifPeriodKey(best.budget.id, periodKey)
         } catch (_: Exception) {
             // Non-critical — silently fail
         }
+    }
+
+    companion object {
+        /**
+         * Projected percentage threshold at which a forecast notification fires.
+         * Only fires once per budget per period when this threshold is first crossed.
+         */
+        const val FORECAST_NOTIFY_THRESHOLD = 75.0
     }
 }

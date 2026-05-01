@@ -8,6 +8,7 @@ import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.RecipientGroup
+import com.pesatrack.data.local.database.dao.TopCategoryResult
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.local.database.entities.ExpenseEntity
@@ -233,6 +234,22 @@ class ExpenseRepository @Inject constructor(
         dayEndMs: Long
     ): Boolean {
         return expenseDao.expenseExistsAtAmountAndDate(amount, tolerance, dayStartMs, dayEndMs)
+    }
+
+    // ==================== Weekly Snapshot ====================
+
+    /**
+     * Get total expenses for a date range (suspend version for weekly snapshot).
+     */
+    suspend fun getTotalInRange(startMs: Long, endMs: Long): Double {
+        return expenseDao.getTotalSpendingInRange(startMs, endMs)
+    }
+
+    /**
+     * Get the top spending category (group name) within a date range.
+     */
+    suspend fun getTopCategoryInRange(startMs: Long, endMs: Long): TopCategoryResult? {
+        return expenseDao.getTopCategoryInRange(startMs, endMs)
     }
 
     // ==================== Analytics ====================

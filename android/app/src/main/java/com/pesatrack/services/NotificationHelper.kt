@@ -233,15 +233,23 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val (title, text) = if (exhaustionImminent) {
-            val formattedRemaining = String.format("KES %,.0f", remaining)
-            "⏰ $categoryName budget runs out in ~${daysRemaining} days" to
-                "$formattedRemaining remaining"
-        } else {
-            val formattedProjected = String.format("KES %,.0f", projectedTotal)
-            val formattedSafe = String.format("KES %,.0f", safeDailyBudget)
-            "📊 $categoryName: On track for $formattedProjected ($projectedPercentage%)" to
-                "$formattedSafe/day to stay on budget"
+        val formattedProjected = String.format("KES %,.0f", projectedTotal)
+        val formattedSafe = String.format("KES %,.0f", safeDailyBudget)
+
+        val (title, text) = when {
+            exhaustionImminent -> {
+                val formattedRemaining = String.format("KES %,.0f", remaining)
+                "⏰ $categoryName budget runs out in ~${daysRemaining} days" to
+                    "$formattedRemaining remaining"
+            }
+            projectedPercentage > 100 -> {
+                "🚨 $categoryName: Projected $formattedProjected ($projectedPercentage%)" to
+                    "$formattedSafe/day to get back on track"
+            }
+            else -> {
+                "📊 $categoryName: On track at $formattedProjected ($projectedPercentage%)" to
+                    "$formattedSafe/day to stay on budget"
+            }
         }
 
         val notification = NotificationCompat.Builder(context, BUDGET_CHANNEL_ID)

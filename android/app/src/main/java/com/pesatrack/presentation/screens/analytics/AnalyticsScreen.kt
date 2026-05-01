@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -129,6 +131,20 @@ fun MonthlyTabContent(
         item {
             if (uiState.monthComparison != null) {
                 MonthComparisonCard(comparison = uiState.monthComparison!!)
+            }
+        }
+
+        // Weekly Snapshot Card (rolling 7 days vs previous 7 days)
+        if (uiState.weeklyTotal > 0 || uiState.previousWeekTotal > 0) {
+            item {
+                WeeklySnapshotCard(
+                    weekDateLabel = uiState.weekDateLabel,
+                    weeklyTotal = uiState.weeklyTotal,
+                    previousWeekTotal = uiState.previousWeekTotal,
+                    weekOverWeekChange = uiState.weekOverWeekChange,
+                    topCategoryName = uiState.topCategoryThisWeek,
+                    topCategoryAmount = uiState.topCategoryThisWeekAmount
+                )
             }
         }
 
@@ -716,6 +732,161 @@ fun MonthSelectorRow(
 }
 
 // ==================== Month-over-Month Comparison ====================
+
+// ==================== Weekly Snapshot Card ====================
+
+@Composable
+fun WeeklySnapshotCard(
+    weekDateLabel: String,
+    weeklyTotal: Double,
+    previousWeekTotal: Double,
+    weekOverWeekChange: Double,
+    topCategoryName: String?,
+    topCategoryAmount: Double
+) {
+    val isIncrease = weekOverWeekChange > 0
+    val changeColor = if (isIncrease) {
+        Color(0xFFE53935) // Red for spending increase
+    } else {
+        Color(0xFF43A047) // Green for spending decrease
+    }
+    val changeIcon = if (isIncrease) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown
+    val dailyAvg = if (weeklyTotal > 0) weeklyTotal / 7.0 else 0.0
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "📅 ",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = "This Week",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = weekDateLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Stats row: Total | Daily avg | vs last week
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Total
+                Column {
+                    Text(
+                        text = "Total",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = weeklyTotal.formatAsCurrency(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+
+                // Daily avg
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Daily avg",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = dailyAvg.formatAsCurrency(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+
+                // vs last week
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "vs last week",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                    if (previousWeekTotal > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = changeIcon,
+                                contentDescription = null,
+                                tint = changeColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${String.format("%.0f", weekOverWeekChange.absoluteValue)}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = changeColor
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "—",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.4f)
+                        )
+                    }
+                }
+            }
+
+            // Top category this week
+            if (topCategoryName != null && topCategoryAmount > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.12f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Top category: ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = topCategoryName,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        text = " (${topCategoryAmount.formatAsCurrency()})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==================== Month Comparison Card ====================
 
 @Composable
 fun MonthComparisonCard(comparison: MonthComparison) {

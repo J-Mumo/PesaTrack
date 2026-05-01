@@ -21,6 +21,7 @@
 **Focus:** NCBA bank parser fix, budget notification fix, user feedback & engagement system
 
 ### ✨ New Features
+- **Weekly Snapshot Card (Analytics)** — Moved weekly spending info from the Home screen to a richer card in the Analytics monthly tab. Shows: this-week total, daily average, week-over-week % change (color-coded ↑/↓), and top spending category for the week.
 - **In-App Review Prompt (Stage 1B)** — Google Play In-App Review triggered for engaged users (≥5 qualified sessions + key milestones reached); throttled to avoid annoyance
 - **Structured Feedback Prompt (Stage 1D)** — Home screen card asking "What would make PesaTrack more useful?" with 6 predefined options + free text; response saved locally and opens prefilled email draft
 - **Low-Engagement Feedback (Stage 1E)** — Home screen card for users who haven't completed setup, asking "What blocked setup for you?" with 6 reasons; captures friction points locally + email draft
@@ -33,6 +34,8 @@
 - **Budget "Exceeded" at Exactly 100%** — Budget notification incorrectly said "Budget exceeded!" when spending was exactly at 100%. Now correctly says "Budget fully used!" at exactly 100%, and "Budget exceeded!" only when spending goes over 100%.
 
 ### 📦 Technical
+- New `WeeklySnapshotCard` composable in Analytics; new `getTopCategoryInRange` DAO query + `TopCategoryResult` data class; `loadWeeklySnapshot()` in `AnalyticsViewModel`
+- Removed `totalLast7Days` from `HomeUiState` / `HomeViewModel` / `MonthlySummaryCard` (moved to Analytics)
 - New `UsageSummaryGenerator` utility (text + JSON output, Hilt-injected)
 - New `AboutViewModel` for Hilt dependency injection in About screen
 - `AppPreferences`: added review prompt, feedback, low-engagement, and usage metrics snapshot keys
