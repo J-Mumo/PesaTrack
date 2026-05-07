@@ -124,7 +124,7 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Room Database** | | |
-| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 14 with migrations |
+| Database Setup | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:16) | Version 15 with migrations |
 | Migration 2→3 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:34) | Moved Seed category to Faith & Giving |
 | Migration 6→7 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:469) | Added `isExcluded` column to expenses |
 | Migration 7→8 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:484) | Investment deep-dive: moved 6 sub-categories from Financial to new Investment & Savings group (18) |
@@ -134,12 +134,13 @@ SMS Sources ──────────────────────�
 | Migration 11→12 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:845) | Sub-category budgets: renamed `categoryGroupId` → `categoryId`, added `isGroupBudget` column |
 | Migration 12→13 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:895) | Added `income` table for manual monthly income tracking |
 | Migration 13→14 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:925) | Added `customStartDate` and `customEndDate` columns to budgets table (CUSTOM period support — later replaced by global month-start-day setting) |
+| Migration 14→15 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:938) | Added "Family & Friends Support" (id=507) sub-category under Faith & Giving (group 5) |
 | Expense Entity | [`ExpenseEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/ExpenseEntity.kt:11) | Full schema with FK to categories + isExcluded flag |
 | Category Entity | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:12) | Hierarchical categories with parent-child |
 | Category Rule Entity | [`CategoryRuleEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryRuleEntity.kt:1) | User-defined auto-categorization rules (pattern, matchType, categoryId, priority) |
 | Budget Entity | [`BudgetEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/BudgetEntity.kt:1) | Budget limits per category group, sub-category, or total, with period + isActive + isGroupBudget |
 | Income Entity | [`IncomeEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/IncomeEntity.kt:1) | Monthly income records (amount, yearMonth unique, note) for budget allocation checking |
-| Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 18 groups, 90+ sub-categories |
+| Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 17 groups, 95+ sub-categories |
 | Expense DAO | [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt:10) | CRUD + month queries + duplicate check + budget spending queries (total, group, sub-category) |
 | Category DAO | [`CategoryDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryDao.kt:11) | CRUD + search + default seeding + expense count queries + group management |
 | Category Rule DAO | [`CategoryRuleDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryRuleDao.kt:1) | Rule CRUD + active rules query |
@@ -153,7 +154,7 @@ SMS Sources ──────────────────────�
 | Category Rule Repository | [`CategoryRuleRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRuleRepository.kt:1) | Rule CRUD, active rules loading for categorization pipeline |
 | Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation (with month-start-day offset), spending aggregation (total/group/sub-category), progress/alert calculation, monthly income get/set, total budgeted computation |
 | **Dependency Injection** | | |
-| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v14 with all migrations), DAOs (including BudgetDao, CategoryRuleDao, IncomeDao) |
+| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v15 with all migrations), DAOs (including BudgetDao, CategoryRuleDao, IncomeDao) |
 
 ---
 
@@ -319,7 +320,7 @@ SMS Sources ──────────────────────�
 | 2 | Digital & Tech | **Airtime** (202), Data Bundles, AI Subs, Streaming, Domain, Hosting, VPN |
 | 3 | Education | Certifications, Conferences, Courses, School Fees, Stationery |
 | 4 | Entertainment | Events, Games, Hobbies, Movies |
-| 5 | Faith & Giving | Church Program, Give, Offering, **Seed**, Tithe |
+| 5 | Faith & Giving | Church Program, Community Program, **Family & Friends Support**, Give, Offering, **Seed**, Tithe |
 | 6 | Financial | Bank Charges, Loan Interest, Loan Repayment, **Mpesa Transaction Cost** (606), Pesalink/RTGS Charges |
 | 7 | Food & Dining | Groceries, Eating Out, Snacks/Drinks, Takeaway, Drinking Water |
 | 8 | Government & Legal | KRA, NTSA, SHA, County Rates, Excise Duty, Visa/Passport Fees |
@@ -444,7 +445,7 @@ app/src/main/java/com/pesatrack/
 ├── data/
 │   ├── local/
 │   │   ├── database/
-│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v14 with migrations (v13→v14: CUSTOM period columns)
+│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v15 with migrations (v14→v15: Family & Friends Support category)
 │   │   │   ├── dao/
 │   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check + budget spending queries
 │   │   │   │   ├── CategoryDao.kt           ✅ CRUD + search + default seeding + expense count queries + group mgmt
@@ -453,7 +454,7 @@ app/src/main/java/com/pesatrack/
 │   │   │   │   └── IncomeDao.kt             ✅ Income upsert + getByYearMonth + observe as Flow
 │   │   │   └── entities/
 │   │   │       ├── ExpenseEntity.kt          ✅ Full schema with FK to categories
-│   │   │       ├── CategoryEntity.kt         ✅ 18 groups, 90+ categories
+│   │   │       ├── CategoryEntity.kt         ✅ 17 groups, 95+ categories
 │   │   │       ├── CategoryRuleEntity.kt     ✅ User-defined auto-categorization rules (pattern, matchType, priority)
 │   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
 │   │   │       └── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)

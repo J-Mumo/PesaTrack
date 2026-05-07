@@ -129,10 +129,11 @@ object DefaultCategories {
     private val faithCategories = listOf(
         CategoryEntity(id = 501, name = "Church Program", icon = "auto_awesome", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 1),
         CategoryEntity(id = 502, name = "Community Program", icon = "diversity_3", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 2),
-        CategoryEntity(id = 503, name = "Give", icon = "volunteer_activism", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 3),
-        CategoryEntity(id = 504, name = "Offering", icon = "favorite", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 4),
-        CategoryEntity(id = 505, name = "Seed", icon = "grass", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 5),
-        CategoryEntity(id = 506, name = "Tithe", icon = "church", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 6),
+        CategoryEntity(id = 507, name = "Family & Friends Support", icon = "people", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 3),
+        CategoryEntity(id = 503, name = "Give", icon = "volunteer_activism", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 4),
+        CategoryEntity(id = 504, name = "Offering", icon = "favorite", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 5),
+        CategoryEntity(id = 505, name = "Seed", icon = "grass", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 6),
+        CategoryEntity(id = 506, name = "Tithe", icon = "church", color = "#673AB7", parentId = 5, isDefault = true, sortOrder = 7),
     )
 
     // ==================== Group 6: Financial (expense-only; investments moved to Group 18) ====================

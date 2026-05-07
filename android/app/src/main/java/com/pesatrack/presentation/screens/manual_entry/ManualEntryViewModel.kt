@@ -62,16 +62,23 @@ class ManualEntryViewModel @Inject constructor(
     }
 
     fun updateRecipient(value: String) {
+        // Only allow digits (phone/till/paybill numbers)
+        val filtered = value.filter { it.isDigit() }
         _uiState.update {
             it.copy(
-                recipient = value,
+                recipient = filtered,
                 recipientError = null
             )
         }
     }
 
     fun updateRecipientName(value: String) {
-        _uiState.update { it.copy(recipientName = value) }
+        _uiState.update {
+            it.copy(
+                recipientName = value,
+                recipientNameError = null
+            )
+        }
     }
 
     fun updateNotes(value: String) {
@@ -102,8 +109,14 @@ class ManualEntryViewModel @Inject constructor(
             valid = false
         }
 
-        if (state.recipient.isBlank()) {
-            _uiState.update { it.copy(recipientError = "Enter a recipient") }
+        if (state.recipientName.isBlank()) {
+            _uiState.update { it.copy(recipientNameError = "Enter a recipient name") }
+            valid = false
+        }
+
+        // Recipient number is optional, but if provided must be digits only
+        if (state.recipient.isNotBlank() && !state.recipient.all { it.isDigit() }) {
+            _uiState.update { it.copy(recipientError = "Must be numbers only") }
             valid = false
         }
 
@@ -122,10 +135,14 @@ class ManualEntryViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = true, error = null) }
 
             try {
+                // Use recipient number if provided, otherwise fall back to recipient name
+                val recipientValue = state.recipient.trim().ifBlank { state.recipientName.trim() }
+                val recipientNameValue = state.recipientName.trim().ifBlank { null }
+
                 val expense = Expense(
                     amount = amount,
-                    recipient = state.recipient.trim(),
-                    recipientName = state.recipientName.trim().ifBlank { null },
+                    recipient = recipientValue,
+                    recipientName = recipientNameValue,
                     categoryId = state.selectedCategory?.id,
                     paymentType = state.paymentType,
                     source = ExpenseSource.MANUAL,
@@ -137,13 +154,16 @@ class ManualEntryViewModel @Inject constructor(
                 expenseRepository.saveExpense(expense)
 
                 // Save recipient→category mapping if category was selected
-                if (state.selectedCategory != null && state.recipient.isNotBlank()) {
-                    recipientMappingRepository.saveMapping(
-                        recipientKey = state.recipient.trim(),
-                        categoryId = state.selectedCategory.id,
-                        displayName = state.recipientName.trim().ifBlank { null }
-                    )
-                    // Also save by name if provided
+                if (state.selectedCategory != null) {
+                    // Save by number if provided
+                    if (state.recipient.isNotBlank()) {
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = state.recipient.trim(),
+                            categoryId = state.selectedCategory.id,
+                            displayName = recipientNameValue
+                        )
+                    }
+                    // Also save by name
                     if (state.recipientName.isNotBlank()) {
                         recipientMappingRepository.saveMapping(
                             recipientKey = state.recipientName.trim(),

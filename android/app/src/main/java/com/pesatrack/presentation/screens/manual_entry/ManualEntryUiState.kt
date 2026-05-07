@@ -22,6 +22,7 @@ data class ManualEntryUiState(
 
     /** Validation */
     val amountError: String? = null,
+    val recipientNameError: String? = null,
     val recipientError: String? = null,
 
     /** Save state */

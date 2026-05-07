@@ -42,6 +42,8 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
  *            Used by Budget screen to compare total budgeted vs income.
  * - v13→v14: Added customStartDate/customEndDate columns to budgets table
  *            for CUSTOM period support (user-defined date ranges).
+ * - v14→v15: Added "Family & Friends Support" (id=507) sub-category under
+ *            Faith & Giving (group 5) for tracking money given to family/friends.
  */
 @Database(
     entities = [
@@ -52,7 +54,7 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
         CategoryRuleEntity::class,
         IncomeEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -930,6 +932,24 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                 database.execSQL(
                     "ALTER TABLE budgets ADD COLUMN customEndDate INTEGER DEFAULT NULL"
                 )
+            }
+        }
+
+        /**
+         * Migration from version 14 to 15:
+         * Add "Family & Friends Support" sub-category (id=507) under Faith & Giving (group 5).
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    INSERT OR IGNORE INTO categories (id, name, icon, color, parentId, isGroup, isDefault, sortOrder)
+                    VALUES (507, 'Family & Friends Support', 'people', '#673AB7', 5, 0, 1, 3)
+                """)
+                // Shift sort order for existing sub-categories that come after
+                database.execSQL("""
+                    UPDATE categories SET sortOrder = sortOrder + 1
+                    WHERE parentId = 5 AND id != 507 AND sortOrder >= 3
+                """)
             }
         }
     }

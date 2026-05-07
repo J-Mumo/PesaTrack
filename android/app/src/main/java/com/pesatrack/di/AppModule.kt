@@ -48,7 +48,8 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_10_11,
                 PesaTrackDatabase.MIGRATION_11_12,
                 PesaTrackDatabase.MIGRATION_12_13,
-                PesaTrackDatabase.MIGRATION_13_14
+                PesaTrackDatabase.MIGRATION_13_14,
+                PesaTrackDatabase.MIGRATION_14_15
             )
             .fallbackToDestructiveMigration()
             .build()

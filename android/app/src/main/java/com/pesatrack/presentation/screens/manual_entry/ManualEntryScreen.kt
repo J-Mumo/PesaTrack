@@ -103,30 +103,33 @@ fun ManualEntryScreen(
                 singleLine = true
             )
 
-            // ==================== Recipient ====================
-            OutlinedTextField(
-                value = uiState.recipient,
-                onValueChange = { viewModel.updateRecipient(it) },
-                label = { Text("Recipient") },
-                placeholder = { Text("Phone, till, or paybill number") },
-                leadingIcon = {
-                    Icon(Icons.Filled.Person, contentDescription = null)
-                },
-                isError = uiState.recipientError != null,
-                supportingText = uiState.recipientError?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // ==================== Recipient Name (optional) ====================
+            // ==================== Recipient Name ====================
             OutlinedTextField(
                 value = uiState.recipientName,
                 onValueChange = { viewModel.updateRecipientName(it) },
-                label = { Text("Recipient Name (optional)") },
+                label = { Text("Recipient Name") },
                 placeholder = { Text("e.g. Naivas Supermarket") },
                 leadingIcon = {
                     Icon(Icons.Filled.Badge, contentDescription = null)
                 },
+                isError = uiState.recipientNameError != null,
+                supportingText = uiState.recipientNameError?.let { { Text(it) } },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // ==================== Recipient Number (optional) ====================
+            OutlinedTextField(
+                value = uiState.recipient,
+                onValueChange = { viewModel.updateRecipient(it) },
+                label = { Text("Phone / Till / Paybill Number (optional)") },
+                placeholder = { Text("e.g. 0712345678") },
+                leadingIcon = {
+                    Icon(Icons.Filled.Phone, contentDescription = null)
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = uiState.recipientError != null,
+                supportingText = uiState.recipientError?.let { { Text(it) } },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
