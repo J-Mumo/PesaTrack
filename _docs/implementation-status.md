@@ -94,7 +94,7 @@ SMS Sources ──────────────────────�
 | **Parser Strategy Interface** | [`SmsParserStrategy.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserStrategy.kt:15) | Base interface for all SMS parsers |
 | **Parser Registry** | [`SmsParserRegistry.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/SmsParserRegistry.kt:17) | Dispatches SMS to correct parser by sender ID |
 | **M-PESA SMS Parser** | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:31) | 8 M-PESA expense types |
-| **NCBA Bank Parser** | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:38) | 3 NCBA transaction types (Send, Till, Paybill) |
+| **NCBA Bank Parser** | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:38) | 5 NCBA transaction types (Send, Till, Paybill, Card Payment) |
 | SmsParser Facade | [`SmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/SmsParser.kt:20) | Backward-compatible facade delegating to registry |
 | Send Money | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:81) | Pattern: `"sent to NAME PHONE on"` |
 | Buy Goods (Till) | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:84) | Pattern: `"paid to SHOP. on"` |
@@ -110,7 +110,9 @@ SMS Sources ──────────────────────�
 | Transaction cost extraction | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:48) | Regex: `"Transaction cost,? Ksh..."` |
 | Non-expense filtering | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:56) | Skips Receive Money, Deposit, Reversal |
 | NCBA self-transfer skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:70) | Skips bank→own M-PESA transfers |
-| NCBA generic debit skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:51) | Skips "has been debited" (less info) |
+| NCBA Card Payment (debit) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:85) | Pattern: `"has been debited with KES...Ref: FT..."` → KES amount + bank ref |
+| NCBA Card Payment (approval) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:79) | Pattern: `"approved a transaction of USD...at MERCHANT..."` → links merchant name to debit |
+| NCBA generic debit skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:64) | Skips "has been debited" without card ref (non-card debits) |
 | SMS Receiver | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Multi-source BroadcastReceiver with bank preference check |
 | Multi-source Import | [`SmsImportService.kt`](../android/app/src/main/java/com/pesatrack/services/SmsImportService.kt:36) | Imports from M-PESA + enabled banks |
 | Duplicate detection | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Checks transactionId before insert |
@@ -168,7 +170,7 @@ SMS Sources ──────────────────────�
 | Category Model | [`Category.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Category.kt:1) | Domain model |
 | Budget Model | [`Budget.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Budget.kt:1) | Budget (with isGroupBudget flag), BudgetPeriod (WEEKLY/MONTHLY/YEARLY/CUSTOM — CUSTOM hidden via `uiEntries`), BudgetProgress, BudgetStatus (UNDER/WARNING/EXCEEDED), BudgetAlert |
 | Budget Forecast Model | [`BudgetForecast.kt`](../android/app/src/main/java/com/pesatrack/domain/models/BudgetForecast.kt:1) | BudgetForecast (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget), ForecastStatus (ON_TRACK/PROJECTED_OVER/EXHAUSTION_IMMINENT) |
-| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:32) | 9 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT, CASH |
+| PaymentType Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:32) | 10 values: SEND_MONEY, BUY_GOODS, PAY_BILL, WITHDRAW, AIRTIME, MPESA_CARD, TRANSACTION_COST, BANK_DEBIT, CARD_PAYMENT, CASH |
 | ExpenseSource Enum | [`Expense.kt`](../android/app/src/main/java/com/pesatrack/domain/models/Expense.kt:81) | STK_PUSH (legacy), SMS_PARSED, SMS_BANK, EXCEL_IMPORT, MANUAL |
 
 **PaymentType details:**
@@ -182,6 +184,7 @@ SMS Sources ──────────────────────�
 | `AIRTIME` | Airtime | `"bought ... of airtime"` |
 | `MPESA_CARD` | M-PESA Card | `"sent to M-PESA CARD for account"` |
 | `TRANSACTION_COST` | Transaction Cost | `"Transaction cost, KshXX.XX"` (auto-categorized as category 811) |
+| `CARD_PAYMENT` | Card Payment | NCBA card debit: `"has been debited with KES...Ref: FT..."` + linked approval: `"approved a transaction of USD...at MERCHANT"` |
 | `CASH` | Cash | Manual entry only (no SMS pattern) |
 
 **Legacy backward compatibility:** `fromString()` maps old values `"REVERSAL"`, `"RECEIVE_MONEY"`, `"DEPOSIT"` to `SEND_MONEY` for existing DB records.

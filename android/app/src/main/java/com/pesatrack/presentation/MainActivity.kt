@@ -44,14 +44,10 @@ import com.pesatrack.presentation.screens.pin.PinViewModel
 import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
-import com.pesatrack.services.RecurringReminderWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
+
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -100,10 +96,7 @@ class MainActivity : FragmentActivity() {
 
         // Create notification channels (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
-        NotificationHelper.createRecurringReminderChannel(this)
-
-        // Schedule daily recurring-expense reminder worker
-        scheduleRecurringReminderWorker()
+        
 
         // Set up biometric prompt
         setupBiometric()
@@ -292,22 +285,7 @@ class MainActivity : FragmentActivity() {
         biometricPrompt.authenticate(promptInfo)
     }
 
-    /**
-     * Schedule a daily WorkManager task that checks for upcoming/overdue
-     * recurring expenses and sends reminder notifications.
-     * Uses KEEP policy so it won't reset the schedule on every app launch.
-     */
-    private fun scheduleRecurringReminderWorker() {
-        val workRequest = PeriodicWorkRequestBuilder<RecurringReminderWorker>(
-            24, TimeUnit.HOURS
-        ).build()
 
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            RecurringReminderWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            workRequest
-        )
-    }
 
     /**
      * Request notification permission (Android 13+).

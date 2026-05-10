@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
+import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
@@ -46,6 +47,9 @@ class SmsReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var budgetService: BudgetService
+
+    @Inject
+    lateinit var expenseDao: ExpenseDao
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -117,6 +121,12 @@ class SmsReceiver : BroadcastReceiver() {
                 val parsed = SmsParserRegistry.parseTransaction(sender, smsBody, smsDate) ?: return@launch
 
                 var mainExpense = parsed.expense.copy(rawSms = smsBody)
+
+                // Handle card approval update — link to existing card debit record
+                if (parsed.isCardApprovalUpdate) {
+                    handleCardApprovalUpdate(mainExpense, smsDate)
+                    return@launch
+                }
 
                 // Check if transaction already exists
                 val transactionId = mainExpense.transactionId
@@ -247,6 +257,47 @@ class SmsReceiver : BroadcastReceiver() {
             amount = amount,
             recipient = recipient
         )
+    }
+
+    /**
+     * Handle a card approval SMS by linking it to an existing CARD_PAYMENT expense.
+     *
+     * The card approval SMS has the merchant name but no KES amount.
+     * The generic debit SMS (parsed as CARD_PAYMENT) has the KES amount but no merchant.
+     * This method links them by finding a recent CARD_PAYMENT within a 5-minute window
+     * and updating its recipientName and notes with the merchant info.
+     *
+     * If no existing card debit is found (approval arrived first), saves as a placeholder
+     * that will be updated when the debit SMS arrives later.
+     */
+    private suspend fun handleCardApprovalUpdate(
+        cardApproval: com.pesatrack.domain.models.Expense,
+        smsDate: Long
+    ) {
+        val windowMs = 5 * 60 * 1000L // 5 minutes
+        val minTs = smsDate - windowMs
+        val maxTs = smsDate + windowMs
+
+        // Try to find an existing CARD_PAYMENT record (from the debit SMS) within the time window
+        val existing = expenseDao.findRecentCardPaymentPlaceholder(minTs, maxTs, smsDate)
+
+        if (existing != null) {
+            // Link: update the existing debit record with merchant name from card approval
+            val merchantName = cardApproval.recipientName ?: "Unknown Merchant"
+            val notes = cardApproval.notes ?: "Card payment at $merchantName"
+            expenseDao.updateRecipientNameAndNotes(existing.id, merchantName, notes)
+            Log.d(TAG, "Linked card approval to existing debit (id=${existing.id}): $merchantName")
+        } else {
+            // Debit hasn't arrived yet — save the card approval as a placeholder (amount=0)
+            // When the debit SMS arrives, it will be saved normally as CARD_PAYMENT.
+            // A future card approval for that debit will then find it via the time window.
+            Log.d(TAG, "No matching card debit found — card approval from ${cardApproval.recipientName} will await debit SMS")
+            // Don't save a placeholder with amount=0 — it would pollute totals.
+            // The debit SMS will create the real expense. If the approval arrived first,
+            // we just log it. The debit SMS will arrive shortly and be saved.
+            // If we want to guarantee linking, we could save a placeholder, but for v1
+            // we rely on the debit SMS arriving (it always does for NCBA).
+        }
     }
 
     companion object {

@@ -421,5 +421,6 @@ fun getPaymentTypeIcon(paymentType: PaymentType): androidx.compose.ui.graphics.v
         PaymentType.MPESA_CARD -> Icons.Filled.CreditCard
         PaymentType.TRANSACTION_COST -> Icons.Filled.Money
         PaymentType.BANK_DEBIT -> Icons.Filled.AccountBalance
+        PaymentType.CARD_PAYMENT -> Icons.Filled.CreditCard
     }
 }

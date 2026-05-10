@@ -678,6 +678,54 @@ interface ExpenseDao {
         """)
         suspend fun getAllExpensesForExport(): List<ExportExpense>
     
+        // ==================== Card Payment Linking ====================
+    
+        /**
+         * Find a recent CARD_PAYMENT expense with no recipientName within a time window.
+         * Used to link NCBA card approval SMS (with merchant name) to the
+         * corresponding generic debit SMS (with KES amount).
+         */
+        @Query("""
+            SELECT * FROM expenses
+            WHERE paymentType = 'CARD_PAYMENT'
+              AND (recipientName IS NULL OR recipientName = '')
+              AND timestamp >= :minTimestamp AND timestamp <= :maxTimestamp
+            ORDER BY ABS(timestamp - :targetTimestamp) ASC
+            LIMIT 1
+        """)
+        suspend fun findRecentCardPaymentPlaceholder(
+            minTimestamp: Long,
+            maxTimestamp: Long,
+            targetTimestamp: Long
+        ): ExpenseEntity?
+
+        /**
+         * Find a recent CARD_PAYMENT expense by approximate amount and time window.
+         * Used to link card approval (merchant name) to card debit (KES amount)
+         * when both have already been saved.
+         */
+        @Query("""
+            SELECT * FROM expenses
+            WHERE paymentType = 'CARD_PAYMENT'
+              AND ABS(timestamp - :targetTimestamp) <= :windowMs
+            ORDER BY ABS(timestamp - :targetTimestamp) ASC
+            LIMIT 1
+        """)
+        suspend fun findRecentCardPayment(
+            targetTimestamp: Long,
+            windowMs: Long = 300000
+        ): ExpenseEntity?
+
+        /**
+         * Update recipientName and notes on an existing expense (for card payment linking).
+         */
+        @Query("""
+            UPDATE expenses
+            SET recipientName = :recipientName, notes = :notes
+            WHERE id = :expenseId
+        """)
+        suspend fun updateRecipientNameAndNotes(expenseId: Long, recipientName: String, notes: String)
+
         // ==================== Recurring Expense Detection ====================
     
         /**

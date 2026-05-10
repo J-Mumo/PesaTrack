@@ -38,7 +38,14 @@ object SmsParser {
      */
     data class ParsedTransaction(
         val expense: Expense,
-        val transactionCost: Expense?
+        val transactionCost: Expense?,
+        /**
+         * When true, this parsed result represents a card approval SMS that should
+         * UPDATE an existing CARD_PAYMENT expense (adding merchant name) rather than
+         * inserting a new record. The SmsReceiver should find a recent CARD_PAYMENT
+         * within a 5-minute window and update its recipientName/notes.
+         */
+        val isCardApprovalUpdate: Boolean = false
     )
 
     /**

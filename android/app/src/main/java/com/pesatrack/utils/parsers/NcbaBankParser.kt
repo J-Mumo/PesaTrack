@@ -56,14 +56,29 @@ class NcbaBankParser : SmsParserStrategy {
 
     // --- Skip patterns ---
 
+    // Credit notification (skip — not an expense)
+    private val creditPattern = Pattern.compile(
+        "has been credited", Pattern.CASE_INSENSITIVE
+    )
+
     // Generic debit notification (skip — duplicate, less info)
+    // NOTE: Card debits (Ref: FTC...) are now parsed instead of skipped
     private val genericDebitPattern = Pattern.compile(
         "Your account.*has been debited", Pattern.CASE_INSENSITIVE
     )
 
-    // Credit notification (skip — not an expense)
-    private val creditPattern = Pattern.compile(
-        "has been credited", Pattern.CASE_INSENSITIVE
+    // --- Card payment patterns ---
+
+    // Card approval: "Joel, we have approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
+    private val cardApprovalPattern = Pattern.compile(
+        "approved a transaction of ([A-Z]{3})\\s+([\\d,]+(?:\\.\\d{1,2})?)\\s+at\\s+(.+?)\\s+on your card no\\.\\s*ending\\s*\\*(\\d+)",
+        Pattern.CASE_INSENSITIVE
+    )
+
+    // Card debit: "Your account 763****018 has been debited with KES 1,574.87 on 06/05/2026 at 19:49. Ref: FTC260506OWPTPV"
+    private val cardDebitPattern = Pattern.compile(
+        "has been debited with KES\\s*([\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(\\d{1,2}/\\d{2}/\\d{4})\\s+at\\s+(\\d{2}:\\d{2})\\.\\s*Ref:\\s*(FT\\S+)",
+        Pattern.CASE_INSENSITIVE
     )
 
     // --- Expense patterns (ordered most specific → least specific) ---
@@ -140,20 +155,18 @@ class NcbaBankParser : SmsParserStrategy {
         val isNcba = senderIds.any { sender.contains(it, ignoreCase = true) }
         if (!isNcba) return false
 
-        // Must be a detailed confirmation (not just a generic debit)
-        // Look for keywords that indicate it's a parseable NCBA transaction SMS
+        // Parseable NCBA transaction types:
+        // 1. M-PESA transfers (Send/Till/Paybill)
+        // 2. Card approval alerts
+        // 3. Card debit notifications (Ref: FT...)
         return body.contains("MPESA transfer", ignoreCase = true) ||
                 body.contains("Mpesa Till transfer", ignoreCase = true) ||
-                body.contains("Mpesa Paybill transfer", ignoreCase = true)
+                body.contains("Mpesa Paybill transfer", ignoreCase = true) ||
+                body.contains("approved a transaction of", ignoreCase = true) ||
+                (body.contains("has been debited", ignoreCase = true) && body.contains("Ref:", ignoreCase = true))
     }
 
     override fun parse(body: String, smsDate: Long): SmsParser.ParsedTransaction? {
-        // Skip generic debit notifications
-        if (genericDebitPattern.matcher(body).find()) {
-            Log.d(TAG, "Skipping NCBA generic debit notification")
-            return null
-        }
-
         // Skip credit notifications
         if (creditPattern.matcher(body).find()) {
             Log.d(TAG, "Skipping NCBA credit notification (not an expense)")
@@ -161,7 +174,75 @@ class NcbaBankParser : SmsParserStrategy {
         }
 
         try {
-            // Try each pattern in order of specificity (most specific first)
+            // 0a. Card approval: "approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
+            cardApprovalPattern.matcher(body).let { m ->
+                if (m.find()) {
+                    val currency = m.group(1)?.trim() ?: "KES"
+                    val amount = parseAmount(m.group(2))
+                    val merchant = m.group(3)?.trim() ?: "Unknown Merchant"
+                    val cardLast4 = m.group(4)?.trim() ?: ""
+
+                    Log.d(TAG, "Parsed NCBA card approval: $currency $amount at $merchant (card *$cardLast4)")
+
+                    // Return as a card approval update — SmsReceiver will try to link
+                    // to an existing card debit record or save as placeholder
+                    return SmsParser.ParsedTransaction(
+                        expense = Expense(
+                            transactionId = null, // No ref in card approval SMS
+                            amount = amount ?: 0.0, // Foreign currency amount (placeholder if 0)
+                            recipient = "*$cardLast4",
+                            recipientName = merchant,
+                            paymentType = PaymentType.CARD_PAYMENT,
+                            source = expenseSource,
+                            notes = "$currency ${m.group(2)?.trim()} at $merchant (Card *$cardLast4)",
+                            timestamp = smsDate,
+                            isCategorized = false
+                        ),
+                        transactionCost = null,
+                        isCardApprovalUpdate = true
+                    )
+                }
+            }
+
+            // 0b. Card debit: "Your account 763****018 has been debited with KES 1,574.87 on 06/05/2026 at 19:49. Ref: FTC260506OWPTPV"
+            cardDebitPattern.matcher(body).let { m ->
+                if (m.find()) {
+                    val amount = parseAmount(m.group(1))
+                    val dateStr = m.group(2)?.trim() // "06/05/2026"
+                    val timeStr = m.group(3)?.trim() // "19:49"
+                    val bankRef = m.group(4)?.trim() ?: ""
+
+                    // Parse date from SMS body
+                    val parsedTimestamp = parseDatetime(dateStr, timeStr) ?: smsDate
+
+                    Log.d(TAG, "Parsed NCBA card debit: KES $amount, Ref: $bankRef")
+
+                    if (amount != null) {
+                        return SmsParser.ParsedTransaction(
+                            expense = Expense(
+                                transactionId = bankRef,
+                                amount = amount,
+                                recipient = bankRef,
+                                recipientName = null, // Will be updated by card approval linking
+                                paymentType = PaymentType.CARD_PAYMENT,
+                                source = expenseSource,
+                                notes = "Card debit, Ref: $bankRef",
+                                timestamp = parsedTimestamp,
+                                isCategorized = false
+                            ),
+                            transactionCost = null
+                        )
+                    }
+                }
+            }
+
+            // Skip generic debit notifications that are NOT card debits
+            if (genericDebitPattern.matcher(body).find()) {
+                Log.d(TAG, "Skipping NCBA generic debit notification (no card ref)")
+                return null
+            }
+
+            // Try each M-PESA pattern in order of specificity (most specific first)
 
             // 1a. Till payment Format A (with till number — more specific, try first)
             tillPaymentPatternA.matcher(body).let { m ->
@@ -347,6 +428,19 @@ class NcbaBankParser : SmsParserStrategy {
     private fun parseAmount(amountStr: String?): Double? {
         if (amountStr == null) return null
         return amountStr.replace(",", "").toDoubleOrNull()
+    }
+
+    /**
+     * Parse date + time from NCBA debit SMS format: "06/05/2026" + "19:49"
+     */
+    private fun parseDatetime(dateStr: String?, timeStr: String?): Long? {
+        if (dateStr == null || timeStr == null) return null
+        return try {
+            val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US)
+            fmt.parse("$dateStr $timeStr")?.time
+        } catch (e: Exception) {
+            null
+        }
     }
 
     companion object {

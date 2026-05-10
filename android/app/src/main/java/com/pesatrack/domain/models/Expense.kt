@@ -38,6 +38,7 @@ enum class PaymentType {
     MPESA_CARD,      // Sent to M-PESA Card (global payments)
     TRANSACTION_COST, // M-PESA transaction cost (auto-categorized)
     BANK_DEBIT,      // Generic bank debit (for non-MPESA bank transactions)
+    CARD_PAYMENT,    // Card payment (e.g. NCBA debit card at merchant)
     CASH;            // Cash payment (manual entry)
 
     companion object {
@@ -54,6 +55,7 @@ enum class PaymentType {
                     "M-PESA Card" -> MPESA_CARD
                     "Transaction Cost" -> TRANSACTION_COST
                     "Bank Debit" -> BANK_DEBIT
+                    "Card Payment" -> CARD_PAYMENT
                     "Cash" -> CASH
                     // Legacy values (for backward compat with old DB records)
                     "REVERSAL" -> SEND_MONEY
@@ -75,6 +77,7 @@ enum class PaymentType {
             MPESA_CARD -> "M-PESA Card"
             TRANSACTION_COST -> "Transaction Cost"
             BANK_DEBIT -> "Bank Debit"
+            CARD_PAYMENT -> "Card Payment"
             CASH -> "Cash"
         }
     }
