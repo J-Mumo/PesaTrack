@@ -10,12 +10,14 @@ import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.database.dao.IncomeDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
+import com.pesatrack.data.local.database.dao.ReportSnapshotDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.CategoryEntity
 import com.pesatrack.data.local.database.entities.CategoryRuleEntity
 import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.data.local.database.entities.IncomeEntity
 import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
+import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
 
 /**
  * PesaTrack Room Database
@@ -44,6 +46,9 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
  *            for CUSTOM period support (user-defined date ranges).
  * - v14→v15: Added "Family & Friends Support" (id=507) sub-category under
  *            Faith & Giving (group 5) for tracking money given to family/friends.
+ * - v15→v16: Added report_snapshots table to persist generated Weekly / Monthly /
+ *            Quarterly / Year-in-Review reports for the Insights & Reports feature
+ *            (see plans/insights-and-reports-plan.md).
  */
 @Database(
     entities = [
@@ -52,9 +57,10 @@ import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
         RecipientCategoryMappingEntity::class,
         BudgetEntity::class,
         CategoryRuleEntity::class,
-        IncomeEntity::class
+        IncomeEntity::class,
+        ReportSnapshotEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -65,6 +71,7 @@ abstract class PesaTrackDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
     abstract fun categoryRuleDao(): CategoryRuleDao
     abstract fun incomeDao(): IncomeDao
+    abstract fun reportSnapshotDao(): ReportSnapshotDao
 
     companion object {
         /**
@@ -950,6 +957,49 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                     UPDATE categories SET sortOrder = sortOrder + 1
                     WHERE parentId = 5 AND id != 507 AND sortOrder >= 3
                 """)
+            }
+        }
+
+        /**
+         * Migration from version 15 to 16:
+         * Create report_snapshots table to persist generated Weekly / Monthly /
+         * Quarterly / Year-in-Review reports. See plans/insights-and-reports-plan.md.
+         *
+         * Schema mirrors [com.pesatrack.data.local.database.entities.ReportSnapshotEntity].
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS report_snapshots (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        cadence TEXT NOT NULL,
+                        periodStart INTEGER NOT NULL,
+                        periodEnd INTEGER NOT NULL,
+                        generatedAt INTEGER NOT NULL,
+                        periodTotal REAL NOT NULL,
+                        previousPeriodTotal REAL NOT NULL,
+                        averagePerDay REAL NOT NULL,
+                        periodDays INTEGER NOT NULL,
+                        biggestChangeCategoryName TEXT,
+                        biggestChangeDelta REAL NOT NULL DEFAULT 0,
+                        feesTotal REAL NOT NULL DEFAULT 0,
+                        headroomAmount REAL,
+                        headroomLabel TEXT,
+                        topCategories TEXT NOT NULL DEFAULT '',
+                        othersAmount REAL NOT NULL DEFAULT 0,
+                        othersCount INTEGER NOT NULL DEFAULT 0,
+                        limitedData INTEGER NOT NULL DEFAULT 0,
+                        viewedAt INTEGER
+                    )
+                """)
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_report_snapshots_cadence_periodStart " +
+                        "ON report_snapshots(cadence, periodStart)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_report_snapshots_cadence_generatedAt " +
+                        "ON report_snapshots(cadence, generatedAt)"
+                )
             }
         }
     }

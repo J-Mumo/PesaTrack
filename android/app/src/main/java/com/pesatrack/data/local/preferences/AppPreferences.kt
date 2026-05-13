@@ -112,6 +112,13 @@ class AppPreferences @Inject constructor(
         private val KEY_RECURRING_REMINDERS_ENABLED = booleanPreferencesKey("recurring_reminders_enabled")
 
         /**
+         * Whether the Weekly Review (Insights & Reports v1.0) notification is enabled.
+         * Default: true — users can disable in Settings under *Reports & Insights*.
+         * See plans/insights-and-reports-plan.md.
+         */
+        private val KEY_WEEKLY_REVIEW_ENABLED = booleanPreferencesKey("weekly_review_enabled")
+
+        /**
          * Key prefix for recurring notification throttle.
          * Stores the last timestamp (epoch millis) a recurring reminder was sent for each expense.
          * Dynamic key: "recurring_notif_{throttleKey}"
@@ -468,6 +475,28 @@ class AppPreferences @Inject constructor(
     suspend fun setRecurringRemindersEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_RECURRING_REMINDERS_ENABLED] = enabled
+        }
+    }
+
+    // ==================== Weekly Review (Insights & Reports v1.0) ====================
+
+    /**
+     * Whether Weekly Review notifications are enabled.
+     * Default: true.
+     */
+    val weeklyReviewEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_WEEKLY_REVIEW_ENABLED] ?: true
+    }
+
+    /** Snapshot: are Weekly Review notifications enabled? */
+    suspend fun getWeeklyReviewEnabled(): Boolean {
+        return context.dataStore.data.first()[KEY_WEEKLY_REVIEW_ENABLED] ?: true
+    }
+
+    /** Toggle Weekly Review notifications. */
+    suspend fun setWeeklyReviewEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_WEEKLY_REVIEW_ENABLED] = enabled
         }
     }
 

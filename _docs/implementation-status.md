@@ -14,7 +14,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 |-----------|--------|------------|
 | **SMS Parsing (7 expense types)** | ✅ Complete | 100% |
 | **Transaction Cost Auto-Tracking** | ✅ Complete | 100% |
-| **Room Database (v14)** | ✅ Complete | 100% |
+| **Room Database (v16)** | ✅ Complete | 100% |
 | **Category System (18 groups + custom)** | ✅ Complete | 100% |
 | **Expense Management UI** | ✅ Complete | 100% |
 | **Notifications** | ✅ Complete | 100% |
@@ -38,6 +38,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Onboarding Flow** | ✅ Complete | 100% |
 | **Budget Forecasting (4 phases)** | ✅ Complete | 100% |
 | **Recurring Expense Detection** | ✅ Complete | 100% |
+| **Insights & Reports v1.0 (Weekly Review)** | ✅ Complete | 100% |
 | **Play Store Release (v1.1.0)** | ✅ Published | 100% |
 
 ---
@@ -454,20 +455,23 @@ app/src/main/java/com/pesatrack/
 │   │   │   │   ├── CategoryDao.kt           ✅ CRUD + search + default seeding + expense count queries + group mgmt
 │   │   │   │   ├── CategoryRuleDao.kt       ✅ Rule CRUD + active rules query for categorization pipeline
 │   │   │   │   ├── BudgetDao.kt             ✅ Budget CRUD + active queries + affected budget lookups
-│   │   │   │   └── IncomeDao.kt             ✅ Income upsert + getByYearMonth + observe as Flow
+│   │   │   │   ├── IncomeDao.kt             ✅ Income upsert + getByYearMonth + observe as Flow
+│   │   │   │   └── RecipientCategoryMappingDao.kt ✅ Recipient→category learned mappings CRUD
 │   │   │   └── entities/
 │   │   │       ├── ExpenseEntity.kt          ✅ Full schema with FK to categories
 │   │   │       ├── CategoryEntity.kt         ✅ 17 groups, 95+ categories
 │   │   │       ├── CategoryRuleEntity.kt     ✅ User-defined auto-categorization rules (pattern, matchType, priority)
 │   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
-│   │   │       └── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
+│   │   │       ├── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
+│   │   │       └── RecipientCategoryMappingEntity.kt ✅ Learned recipient→category associations
 │   │   └── preferences/
 │   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle, **recurring reminders toggle + throttle**)
 │   └── repository/
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
 │       ├── CategoryRuleRepository.kt        ✅ Rule CRUD, active rules for categorization pipeline
-│       └── BudgetRepository.kt              ✅ Budget CRUD, period ranges (with month-start-day offset), spending aggregation (total/group/sub-category), progress/alerts, monthly income get/set
+│       ├── BudgetRepository.kt              ✅ Budget CRUD, period ranges (with month-start-day offset), spending aggregation (total/group/sub-category), progress/alerts, monthly income get/set
+│       └── RecipientMappingRepository.kt    ✅ Recipient→category mapping CRUD for learned categorization
 ├── domain/models/
 │   ├── Expense.kt                           ✅ PaymentType (8) + ExpenseSource (5)
 │   ├── Category.kt                          ✅ Domain model
@@ -501,6 +505,17 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── ExcelImportScreen.kt          ✅ File picker + progress + results
 │   │   │   ├── ExcelImportViewModel.kt       ✅ Multi-file import orchestration
 │   │   │   └── ExcelImportUiState.kt         ✅ 5 phases (READY→COMPLETED)
+│   │   ├── statement_import/
+│   │   │   ├── StatementImportScreen.kt      ✅ PDF file picker, password dialog, progress, results
+│   │   │   ├── StatementImportViewModel.kt   ✅ File selection, password input, import execution
+│   │   │   └── StatementImportUiState.kt     ✅ READY, PASSWORD_REQUIRED, IMPORTING, COMPLETED, ERROR
+│   │   ├── import_history/
+│   │   │   ├── ImportScreen.kt               ✅ Historical SMS import screen
+│   │   │   ├── ImportViewModel.kt            ✅ Import orchestration
+│   │   │   └── ImportUiState.kt              ✅ Import state
+│   │   ├── about/
+│   │   │   ├── AboutScreen.kt                ✅ App info, version, privacy policy link
+│   │   │   └── AboutViewModel.kt             ✅ Version info state
 │   │   ├── manual_entry/
 │   │   │   ├── ManualEntryScreen.kt       ✅ Manual expense form with validation
 │   │   │   ├── ManualEntryViewModel.kt    ✅ Save + recipient mapping
@@ -540,6 +555,7 @@ app/src/main/java/com/pesatrack/
 │   ├── SmsReceiver.kt                       ✅ Multi-source BroadcastReceiver + budget alert check + **forecast check** after save
 │   ├── SmsImportService.kt                  ✅ Multi-source historical import
 │   ├── ExcelImportService.kt                ✅ Excel import orchestration (match + standalone)
+│   ├── StatementImportService.kt            ✅ PDF unlock, parse, deduplicate, auto-categorize, batch save
 │   ├── AiCategorizationService.kt           ✅ CategorizationService — two-pass: user rules first, then built-in engine
 │   ├── KeywordRulesEngine.kt                ✅ 100+ business names, keyword rules, PaymentType heuristics
 │   ├── BudgetService.kt                     ✅ Budget threshold checking after expense save + **forecast checking** (checkForecastsAfterExpense)
@@ -547,11 +563,14 @@ app/src/main/java/com/pesatrack/
 │   ├── RecurringExpenseService.kt           ✅ Recurring expense detection engine (interval analysis, 4 cycle types, 15-min cache, period info for forecasting)
 │   ├── RecurringReminderWorker.kt           ✅ Daily WorkManager worker — upcoming/overdue recurring expense notifications (@HiltWorker)
 │   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel**
+│   ├── DataManagementService.kt             ✅ Export, backup/restore, data reset
+│   ├── SampleDataService.kt                 ✅ Sample data generation for testing/demo
 │   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
 │   └── AppLockLifecycleObserver.kt          ✅ ProcessLifecycleOwner observer — background/foreground lock management
 └── utils/
     ├── SmsParser.kt                         ✅ Backward-compat facade → SmsParserRegistry
     ├── Constants.kt                         ✅ formatAsCurrency()
+    ├── UsageSummaryGenerator.kt             ✅ Usage summary text generation
     ├── excel/
     │   ├── ExcelParser.kt                   ✅ Apache POI .xlsx parser (dual date formats)
     │   └── ExcelCategoryMapper.kt           ✅ 55+ label→category ID mappings
@@ -559,6 +578,7 @@ app/src/main/java/com/pesatrack/
         ├── SmsParserStrategy.kt             ✅ Strategy interface for SMS parsers
         ├── SmsParserRegistry.kt             ✅ Central dispatcher (sender → parser)
         ├── MpesaSmsParser.kt                ✅ M-PESA parser (8 expense types)
+        ├── MpesaStatementParser.kt          ✅ PDF text extraction, 13+ transaction type regex, password-protected PDF support
         └── NcbaBankParser.kt                ✅ NCBA bank parser (3 types)
 ```
 
@@ -590,6 +610,10 @@ backend/
 ---
 
 ## Bug Fixes & Improvements History
+
+### Recent Features
+
+- **Insights & Reports v1.0 — Weekly Review** (DB v15 → v16) — New `report_snapshots` table persists weekly spending reviews (with previous-period totals, Top 5 categories incl. "others" rollup, biggest-change category, fees-paid surfaced separately, optional headroom against monthly income). Pure-function `WeeklyReviewGenerator` (in `domain/insights/`) shapes a DAO breakdown into a `WeeklyReviewSnapshot` and is fully unit-tested. `WeeklyReviewWorker` (`@HiltWorker`, 7-day periodic, initial delay aligned to next Thursday 18:00 local) runs `InsightsRepository.generateAndStoreWeeklyReview()` and posts a notification on the new `pesatrack_weekly_review` channel (IMPORTANCE_DEFAULT). Notification deep-links to `Screen.WeeklyReview` carrying the snapshot id so the screen shows the exact report it advertised. Settings exposes a "Reports & Insights" section with toggle (`weekly_review_enabled` DataStore key). Honors AGENTS principles: neutral copy, fees not collapsed into discretionary spend, `limitedData=true` suppresses honest-only-when-comparable percentage delta.
 
 ### Completed Bug Fixes
 

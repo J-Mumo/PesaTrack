@@ -43,6 +43,7 @@ fun SettingsScreen(
     onNavigateToCategoryManagement: () -> Unit = {},
     onNavigateToPinSetup: (String) -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
+    onNavigateToWeeklyReview: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -118,6 +119,15 @@ fun SettingsScreen(
                 MonthStartDaySection(
                     monthStartDay = uiState.monthStartDay,
                     onMonthStartDayChanged = viewModel::setMonthStartDay
+                )
+
+                // Section: Reports & Insights (v1.0)
+                ReportsAndInsightsSection(
+                    weeklyReviewEnabled = uiState.weeklyReviewEnabled,
+                    onWeeklyReviewToggle = { enabled ->
+                        viewModel.setWeeklyReviewEnabled(context, enabled)
+                    },
+                    onOpenWeeklyReview = onNavigateToWeeklyReview
                 )
 
                 // Section: SMS Sources
@@ -425,9 +435,6 @@ private fun SmsSourcesSection(uiState: SettingsUiState, onBankTrackingToggled: (
     }
 }
 
-
-}
-
 @Composable
 private fun MonthStartDaySection(
     monthStartDay: Int,
@@ -580,6 +587,98 @@ private fun AboutSection(
 private const val SETTINGS_SHARE_MESSAGE =
     "I use PesaTrack to automatically track my M-PESA expenses - it reads SMS and categorizes " +
     "everything offline. Free on Play Store: https://play.google.com/store/apps/details?id=com.pesatrack"
+
+/**
+ * Reports & Insights section (Insights & Reports v1.0).
+ *
+ * Lets the user open the Weekly Review screen and toggle the Thursday
+ * 18:00 notification. The toggle is a single switch \u2014 honoring the
+ * "nudge, don't nag" principle, we don't expose granular cadence/time
+ * controls; users either get the weekly cadence or they don't.
+ */
+@Composable
+private fun ReportsAndInsightsSection(
+    weeklyReviewEnabled: Boolean,
+    onWeeklyReviewToggle: (Boolean) -> Unit,
+    onOpenWeeklyReview: () -> Unit
+) {
+    Text(
+        text = "Reports & Insights",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenWeeklyReview)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Insights,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
+                        Text(
+                            text = "Weekly Review",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "See where the last 7 days went",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Open Weekly Review",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Thursday notification",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Quiet weekly summary at 6:00 PM",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = weeklyReviewEnabled,
+                    onCheckedChange = onWeeklyReviewToggle
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun DataManagementSection(

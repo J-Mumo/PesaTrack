@@ -22,6 +22,19 @@ sealed class Screen(val route: String) {
         fun createRoute(mode: String) = "pin_setup/$mode"
     }
     object About : Screen("about")
+
+    /**
+     * Weekly Review screen (Insights & Reports v1.0).
+     *
+     * Accepts an optional snapshot id so notifications can deep-link to the
+     * exact report they advertised. When called without an id, the screen
+     * falls back to the most recent stored snapshot.
+     */
+    object WeeklyReview : Screen("weekly_review?snapshotId={snapshotId}") {
+        const val ARG_SNAPSHOT_ID = "snapshotId"
+        fun createRoute(snapshotId: Long? = null): String =
+            if (snapshotId == null) "weekly_review" else "weekly_review?snapshotId=$snapshotId"
+    }
 }
 
 /**

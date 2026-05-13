@@ -5,6 +5,8 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.AppLockLifecycleObserver
+import com.pesatrack.services.NotificationHelper
+import com.pesatrack.services.WeeklyReviewWorker
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +51,11 @@ class PesaTrackApp : Application(), Configuration.Provider {
         CoroutineScope(Dispatchers.IO).launch {
             appPreferences.recordInstallTimestamp()
         }
+
+        // Insights & Reports v1.0 — weekly review channel + Thursday 18:00 scheduler.
+        // KEEP policy means this is safe to call on every cold start.
+        NotificationHelper.createWeeklyReviewChannel(this)
+        WeeklyReviewWorker.scheduleWeekly(this)
     }
 
     override val workManagerConfiguration: Configuration

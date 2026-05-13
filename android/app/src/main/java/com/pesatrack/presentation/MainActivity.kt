@@ -85,6 +85,7 @@ class MainActivity : FragmentActivity() {
     /** Deep-link navigation target from notification intent extras. */
     private val pendingNavigateTo = mutableStateOf<String?>(null)
     private val pendingExpenseId = mutableStateOf<Long?>(null)
+    private val pendingSnapshotId = mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,9 +123,13 @@ class MainActivity : FragmentActivity() {
     private fun handleDeepLinkIntent(intent: Intent?) {
         val navigateTo = intent?.getStringExtra("navigate_to") ?: return
         val expenseId = intent.getLongExtra("expense_id", -1L)
+        val snapshotId = intent.getLongExtra("report_snapshot_id", -1L)
         pendingNavigateTo.value = navigateTo
         if (expenseId != -1L) {
             pendingExpenseId.value = expenseId
+        }
+        if (snapshotId != -1L) {
+            pendingSnapshotId.value = snapshotId
         }
     }
 
@@ -224,14 +229,17 @@ class MainActivity : FragmentActivity() {
         } else {
             val deepLinkTarget by pendingNavigateTo
             val deepLinkExpenseId by pendingExpenseId
+            val deepLinkSnapshotId by pendingSnapshotId
             MainScreen(
                 navigateToImport = navigateToImport,
                 onImportNavigated = onImportNavigated,
                 deepLinkTarget = deepLinkTarget,
                 deepLinkExpenseId = deepLinkExpenseId,
+                deepLinkSnapshotId = deepLinkSnapshotId,
                 onDeepLinkHandled = {
                     pendingNavigateTo.value = null
                     pendingExpenseId.value = null
+                    pendingSnapshotId.value = null
                 }
             )
         }
@@ -328,6 +336,7 @@ fun MainScreen(
     onImportNavigated: () -> Unit = {},
     deepLinkTarget: String? = null,
     deepLinkExpenseId: Long? = null,
+    deepLinkSnapshotId: Long? = null,
     onDeepLinkHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -351,6 +360,11 @@ fun MainScreen(
                 }
             }
             "budget" -> navController.navigate(Screen.Budget.route)
+            "weekly_review" -> {
+                navController.navigate(
+                    Screen.WeeklyReview.createRoute(deepLinkSnapshotId)
+                )
+            }
         }
         if (deepLinkTarget != null) {
             onDeepLinkHandled()

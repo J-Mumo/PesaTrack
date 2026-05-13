@@ -29,6 +29,13 @@ object NotificationHelper {
     private const val RECURRING_CHANNEL_ID = "pesatrack_recurring_reminders"
     private const val RECURRING_CHANNEL_NAME = "Recurring Reminders"
     private const val RECURRING_CHANNEL_DESCRIPTION = "Reminders for upcoming and overdue recurring expenses"
+
+    private const val WEEKLY_REVIEW_CHANNEL_ID = "pesatrack_weekly_review"
+    private const val WEEKLY_REVIEW_CHANNEL_NAME = "Weekly Review"
+    private const val WEEKLY_REVIEW_CHANNEL_DESCRIPTION =
+        "Your weekly spending review (Thursdays) \u2014 see Insights & Reports plan."
+    /** Fixed notification id so a fresh weekly review replaces any previous one. */
+    private const val WEEKLY_REVIEW_NOTIFICATION_ID = 410_001
     
     /**
      * Create the notification channel (required for Android 8.0+).
@@ -381,5 +388,94 @@ object NotificationHelper {
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
         notificationManager.notify(notificationId, notification)
+    }
+
+    // ==================== Weekly Review (Insights & Reports v1.0) ====================
+
+    /**
+     * Create the Weekly Review notification channel.
+     * Safe to call multiple times — only creates the channel once.
+     */
+    fun createWeeklyReviewChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                WEEKLY_REVIEW_CHANNEL_ID,
+                WEEKLY_REVIEW_CHANNEL_NAME,
+                // DEFAULT (not HIGH) per the plan: it's a review, not an alert.
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = WEEKLY_REVIEW_CHANNEL_DESCRIPTION
+            }
+
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show the Weekly Review notification.
+     *
+     * Body copy follows plans/insights-and-reports-plan.md → *Notification anatomy*:
+     * `KES {total} spent this week {arrow} {pct}% vs last week. Biggest change: {category} {arrow} KES {delta}.`
+     *
+     * @param snapshotId DB id of the persisted snapshot; passed through the deep link
+     *                   so the screen can hydrate the exact report the user was notified about.
+     */
+    fun showWeeklyReviewNotification(
+        context: Context,
+        snapshotId: Long,
+        periodTotal: Double,
+        previousPeriodTotal: Double,
+        biggestChangeCategoryName: String?,
+        biggestChangeDelta: Double
+    ) {
+        createWeeklyReviewChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "weekly_review")
+            putExtra("report_snapshot_id", snapshotId)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            WEEKLY_REVIEW_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedTotal = String.format("KES %,.0f", periodTotal)
+        val body = buildString {
+            append("$formattedTotal spent this week")
+            if (previousPeriodTotal > 0.0) {
+                val pct = ((periodTotal - previousPeriodTotal) / previousPeriodTotal) * 100.0
+                val arrow = if (pct >= 0.0) "\u2191" else "\u2193"
+                append(" $arrow ${String.format("%.0f", kotlin.math.abs(pct))}% vs last week.")
+            } else {
+                append(".")
+            }
+            if (biggestChangeCategoryName != null && kotlin.math.abs(biggestChangeDelta) > 0.0) {
+                val arrow = if (biggestChangeDelta >= 0.0) "\u2191" else "\u2193"
+                val deltaStr = String.format("KES %,.0f", kotlin.math.abs(biggestChangeDelta))
+                append(" Biggest change: $biggestChangeCategoryName $arrow $deltaStr.")
+            }
+        }
+
+        val notification = NotificationCompat.Builder(context, WEEKLY_REVIEW_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Your week in review")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(WEEKLY_REVIEW_NOTIFICATION_ID, notification)
     }
 }

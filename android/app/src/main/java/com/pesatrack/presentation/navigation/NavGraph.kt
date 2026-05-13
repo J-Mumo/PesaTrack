@@ -21,6 +21,7 @@ import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.about.AboutScreen
 import com.pesatrack.presentation.screens.pin.PinSetupScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
+import com.pesatrack.presentation.screens.weekly_review.WeeklyReviewScreen
 
 /**
  * Main navigation graph for the app
@@ -176,6 +177,9 @@ fun NavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(Screen.About.route)
+                },
+                onNavigateToWeeklyReview = {
+                    navController.navigate(Screen.WeeklyReview.createRoute())
                 }
             )
         }
@@ -235,6 +239,23 @@ fun NavGraph(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
+            )
+        }
+
+        // Weekly Review (Insights & Reports v1.0)
+        composable(
+            route = Screen.WeeklyReview.route,
+            arguments = listOf(
+                navArgument(Screen.WeeklyReview.ARG_SNAPSHOT_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStackEntry ->
+            val rawId = backStackEntry.arguments?.getLong(Screen.WeeklyReview.ARG_SNAPSHOT_ID) ?: -1L
+            WeeklyReviewScreen(
+                snapshotId = if (rawId > 0L) rawId else null,
+                onBack = { navController.popBackStack() }
             )
         }
     }
