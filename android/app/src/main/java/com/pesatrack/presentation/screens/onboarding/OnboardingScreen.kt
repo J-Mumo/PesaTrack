@@ -12,6 +12,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +72,24 @@ fun OnboardingScreen(
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ -> /* No action needed — just request it */ }
+
+    // Auto-launch the system SMS permission dialog as soon as the user lands
+    // on the SMS page. Mirrors how the notification permission is requested
+    // (system dialog) so users can't miss it by tapping "Next" too quickly.
+    // We only auto-prompt once per session; if the user denies it they can
+    // still tap the in-page "Grant SMS Permission" button to retry.
+    var smsAutoPrompted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(pagerState.currentPage, smsPermissionGranted) {
+        if (pagerState.currentPage == 2 && !smsPermissionGranted && !smsAutoPrompted) {
+            smsAutoPrompted = true
+            smsPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.READ_SMS,
+                    Manifest.permission.RECEIVE_SMS
+                )
+            )
+        }
+    }
 
     Scaffold { paddingValues ->
         Column(
