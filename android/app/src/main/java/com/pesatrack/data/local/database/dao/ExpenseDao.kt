@@ -608,6 +608,20 @@ interface ExpenseDao {
     """)
     fun getInvestmentTotalForMonth(startOfMonth: Long, endOfMonth: Long): Flow<Double>
 
+    /**
+     * Get total investment spending for a date range (suspend version).
+     * Used by insights generators to compute investment illustration.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(e.amount), 0.0)
+        FROM expenses e
+        INNER JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+        AND e.timestamp >= :startMs AND e.timestamp < :endMs
+        AND (c.parentId = 18 OR c.id = 18)
+    """)
+    suspend fun getInvestmentTotalInRange(startMs: Long, endMs: Long): Double
+
     // ==================== Weekly Snapshot Queries ====================
 
     /**

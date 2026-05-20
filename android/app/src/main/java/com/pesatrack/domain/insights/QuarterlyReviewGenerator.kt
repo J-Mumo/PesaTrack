@@ -17,8 +17,9 @@ object QuarterlyReviewGenerator {
     private const val MAX_TOP_CATEGORIES = 5
     private const val INVESTMENT_ANNUAL_RATE = 0.10
     private const val INVESTMENT_COMPOUNDING_PERIODS = 12
-    private const val INVESTMENT_HORIZON_MONTHS = 12
-    private const val INVESTMENT_DISCLAIMER = "Illustration only — assumes 10% APY, monthly compounding. Not a recommendation."
+    private const val INVESTMENT_HORIZON_MONTHS = 60
+    private const val INVESTMENT_DISCLAIMER = "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
+    private const val RECOMMENDED_INVESTMENT_PERCENT = 0.20
 
     /**
      * Determine the quarter number (1-4) for a given month (1-12).
@@ -56,7 +57,8 @@ object QuarterlyReviewGenerator {
         quarterNumber: Int,
         year: Int,
         monthlyIncome: Double?,
-        monthlyTotals: List<Pair<String, Double>> = emptyList()
+        monthlyTotals: List<Pair<String, Double>> = emptyList(),
+        actualInvestmentAmount: Double = 0.0
     ): QuarterlyReviewSnapshot {
         val periodLabel = quarterLabel(quarterNumber, year)
 
@@ -126,31 +128,14 @@ object QuarterlyReviewGenerator {
             )
         } else null
 
-        // ── Investment Illustration ──
-        // Principal = average monthly headroom × 3 months (quarterly savings)
-        val investmentIllustration = if (monthlyIncome != null && monthlyIncome > 0.0) {
-            val avgMonthlySpend = if (monthlyTotals.isNotEmpty()) {
-                monthlyTotals.map { it.second }.average()
-            } else {
-                periodTotal / 3.0
-            }
-            val monthlySavings = (monthlyIncome - avgMonthlySpend).coerceAtLeast(0.0)
-            val quarterlySavings = monthlySavings * 3.0
-            if (quarterlySavings > 0.0) {
-                val r = INVESTMENT_ANNUAL_RATE
-                val n = INVESTMENT_COMPOUNDING_PERIODS
-                val t = INVESTMENT_HORIZON_MONTHS / 12.0
-                val futureValue = quarterlySavings * (1.0 + r / n).pow(n * t)
-                InvestmentIllustration(
-                    principalAmount = quarterlySavings,
-                    annualRate = r,
-                    compoundingPeriodsPerYear = n,
-                    horizonMonths = INVESTMENT_HORIZON_MONTHS,
-                    futureValue = futureValue,
-                    disclaimer = INVESTMENT_DISCLAIMER
-                )
-            } else null
-        } else null
+        // ── Investment Illustration (tier-based) ──
+        val totalFeesPaid = totalFees
+        val investmentIllustration = MonthlyReviewGenerator.buildInvestmentIllustration(
+            actualInvestmentAmount = actualInvestmentAmount,
+            monthlyIncome = if (monthlyIncome != null && monthlyIncome > 0.0) monthlyIncome * 3.0 else null, // quarterly income
+            totalSpent = periodTotal,
+            feesPaid = totalFeesPaid
+        )
 
         return QuarterlyReviewSnapshot(
             id = UUID.randomUUID().toString(),

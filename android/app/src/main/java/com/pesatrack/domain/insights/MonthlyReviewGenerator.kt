@@ -22,8 +22,9 @@ object MonthlyReviewGenerator {
     private const val MAX_TOP_CATEGORIES = 5
     private const val INVESTMENT_ANNUAL_RATE = 0.10
     private const val INVESTMENT_COMPOUNDING_PERIODS = 12
-    private const val INVESTMENT_HORIZON_MONTHS = 12
-    private const val INVESTMENT_DISCLAIMER = "Illustration only — not a recommendation."
+    private const val INVESTMENT_HORIZON_MONTHS = 60 // 5 years
+    private const val INVESTMENT_DISCLAIMER = "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
+    private const val RECOMMENDED_INVESTMENT_PERCENT = 0.20
 
     /**
      * Build a monthly review snapshot.
@@ -34,11 +35,16 @@ object MonthlyReviewGenerator {
      * @param monthlyIncome user's monthly income, or null if not set.
      * @param currentDate today's date (for pace calculation when reviewing current month).
      */
+    /**
+     * @param actualInvestmentAmount total amount invested (Savings & Investments group 18)
+     *   during the reviewed month. 0.0 if none.
+     */
     fun generate(
         currentMonthCategories: List<CategoryTotal>,
         previousMonthCategories: List<CategoryTotal>,
         monthStart: LocalDate,
         monthlyIncome: Double?,
+        actualInvestmentAmount: Double = 0.0,
         currentDate: LocalDate = LocalDate.now()
     ): MonthlyReviewSnapshot {
         val yearMonth = YearMonth.from(monthStart)
@@ -144,19 +150,12 @@ object MonthlyReviewGenerator {
             monthlyIncome - totalSpent
         } else null
 
-        // ── Investment Illustration ──
-        val discretionary = (totalSpent - feesPaid).coerceAtLeast(0.0)
-        val r = INVESTMENT_ANNUAL_RATE
-        val n = INVESTMENT_COMPOUNDING_PERIODS
-        val t = INVESTMENT_HORIZON_MONTHS / 12.0
-        val futureValue = discretionary * (1.0 + r / n).pow(n * t)
-        val investmentIllustration = InvestmentIllustration(
-            principalAmount = discretionary,
-            annualRate = r,
-            compoundingPeriodsPerYear = n,
-            horizonMonths = INVESTMENT_HORIZON_MONTHS,
-            futureValue = futureValue,
-            disclaimer = INVESTMENT_DISCLAIMER
+        // ── Investment Illustration (tier-based) ──
+        val investmentIllustration = buildInvestmentIllustration(
+            actualInvestmentAmount = actualInvestmentAmount,
+            monthlyIncome = monthlyIncome,
+            totalSpent = totalSpent,
+            feesPaid = feesPaid
         )
 
         return MonthlyReviewSnapshot(
@@ -178,6 +177,93 @@ object MonthlyReviewGenerator {
             pace = pace,
             investmentIllustration = investmentIllustration,
             generatedAt = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * Build tier-based investment illustration.
+     *
+     * Priority:
+     * 1. C — Actual investments detected (Savings & Investments group 18)
+     * 2. A — Income set + headroom > 0 (but no investments)
+     * 3. B — No income or headroom ≤ 0 → 20% nudge
+     *
+     * For users already investing, shows next target tier:
+     * - < 20% → target 20%
+     * - 20-29% → target 30%
+     * - 30-49% → target 50%
+     * - ≥ 50% → no higher target (celebrate)
+     */
+    fun buildInvestmentIllustration(
+        actualInvestmentAmount: Double,
+        monthlyIncome: Double?,
+        totalSpent: Double,
+        feesPaid: Double = 0.0
+    ): InvestmentIllustration {
+        val r = INVESTMENT_ANNUAL_RATE
+        val n = INVESTMENT_COMPOUNDING_PERIODS
+        val t = INVESTMENT_HORIZON_MONTHS / 12.0
+
+        // Determine source, principal, and tier info
+        val source: InvestmentSource
+        val principal: Double
+        val currentPercent: Double?
+        val nextTargetPercent: Double?
+        val gapAmount: Double?
+
+        if (actualInvestmentAmount > 0.0) {
+            // C — Actual investments found
+            source = InvestmentSource.ACTUAL_INVESTMENT
+            principal = actualInvestmentAmount
+            currentPercent = if (monthlyIncome != null && monthlyIncome > 0.0) {
+                (actualInvestmentAmount / monthlyIncome) * 100.0
+            } else null
+
+            val pct = currentPercent ?: 0.0
+            nextTargetPercent = when {
+                pct >= 50.0 -> null
+                pct >= 30.0 -> 50.0
+                pct >= 20.0 -> 30.0
+                else -> 20.0
+            }
+            gapAmount = if (nextTargetPercent != null && monthlyIncome != null && monthlyIncome > 0.0) {
+                ((monthlyIncome * nextTargetPercent / 100.0) - actualInvestmentAmount).coerceAtLeast(0.0)
+            } else null
+
+        } else if (monthlyIncome != null && monthlyIncome > 0.0 && (monthlyIncome - totalSpent) > 0.0) {
+            // A — Headroom available
+            source = InvestmentSource.HEADROOM
+            principal = monthlyIncome - totalSpent
+            currentPercent = 0.0
+            nextTargetPercent = RECOMMENDED_INVESTMENT_PERCENT * 100.0
+            gapAmount = (monthlyIncome * RECOMMENDED_INVESTMENT_PERCENT)
+
+        } else {
+            // B — Nudge: 20% of income (or 20% of spending if no income)
+            source = InvestmentSource.NUDGE_TARGET
+            principal = if (monthlyIncome != null && monthlyIncome > 0.0) {
+                monthlyIncome * RECOMMENDED_INVESTMENT_PERCENT
+            } else {
+                (totalSpent - feesPaid).coerceAtLeast(0.0) * RECOMMENDED_INVESTMENT_PERCENT
+            }
+            currentPercent = 0.0
+            nextTargetPercent = RECOMMENDED_INVESTMENT_PERCENT * 100.0
+            gapAmount = principal // The full target amount since current is 0
+        }
+
+        val futureValue = principal * (1.0 + r / n).pow(n * t)
+
+        return InvestmentIllustration(
+            source = source,
+            principalAmount = principal,
+            annualRate = r,
+            compoundingPeriodsPerYear = n,
+            horizonMonths = INVESTMENT_HORIZON_MONTHS,
+            futureValue = futureValue,
+            currentPercent = currentPercent,
+            nextTargetPercent = nextTargetPercent,
+            gapAmount = gapAmount,
+            disclaimer = INVESTMENT_DISCLAIMER
         )
     }
 }

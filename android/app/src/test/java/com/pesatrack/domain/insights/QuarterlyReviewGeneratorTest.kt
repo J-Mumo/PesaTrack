@@ -81,7 +81,9 @@ class QuarterlyReviewGeneratorTest {
         assertTrue(snap.topCategories.isEmpty())
         assertNull(snap.biggestMover)
         assertNull(snap.savingsMomentum)
-        assertNull(snap.investmentIllustration)
+        // With zero spending and no income, investment illustration has principal=0
+        assertNotNull(snap.investmentIllustration)
+        assertEquals(0.0, snap.investmentIllustration!!.principalAmount, 0.001)
     }
 
     @Test
@@ -126,14 +128,15 @@ class QuarterlyReviewGeneratorTest {
         assertNotNull(snap.investmentIllustration)
         val illust = snap.investmentIllustration!!
 
-        // Monthly savings = 50000 - 10000 = 40000, quarterly = 120000
+        // Quarterly income = 50000*3 = 150000, totalSpent = 30000, headroom = 120000
+        assertEquals(InvestmentSource.HEADROOM, illust.source)
         assertEquals(120000.0, illust.principalAmount, 0.001)
         assertEquals(0.10, illust.annualRate, 0.001)
-        assertEquals(12, illust.horizonMonths)
+        assertEquals(60, illust.horizonMonths)
         assertEquals(12, illust.compoundingPeriodsPerYear)
 
-        // FV = 120000 * (1 + 0.10/12)^12
-        val expectedFV = 120000.0 * Math.pow(1.0 + 0.10 / 12.0, 12.0)
+        // FV = 120000 * (1 + 0.10/12)^60
+        val expectedFV = 120000.0 * Math.pow(1.0 + 0.10 / 12.0, 60.0)
         assertEquals(expectedFV, illust.futureValue, 0.01)
         assertTrue(illust.disclaimer.contains("Illustration"))
     }
@@ -211,7 +214,7 @@ class QuarterlyReviewGeneratorTest {
     }
 
     @Test
-    fun `no investment illustration without income`() {
+    fun `investment illustration nudge without income`() {
         val current = listOf(row(1, "Food", 10000.0))
 
         val snap = QuarterlyReviewGenerator.generate(
@@ -223,6 +226,10 @@ class QuarterlyReviewGeneratorTest {
             monthlyTotals = emptyList()
         )
 
-        assertNull(snap.investmentIllustration)
+        assertNotNull(snap.investmentIllustration)
+        val illust = snap.investmentIllustration!!
+        assertEquals(InvestmentSource.NUDGE_TARGET, illust.source)
+        // 20% of totalSpent (10000) = 2000
+        assertEquals(2000.0, illust.principalAmount, 0.001)
     }
 }

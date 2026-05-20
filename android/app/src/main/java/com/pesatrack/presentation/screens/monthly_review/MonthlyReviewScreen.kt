@@ -373,25 +373,60 @@ private fun InvestmentIllustrationCard(snapshot: MonthlyReviewSnapshot) {
     val illust = snapshot.investmentIllustration
     if (illust.principalAmount <= 0.0) return
 
+    val heading = when (illust.source) {
+        com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
+            val pct = illust.currentPercent
+            when {
+                pct != null && pct >= 50.0 -> "Your investments are compounding"
+                pct != null && pct >= 30.0 -> "Exceptional investing"
+                pct != null && pct >= 20.0 -> "Strong investment discipline"
+                pct != null && pct >= 10.0 -> "Building momentum"
+                else -> "You've started investing"
+            }
+        }
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "What your savings could become"
+        com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> "A small redirect goes far"
+    }
+
+    val body = when (illust.source) {
+        com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
+            val base = "You invested ${illust.principalAmount.formatAsCurrency()}"
+            val pctStr = illust.currentPercent?.let { " (${String.format("%.0f", it)}% of income)" } ?: ""
+            val growth = ". At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}"
+            val nextTarget = if (illust.nextTargetPercent != null && illust.gapAmount != null) {
+                ". Next milestone: ${String.format("%.0f", illust.nextTargetPercent)}% — just ${illust.gapAmount.formatAsCurrency()} more."
+            } else {
+                ". Your money is growing faster than most."
+            }
+            "$base$pctStr$growth$nextTarget"
+        }
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> {
+            "You saved ${illust.principalAmount.formatAsCurrency()} but haven't invested yet. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+        }
+        com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> {
+            "Investing 20% of income is a powerful habit. That's ${illust.principalAmount.formatAsCurrency()}/month. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "What if you invested?",
+                text = heading,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "If ${illust.principalAmount.formatAsCurrency()} were invested at an illustrative ${(illust.annualRate * 100).toInt()}% APY, in ${illust.horizonMonths} months that's ~${illust.futureValue.formatAsCurrency()}.",
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Assumptions: ${(illust.annualRate * 100).toInt()}% APY, monthly compounding. ${illust.disclaimer}",
+                text = illust.disclaimer,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
             )

@@ -414,19 +414,48 @@ private fun YearInvestmentCard(snapshot: YearInReviewSnapshot) {
     val illust = snapshot.investmentIllustration ?: return
     if (illust.principalAmount <= 0.0) return
 
+    val heading = when (illust.source) {
+        com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
+            val pct = illust.currentPercent
+            when {
+                pct != null && pct >= 50.0 -> "Your investments are compounding"
+                pct != null && pct >= 20.0 -> "Strong investment discipline"
+                else -> "You've started investing"
+            }
+        }
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "What your savings could become"
+        com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> "A small redirect goes far"
+    }
+
+    val body = when (illust.source) {
+        com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
+            val base = "You invested ${illust.principalAmount.formatAsCurrency()} this year"
+            val pctStr = illust.currentPercent?.let { " (${String.format("%.0f", it)}% of income)" } ?: ""
+            val growth = ". At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}"
+            val next = if (illust.nextTargetPercent != null) {
+                ". Next milestone: ${String.format("%.0f", illust.nextTargetPercent)}%."
+            } else ". Your money is growing faster than most."
+            "$base$pctStr$growth$next"
+        }
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM ->
+            "You saved ${illust.principalAmount.formatAsCurrency()} this year. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+        com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET ->
+            "20% of income invested consistently adds up. That's ${illust.principalAmount.formatAsCurrency()}/year. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "What if you invested your annual savings?",
+                text = heading,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "If ${illust.principalAmount.formatAsCurrency()} were invested at an illustrative ${(illust.annualRate * 100).toInt()}% APY, in ${illust.horizonMonths} months that's ~${illust.futureValue.formatAsCurrency()}.",
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )

@@ -67,7 +67,8 @@ class YearInReviewGeneratorTest {
         assertTrue(snap.topCategories.isEmpty())
         assertNull(snap.biggestMover)
         assertNull(snap.savingsStory)
-        assertNull(snap.investmentIllustration)
+        assertNotNull(snap.investmentIllustration)
+        assertEquals(0.0, snap.investmentIllustration!!.principalAmount, 0.001)
         assertTrue(snap.quietLeaks.isEmpty())
     }
 
@@ -136,11 +137,13 @@ class YearInReviewGeneratorTest {
         val illust = snap.investmentIllustration!!
 
         // Total headroom = 10000 + 20000 = 30000
+        // annualIncome = 100000, annualTotal = 70000, headroom = 30000
+        assertEquals(InvestmentSource.HEADROOM, illust.source)
         assertEquals(30000.0, illust.principalAmount, 0.001)
         assertEquals(0.10, illust.annualRate, 0.001)
-        assertEquals(12, illust.horizonMonths)
+        assertEquals(60, illust.horizonMonths)
 
-        val expectedFV = 30000.0 * Math.pow(1.0 + 0.10 / 12.0, 12.0)
+        val expectedFV = 30000.0 * Math.pow(1.0 + 0.10 / 12.0, 60.0)
         assertEquals(expectedFV, illust.futureValue, 0.01)
         assertTrue(illust.disclaimer.contains("Illustration"))
     }

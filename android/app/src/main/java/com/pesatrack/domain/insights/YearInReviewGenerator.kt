@@ -16,9 +16,9 @@ object YearInReviewGenerator {
     private const val MAX_TOP_CATEGORIES = 5
     private const val INVESTMENT_ANNUAL_RATE = 0.10
     private const val INVESTMENT_COMPOUNDING_PERIODS = 12
-    private const val INVESTMENT_HORIZON_MONTHS = 12
+    private const val INVESTMENT_HORIZON_MONTHS = 60
     private const val INVESTMENT_DISCLAIMER =
-        "Illustration only — assumes 10% APY, monthly compounding, 1-year horizon. Not a recommendation."
+        "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
 
     private const val QUIET_LEAK_MIN_TRANSACTIONS = 50
     private const val QUIET_LEAK_MAX_AVG = 300.0
@@ -36,7 +36,8 @@ object YearInReviewGenerator {
         year: Int,
         currentYearCategories: List<CategoryTotal>,
         previousYearCategories: List<CategoryTotal>,
-        monthlyData: List<MonthData> = emptyList()
+        monthlyData: List<MonthData> = emptyList(),
+        actualInvestmentAmount: Double = 0.0
     ): YearInReviewSnapshot {
         // ── Totals ──
         val annualTotal = currentYearCategories.sumOf { it.total }
@@ -124,22 +125,14 @@ object YearInReviewGenerator {
             } else null
         } else null
 
-        // ── Investment Illustration ──
-        val investmentIllustration = if (savingsStory != null && savingsStory.totalHeadroom > 0.0) {
-            val principal = savingsStory.totalHeadroom
-            val r = INVESTMENT_ANNUAL_RATE
-            val n = INVESTMENT_COMPOUNDING_PERIODS
-            val t = INVESTMENT_HORIZON_MONTHS / 12.0
-            val futureValue = principal * (1.0 + r / n).pow(n * t)
-            InvestmentIllustration(
-                principalAmount = principal,
-                annualRate = r,
-                compoundingPeriodsPerYear = n,
-                horizonMonths = INVESTMENT_HORIZON_MONTHS,
-                futureValue = futureValue,
-                disclaimer = INVESTMENT_DISCLAIMER
-            )
-        } else null
+        // ── Investment Illustration (tier-based) ──
+        val annualIncome = monthlyData.sumOf { it.income }
+        val investmentIllustration = MonthlyReviewGenerator.buildInvestmentIllustration(
+            actualInvestmentAmount = actualInvestmentAmount,
+            monthlyIncome = if (annualIncome > 0.0) annualIncome else null,
+            totalSpent = annualTotal,
+            feesPaid = totalFees
+        )
 
         return YearInReviewSnapshot(
             year = year,

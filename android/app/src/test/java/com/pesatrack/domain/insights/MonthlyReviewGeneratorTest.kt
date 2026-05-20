@@ -175,11 +175,14 @@ class MonthlyReviewGeneratorTest {
             monthlyIncome = null,
             currentDate = currentDate
         )
-        // P = 10000 (no fees), r = 0.10, n = 12, t = 1
-        val expectedFV = 10000.0 * Math.pow(1.0 + 0.10 / 12.0, 12.0)
+        // NUDGE_TARGET: P = 10000 * 0.20 = 2000, r = 0.10, n = 12, t = 5
+        val expectedPrincipal = 10000.0 * 0.20
+        val expectedFV = expectedPrincipal * Math.pow(1.0 + 0.10 / 12.0, 60.0)
+        assertEquals(InvestmentSource.NUDGE_TARGET, snap.investmentIllustration.source)
+        assertEquals(expectedPrincipal, snap.investmentIllustration.principalAmount, 0.01)
         assertEquals(expectedFV, snap.investmentIllustration.futureValue, 0.01)
         assertEquals(0.10, snap.investmentIllustration.annualRate, 0.001)
-        assertEquals(12, snap.investmentIllustration.horizonMonths)
+        assertEquals(60, snap.investmentIllustration.horizonMonths)
     }
 
     @Test

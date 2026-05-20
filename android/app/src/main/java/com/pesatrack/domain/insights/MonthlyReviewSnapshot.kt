@@ -72,13 +72,28 @@ data class CategoryChange(
 )
 
 /**
- * Investment illustration payload.
+ * How the investment illustration principal was determined.
+ */
+enum class InvestmentSource {
+    /** User has actual Investment & Savings transactions this period. */
+    ACTUAL_INVESTMENT,
+    /** No investments but income - spending > 0 (headroom). */
+    HEADROOM,
+    /** No income or headroom ≤ 0 — uses 20% of income/spending as nudge. */
+    NUDGE_TARGET
+}
+
+/**
+ * Investment illustration payload — tier-based.
  *
- * Shows what discretionary spending could yield if invested. Always surfaced
- * with explicit assumptions per Principle 5.
+ * Uses actual investment data when available (Savings & Investments category, group 18),
+ * falls back to headroom or a 20% nudge. Always surfaced with explicit assumptions
+ * per Principle 5.
  */
 data class InvestmentIllustration(
-    /** Discretionary spend for the month (total - fees). */
+    /** How the principal was determined. */
+    val source: InvestmentSource,
+    /** The amount used as the principal for the growth calculation. */
     val principalAmount: Double,
     /** Annual rate used in the illustration. */
     val annualRate: Double,
@@ -88,6 +103,12 @@ data class InvestmentIllustration(
     val horizonMonths: Int,
     /** Computed future value. */
     val futureValue: Double,
+    /** Current investment as % of income (null if no income set). */
+    val currentPercent: Double? = null,
+    /** Next target % to encourage (null if already ≥ 50%). */
+    val nextTargetPercent: Double? = null,
+    /** KES gap to reach next target (null if at/above target or no income). */
+    val gapAmount: Double? = null,
     /** Disclaimer text. */
     val disclaimer: String
 )

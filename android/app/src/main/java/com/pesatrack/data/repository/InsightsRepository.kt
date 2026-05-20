@@ -140,11 +140,14 @@ class InsightsRepository @Inject constructor(
         val monthIncomeKey = monthYearKeyFor(prevMonthBounds.start)
         val monthlyIncome = incomeDao.getByYearMonth(monthIncomeKey)?.amount
 
+        val investmentTotal = expenseDao.getInvestmentTotalInRange(prevMonthBounds.start, prevMonthBounds.endExclusive)
+
         val snapshot = MonthlyReviewGenerator.generate(
             currentMonthCategories = currentCategories,
             previousMonthCategories = previousCategories,
             monthStart = monthStart,
             monthlyIncome = monthlyIncome,
+            actualInvestmentAmount = investmentTotal,
             currentDate = monthStart.plusMonths(1) // month is complete
         )
 
@@ -369,12 +372,13 @@ class InsightsRepository @Inject constructor(
             monthlyIncome = if (headroomAmount != null) headroomAmount + periodTotal else null,
             pace = averagePerDay * periodDays,
             investmentIllustration = com.pesatrack.domain.insights.InvestmentIllustration(
+                source = com.pesatrack.domain.insights.InvestmentSource.HEADROOM,
                 principalAmount = discretionary,
                 annualRate = 0.10,
                 compoundingPeriodsPerYear = 12,
-                horizonMonths = 12,
+                horizonMonths = 60,
                 futureValue = fv,
-                disclaimer = "Illustration only — not a recommendation."
+                disclaimer = "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
             ),
             generatedAt = generatedAt
         )
@@ -425,13 +429,16 @@ class InsightsRepository @Inject constructor(
             label to total
         }
 
+        val investmentTotal = expenseDao.getInvestmentTotalInRange(quarterStart, quarterEnd)
+
         val snapshot = QuarterlyReviewGenerator.generate(
             currentQuarterCategories = currentCategories,
             previousQuarterCategories = previousCategories,
             quarterNumber = currentQ,
             year = currentYear,
             monthlyIncome = monthlyIncome,
-            monthlyTotals = monthlyTotals
+            monthlyTotals = monthlyTotals,
+            actualInvestmentAmount = investmentTotal
         )
 
         val entity = snapshot.toEntity()
@@ -576,11 +583,14 @@ class InsightsRepository @Inject constructor(
             YearInReviewGenerator.MonthData(label = label, income = income, spend = spend)
         }
 
+        val investmentTotal = expenseDao.getInvestmentTotalInRange(yearStart, yearEnd)
+
         val snapshot = YearInReviewGenerator.generate(
             year = year,
             currentYearCategories = currentCategories,
             previousYearCategories = previousCategories,
-            monthlyData = monthlyData
+            monthlyData = monthlyData,
+            actualInvestmentAmount = investmentTotal
         )
 
         val entity = snapshot.toEntity()

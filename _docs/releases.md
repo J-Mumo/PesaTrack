@@ -8,12 +8,39 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.3.0** | 7 | 2026-05-20 | Production | 🟡 Pending upload |
 | **1.2.1** | 6 | 2026-05-01 | Production | 🟡 Pending upload |
 | **1.2.0** | 5 | 2026-04-29 | Production | 🟡 Pending upload |
 | **1.1.0** | 4 | 2026-04-17 | Production | ✅ Published |
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.3.0 (versionCode 7) — 2026-05-20
+
+**Focus:** Smarter investment illustrations + NCBA duplicate fix
+
+### ✨ New Features
+- **Tier-Based Investment Illustration** — Replaced naive "what if all expenses invested" with intelligent approach: detects actual investments from Savings & Investments category, shows headroom when income is set, or nudges 20% target as fallback. Progressive milestones (20% → 30% → 50%) encourage higher savings rates. 5-year projection horizon.
+
+### 🐛 Bug Fixes
+- **NCBA Duplicate SMS** — Fixed duplicate transaction detection for NCBA bank SMS messages that could create multiple entries for the same transaction.
+
+### 📦 Technical
+- New `InvestmentSource` enum (`ACTUAL_INVESTMENT`, `HEADROOM`, `NUDGE_TARGET`) with tier logic in shared `buildInvestmentIllustration()` helper
+- Added `getInvestmentTotalInRange()` DAO query for Savings & Investments category group 18
+- Updated UI cards in Monthly/Quarterly/Year-in-Review screens with tier-aware copy
+- All unit tests updated (33 passing)
+
+### 🏪 Play Store Release Notes
+```
+What's New:
+• Smarter "What if you invested" section — now shows your actual savings rate and personalized investment targets
+• Fixed duplicate transactions for NCBA bank messages
+• 5-year investment growth projections with progressive milestones
+```
 
 ---
 
