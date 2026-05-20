@@ -19,12 +19,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.absoluteValue
 import kotlin.math.sqrt
 
 @HiltViewModel
@@ -56,6 +58,8 @@ class AnalyticsViewModel @Inject constructor(
         loadBudgetStatus()
         loadRecurringBreakdown()
         loadWeeklySnapshot()
+        loadInsightCards()
+        loadBudgetBurnDown()
 
         // Track analytics viewed milestone and counter (fire-and-forget)
         viewModelScope.launch {
@@ -64,16 +68,166 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    // ==================== Tab Management ====================
+    // ==================== Top-level Tab Management ====================
 
     /**
-     * Switch between Monthly and Yearly tabs.
+     * Switch between Insights and Charts top-level tabs.
+     */
+    fun selectInsightsTab(tab: InsightsTab) {
+        _uiState.update { it.copy(selectedInsightsTab = tab) }
+    }
+
+    // ==================== Charts Sub-Tab Management ====================
+
+    /**
+     * Switch between Monthly and Yearly charts sub-tabs.
      * Yearly data is loaded lazily on first access.
      */
     fun selectTab(tab: AnalyticsTab) {
         _uiState.update { it.copy(selectedTab = tab) }
         if (tab == AnalyticsTab.YEARLY && _uiState.value.yearComparison == null) {
             loadYearlyData()
+        }
+    }
+
+    // ==================== Insight Cards ====================
+
+    /**
+     * Load all insight card data: pace, quiet leaks, uncategorized percentage.
+     */
+    private fun loadInsightCards() {
+        viewModelScope.launch {
+            loadPaceCard()
+            loadQuietLeaks()
+            loadUncategorizedPercentage()
+        }
+    }
+
+    /**
+     * Pace Card: daily_run_rate = spend_so_far / days_elapsed,
+     * projected = run_rate × days_in_month, compare vs last month total.
+     * Only show after 7th of month.
+     */
+    private suspend fun loadPaceCard() {
+        try {
+            val now = Calendar.getInstance()
+            val dayOfMonth = now.get(Calendar.DAY_OF_MONTH)
+
+            if (dayOfMonth < 7) {
+                _uiState.update { it.copy(showPaceCard = false, paceData = null) }
+                return
+            }
+
+            val year = now.get(Calendar.YEAR)
+            val month = now.get(Calendar.MONTH) + 1
+            val daysInMonth = now.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+            val spendSoFar = expenseRepository.getTotalForMonth(year, month)
+            val dailyRunRate = spendSoFar / dayOfMonth
+            val projected = dailyRunRate * daysInMonth
+
+            // Last month total
+            val prevCal = Calendar.getInstance().apply {
+                add(Calendar.MONTH, -1)
+            }
+            val prevYear = prevCal.get(Calendar.YEAR)
+            val prevMonth = prevCal.get(Calendar.MONTH) + 1
+            val lastMonthTotal = expenseRepository.getTotalForMonth(prevYear, prevMonth)
+
+            val delta = projected - lastMonthTotal
+
+            val monthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(now.time)
+            val prevMonthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(prevCal.time)
+
+            val paceData = PaceCardData(
+                dailyRunRate = dailyRunRate,
+                projected = projected,
+                lastMonthTotal = lastMonthTotal,
+                delta = delta,
+                monthName = monthName,
+                prevMonthName = prevMonthName
+            )
+
+            _uiState.update {
+                it.copy(
+                    paceData = paceData,
+                    showPaceCard = true
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(showPaceCard = false, paceData = null) }
+        }
+    }
+
+    /**
+     * Quiet Leak: Find categories with ≥8 transactions in current month
+     * AND average transaction amount ≤ KES 300.
+     */
+    private suspend fun loadQuietLeaks() {
+        try {
+            val now = Calendar.getInstance()
+            val year = now.get(Calendar.YEAR)
+            val month = now.get(Calendar.MONTH) + 1
+
+            val categoryTotals = expenseRepository.getCategoryTotalsForMonth(year, month)
+
+            val leaks = categoryTotals
+                .filter { it.transactionCount >= 8 }
+                .filter { it.categoryId != null }
+                .filter { (it.total / it.transactionCount) <= 300.0 }
+                .map { cat ->
+                    QuietLeakData(
+                        categoryName = cat.categoryName,
+                        transactionCount = cat.transactionCount,
+                        total = cat.total,
+                        categoryId = cat.categoryId?.toInt() ?: 0
+                    )
+                }
+                .sortedByDescending { it.total }
+
+            _uiState.update {
+                it.copy(
+                    quietLeaks = leaks,
+                    showQuietLeakCard = leaks.isNotEmpty()
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(quietLeaks = emptyList(), showQuietLeakCard = false) }
+        }
+    }
+
+    /**
+     * Uncategorized %: Calculate percentage of total spend that is uncategorized.
+     */
+    private suspend fun loadUncategorizedPercentage() {
+        try {
+            val now = Calendar.getInstance()
+            val year = now.get(Calendar.YEAR)
+            val month = now.get(Calendar.MONTH) + 1
+
+            val categoryTotals = expenseRepository.getCategoryTotalsForMonth(year, month)
+            val totalSpend = categoryTotals.sumOf { it.total }
+
+            if (totalSpend <= 0) {
+                _uiState.update { it.copy(uncategorizedPercentage = 0.0, showCategorizationNudge = false) }
+                return
+            }
+
+            // Uncategorized = categoryId is null OR categoryName contains "Uncategorized"
+            val uncategorizedTotal = categoryTotals
+                .filter { it.categoryId == null || it.categoryName.contains("Uncategorized", ignoreCase = true) }
+                .sumOf { it.total }
+
+            val pct = (uncategorizedTotal / totalSpend) * 100.0
+
+            _uiState.update {
+                it.copy(
+                    uncategorizedPercentage = pct,
+                    showCategorizationNudge = pct > 15.0
+                )
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(uncategorizedPercentage = 0.0, showCategorizationNudge = false) }
         }
     }
 
@@ -639,6 +793,90 @@ class AnalyticsViewModel @Inject constructor(
                 _uiState.update { it.copy(hasActiveBudgets = hasBudgets) }
             } catch (_: Exception) {
                 // Non-critical — leave default (false)
+            }
+        }
+    }
+
+    // ==================== Budget Burn-Down (v1.3) ====================
+
+    /**
+     * Compute which budget categories will exhaust ≥3 days before month end
+     * based on current daily spend rate.
+     */
+    private fun loadBudgetBurnDown() {
+        viewModelScope.launch {
+            try {
+                val monthStartDay = appPreferences.monthStartDay.first()
+                val now = Calendar.getInstance()
+                val today = now.get(Calendar.DAY_OF_MONTH)
+
+                // Calculate budget period start and end based on monthStartDay
+                val periodStart = Calendar.getInstance().apply {
+                    if (today >= monthStartDay) {
+                        // Period started this calendar month
+                        set(Calendar.DAY_OF_MONTH, monthStartDay)
+                    } else {
+                        // Period started last calendar month
+                        add(Calendar.MONTH, -1)
+                        set(Calendar.DAY_OF_MONTH, monthStartDay)
+                    }
+                }
+                val periodEnd = (periodStart.clone() as Calendar).apply {
+                    add(Calendar.MONTH, 1)
+                }
+
+                val totalDaysInPeriod = ((periodEnd.timeInMillis - periodStart.timeInMillis) / (24L * 60 * 60 * 1000)).toInt()
+                val daysElapsed = ((now.timeInMillis - periodStart.timeInMillis) / (24L * 60 * 60 * 1000)).toInt().coerceAtLeast(1)
+                val daysRemaining = totalDaysInPeriod - daysElapsed
+
+                if (daysElapsed < 5) {
+                    _uiState.update { it.copy(budgetBurnDowns = emptyList(), showBudgetBurnDown = false) }
+                    return@launch
+                }
+
+                val budgetProgressList = budgetRepository.getBudgetProgressList()
+                if (budgetProgressList.isEmpty()) {
+                    _uiState.update { it.copy(budgetBurnDowns = emptyList(), showBudgetBurnDown = false) }
+                    return@launch
+                }
+
+                val burnDowns = budgetProgressList.mapNotNull { progress ->
+                    val budget = progress.budget
+                    val spent = progress.spent
+                    if (budget.amount <= 0 || spent <= 0) return@mapNotNull null
+
+                    val dailyRate = spent.toDouble() / daysElapsed
+                    if (dailyRate <= 0) return@mapNotNull null
+
+                    // How many days from period start until budget is exhausted
+                    val daysUntilExhaustion = (budget.amount / dailyRate).toInt()
+                    val daysEarly = totalDaysInPeriod - daysUntilExhaustion
+
+                    // Only show if ≥3 days early
+                    if (daysEarly < 3) return@mapNotNull null
+
+                    // Calculate the calendar date of exhaustion for display
+                    val exhaustionCal = (periodStart.clone() as Calendar).apply {
+                        add(Calendar.DAY_OF_MONTH, daysUntilExhaustion)
+                    }
+                    val exhaustionDay = exhaustionCal.get(Calendar.DAY_OF_MONTH)
+
+                    BudgetBurnDownData(
+                        categoryName = budget.categoryName ?: "Total Spending",
+                        exhaustionDay = exhaustionDay,
+                        daysEarly = daysEarly,
+                        categoryId = budget.categoryId?.toInt() ?: 0
+                    )
+                }.sortedByDescending { it.daysEarly }
+
+                _uiState.update {
+                    it.copy(
+                        budgetBurnDowns = burnDowns,
+                        showBudgetBurnDown = burnDowns.isNotEmpty()
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(budgetBurnDowns = emptyList(), showBudgetBurnDown = false) }
             }
         }
     }

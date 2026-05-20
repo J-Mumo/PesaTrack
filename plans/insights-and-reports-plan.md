@@ -100,7 +100,7 @@ This is the surfacing matrix. Each insight has a **home surface** and may appear
 
 ### Surfacing rules
 
-- **At most one proactive notification per cadence.** Weekly default ON (Thursday evening); Monthly default ON; Quarterly default ON; Yearly default ON. All user-toggleable. No daily.
+- **At most one proactive notification per cadence.** Weekly ON (Thursday evening); Monthly ON; Quarterly ON; Yearly ON. No user toggle — notifications are always on (users can mute via Android notification channel settings). No daily.
 - **Home is untouched in v1.** The current Home composition stays. Insight cards live in the Insights section (within Analytics) and inside Report screens. Re-evaluate adding Home cards in a later milestone, based on usage of the Insights section.
 - **Limited-data label.** Any card with <4 weeks of history shows a small "limited data" tag and suppresses comparisons rather than fabricating them.
 - **Dismissibility.** Every nudge card has a small "Not useful" affordance (stored locally — no upload). Used to tune ranking only.
@@ -316,7 +316,7 @@ Detection of when a report should be generated:
 | **Analytics screen — Insights section (new)** | New toggle/tab within the existing Analytics screen ("Insights" alongside "Charts"). Feed of generated reports + cards. No new bottom-nav entry. |
 | **Report screens (new)** | 4 new screens: `WeeklyReviewScreen`, `MonthlyReviewScreen`, `QuarterlyReviewScreen`, `YearInReviewScreen`. Each follows `*Screen + *ViewModel + *UiState` pattern. Each report screen has a **"Previous reports"** section at the bottom listing stored past reports for that cadence. |
 | **Analytics screen — Charts (existing)** | Unchanged in v1. Becomes the "deep dive" destination linked from cards. |
-| **Settings** | New section: *Reports & Insights* — toggle each cadence's notification, set income (if not inferred). Investment rate is not configurable (fixed 10%). |
+| **Settings** | No Reports & Insights section. Income setting remains (if not inferred). Investment rate is not configurable (fixed 10%). |
 | **Notifications** | One channel per cadence (`weekly_review`, `monthly_review`, `quarterly_review`, `yearly_review`). Default ON, user can disable per channel. See *Notification anatomy* below. |
 | **Empty states** | Budget screen empty state shows a stub Pace/Burn-Down card teaser. Categorize screen empty state shows a stub Categorization Nudge teaser. |
 

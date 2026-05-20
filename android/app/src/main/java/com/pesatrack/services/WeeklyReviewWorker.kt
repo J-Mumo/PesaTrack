@@ -8,7 +8,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.InsightsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -25,7 +24,6 @@ import java.util.concurrent.TimeUnit
  * delay and trust the 7-day cadence to keep the worker on Thursday.
  *
  * Safety nets inside [doWork]:
- * - Skip silently if the user disabled the toggle in Settings.
  * - Skip the notification when there is no spend data for the period
  *   (don't post an empty review; honest numbers per Principle 5).
  *
@@ -35,17 +33,11 @@ import java.util.concurrent.TimeUnit
 class WeeklyReviewWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted workerParams: WorkerParameters,
-    private val insightsRepository: InsightsRepository,
-    private val appPreferences: AppPreferences
+    private val insightsRepository: InsightsRepository
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
         return try {
-            if (!appPreferences.getWeeklyReviewEnabled()) {
-                Log.d(TAG, "Weekly review disabled — skipping")
-                return Result.success()
-            }
-
             val snapshot = insightsRepository.generateAndStoreWeeklyReview()
 
             // Skip the notification when there is literally no activity in the period —
@@ -99,10 +91,6 @@ class WeeklyReviewWorker @AssistedInject constructor(
             )
         }
 
-        /** Cancel the weekly review worker (used when the user disables it). */
-        fun cancel(context: Context) {
-            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-        }
 
         /**
          * Milliseconds from [now] until the next Thursday at 18:00 local time.

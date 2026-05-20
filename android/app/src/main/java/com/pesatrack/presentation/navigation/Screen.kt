@@ -35,6 +35,36 @@ sealed class Screen(val route: String) {
         fun createRoute(snapshotId: Long? = null): String =
             if (snapshotId == null) "weekly_review" else "weekly_review?snapshotId=$snapshotId"
     }
+
+    /**
+     * Monthly Review screen (Insights & Reports v1.1).
+     *
+     * Accepts an optional snapshot id so notifications can deep-link to the
+     * exact report they advertised.
+     */
+    object MonthlyReview : Screen("monthly_review?snapshotId={snapshotId}") {
+        const val ARG_SNAPSHOT_ID = "snapshotId"
+        fun createRoute(snapshotId: Long? = null): String =
+            if (snapshotId == null) "monthly_review" else "monthly_review?snapshotId=$snapshotId"
+    }
+
+    /**
+     * Quarterly Review screen (Insights & Reports v1.3).
+     */
+    object QuarterlyReview : Screen("quarterly_review?snapshotId={snapshotId}") {
+        const val ARG_SNAPSHOT_ID = "snapshotId"
+        fun createRoute(snapshotId: Long? = null): String =
+            if (snapshotId == null) "quarterly_review" else "quarterly_review?snapshotId=$snapshotId"
+    }
+
+    /**
+     * Year-in-Review screen (Insights & Reports v1.4).
+     */
+    object YearInReview : Screen("year_in_review?year={year}") {
+        const val ARG_YEAR = "year"
+        fun createRoute(year: Int? = null): String =
+            if (year == null) "year_in_review" else "year_in_review?year=$year"
+    }
 }
 
 /**

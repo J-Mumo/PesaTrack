@@ -5,8 +5,11 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.AppLockLifecycleObserver
+import com.pesatrack.services.MonthlyReviewWorker
 import com.pesatrack.services.NotificationHelper
+import com.pesatrack.services.QuarterlyReviewWorker
 import com.pesatrack.services.WeeklyReviewWorker
+import com.pesatrack.services.YearInReviewWorker
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +59,19 @@ class PesaTrackApp : Application(), Configuration.Provider {
         // KEEP policy means this is safe to call on every cold start.
         NotificationHelper.createWeeklyReviewChannel(this)
         WeeklyReviewWorker.scheduleWeekly(this)
+
+        // Insights & Reports v1.1 — monthly review channel + 1st-of-month 09:00 scheduler.
+        NotificationHelper.createMonthlyReviewChannel(this)
+        MonthlyReviewWorker.scheduleMonthly(this)
+
+        // Insights & Reports v1.3 — quarterly review channel + quarter-start scheduler.
+        NotificationHelper.createQuarterlyReviewChannel(this)
+        NotificationHelper.createBudgetBurnDownChannel(this)
+        QuarterlyReviewWorker.scheduleQuarterly(this)
+
+        // Insights & Reports v1.4 — yearly review channel + Dec 28 scheduler.
+        NotificationHelper.createYearlyReviewChannel(this)
+        YearInReviewWorker.scheduleYearly(this)
     }
 
     override val workManagerConfiguration: Configuration

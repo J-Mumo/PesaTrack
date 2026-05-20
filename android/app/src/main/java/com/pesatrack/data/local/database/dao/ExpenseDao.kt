@@ -331,6 +331,33 @@ interface ExpenseDao {
     ): List<CategoryTotal>
 
     /**
+     * Get category totals grouped by parent group for a date range.
+     * Sub-categories are rolled up into their parent group.
+     * Categories without a parent are treated as their own group.
+     * Excludes pass-through expenses. Used by insights generators.
+     */
+    @Query("""
+        SELECT
+            COALESCE(c.parentId, c.id) AS categoryId,
+            COALESCE(pg.name, c.name, 'Uncategorized') AS categoryName,
+            COALESCE(pg.color, c.color) AS categoryColor,
+            NULL AS parentId,
+            COALESCE(SUM(e.amount), 0.0) AS total,
+            COUNT(e.id) AS transactionCount
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        LEFT JOIN categories pg ON c.parentId = pg.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :startMs AND e.timestamp < :endMs
+        GROUP BY COALESCE(c.parentId, c.id)
+        ORDER BY total DESC
+    """)
+    suspend fun getCategoryGroupTotals(
+        startMs: Long,
+        endMs: Long
+    ): List<CategoryTotal>
+
+    /**
      * Get daily totals for a specific month.
      * Returns one row per day with spending total.
      * Excludes pass-through expenses.

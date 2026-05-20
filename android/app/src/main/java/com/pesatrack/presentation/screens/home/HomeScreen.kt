@@ -154,12 +154,29 @@ fun HomeScreen(
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                Row {
+                    IconButton(onClick = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "I use PesaTrack to automatically track my M-PESA expenses - it reads SMS and categorizes everything offline. Free on Play Store: https://play.google.com/store/apps/details?id=com.pesatrack")
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "Share PesaTrack")
+                        )
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = "Share PesaTrack",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -207,15 +224,6 @@ fun HomeScreen(
             }
         }
 
-        // Forecast Card (when ≥5 days into period and budgets exist)
-        if (uiState.showForecastCard) {
-            item {
-                ForecastCard(
-                    forecasts = uiState.budgetForecasts,
-                    onViewBudgets = onNavigateToBudget
-                )
-            }
-        }
 
         // Budget Prompt Card (when user has no budgets but enough data)
         if (uiState.showBudgetPrompt) {
@@ -253,16 +261,6 @@ fun HomeScreen(
             }
         }
 
-        // Spending Trend Card (mini chart)
-        if (uiState.monthlyTrend.isNotEmpty()) {
-            item {
-                SpendingTrendCard(
-                    trendData = uiState.monthlyTrend,
-                    comparison = uiState.monthComparison,
-                    onViewAnalytics = onNavigateToAnalytics
-                )
-            }
-        }
         
         // Import History Card
         item {

@@ -3,6 +3,7 @@ package com.pesatrack.services
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Telephony
 import android.util.Log
 import com.pesatrack.data.local.database.dao.ExpenseDao
@@ -16,6 +17,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.regex.Pattern
 import javax.inject.Inject
 
 /**
@@ -57,6 +59,7 @@ class SmsReceiver : BroadcastReceiver() {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             return
         }
+
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
@@ -122,9 +125,9 @@ class SmsReceiver : BroadcastReceiver() {
 
                 var mainExpense = parsed.expense.copy(rawSms = smsBody)
 
-                // Handle card approval update — link to existing card debit record
+                // Handle card approval update — look up paired debit from inbox
                 if (parsed.isCardApprovalUpdate) {
-                    handleCardApprovalUpdate(mainExpense, smsDate)
+                    handleCardApprovalUpdate(context, mainExpense, smsDate)
                     return@launch
                 }
 
@@ -260,44 +263,109 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Handle a card approval SMS by linking it to an existing CARD_PAYMENT expense.
+     * Handle a card approval SMS by looking up the paired generic debit SMS
+     * from the device inbox to get the KES amount, then saving a complete expense.
      *
-     * The card approval SMS has the merchant name but no KES amount.
-     * The generic debit SMS (parsed as CARD_PAYMENT) has the KES amount but no merchant.
-     * This method links them by finding a recent CARD_PAYMENT within a 5-minute window
-     * and updating its recipientName and notes with the merchant info.
-     *
-     * If no existing card debit is found (approval arrived first), saves as a placeholder
-     * that will be updated when the debit SMS arrives later.
+     * Strategy:
+     * - Card approval has: merchant name, foreign currency amount, card last-4
+     * - Paired generic debit has: KES amount, bank ref, timestamp
+     * - We query the SMS inbox within a 2-minute window for the debit SMS
+     * - If found, use KES amount from debit + merchant from approval
+     * - If not found, save with the foreign currency amount as fallback
      */
     private suspend fun handleCardApprovalUpdate(
+        context: Context,
         cardApproval: com.pesatrack.domain.models.Expense,
         smsDate: Long
     ) {
-        val windowMs = 5 * 60 * 1000L // 5 minutes
-        val minTs = smsDate - windowMs
-        val maxTs = smsDate + windowMs
+        // Look up the paired debit SMS from inbox (2-minute window)
+        val kesAmount = lookupCardDebitFromInbox(context, smsDate)
 
-        // Try to find an existing CARD_PAYMENT record (from the debit SMS) within the time window
-        val existing = expenseDao.findRecentCardPaymentPlaceholder(minTs, maxTs, smsDate)
+        val finalAmount = kesAmount ?: cardApproval.amount // Fallback to foreign currency amount
+        val bankRef = lookupCardDebitRefFromInbox(context, smsDate)
 
-        if (existing != null) {
-            // Link: update the existing debit record with merchant name from card approval
-            val merchantName = cardApproval.recipientName ?: "Unknown Merchant"
-            val notes = cardApproval.notes ?: "Card payment at $merchantName"
-            expenseDao.updateRecipientNameAndNotes(existing.id, merchantName, notes)
-            Log.d(TAG, "Linked card approval to existing debit (id=${existing.id}): $merchantName")
-        } else {
-            // Debit hasn't arrived yet — save the card approval as a placeholder (amount=0)
-            // When the debit SMS arrives, it will be saved normally as CARD_PAYMENT.
-            // A future card approval for that debit will then find it via the time window.
-            Log.d(TAG, "No matching card debit found — card approval from ${cardApproval.recipientName} will await debit SMS")
-            // Don't save a placeholder with amount=0 — it would pollute totals.
-            // The debit SMS will create the real expense. If the approval arrived first,
-            // we just log it. The debit SMS will arrive shortly and be saved.
-            // If we want to guarantee linking, we could save a placeholder, but for v1
-            // we rely on the debit SMS arriving (it always does for NCBA).
+        val expense = cardApproval.copy(
+            amount = finalAmount,
+            transactionId = bankRef, // Use bank ref as transaction ID for dedup
+        )
+
+        // Check if already exists (by bank ref)
+        if (bankRef != null && expenseRepository.transactionExists(bankRef)) {
+            Log.d(TAG, "Card payment $bankRef already recorded, skipping")
+            return
         }
+
+        // Apply auto-categorization and save
+        val categorized = applyAutoCategorization(expense)
+        val expenseId = expenseRepository.saveExpense(categorized)
+        Log.d(TAG, "Saved card payment: KES $finalAmount at ${cardApproval.recipientName} (ref: $bankRef)")
+
+        if (expenseId > 0 && !categorized.isCategorized) {
+            showCategorizeNotification(
+                context, expenseId, finalAmount,
+                cardApproval.recipientName ?: "Card Payment"
+            )
+        }
+    }
+
+    /**
+     * Query the SMS inbox for the paired NCBA generic debit SMS within 2 minutes
+     * of the card approval timestamp. Extracts the KES amount.
+     *
+     * Pattern: "Your account 763****018 has been debited with KES 1,574.87 on ..."
+     */
+    private fun lookupCardDebitFromInbox(context: Context, approvalTimestamp: Long): Double? {
+        val windowMs = 2 * 60 * 1000L // 2 minutes
+        val body = findNcbaDebitSmsBody(context, approvalTimestamp, windowMs) ?: return null
+
+        val amountPattern = Pattern.compile(
+            "has been debited with KES\\s*([\\d,]+(?:\\.\\d{1,2})?)",
+            Pattern.CASE_INSENSITIVE
+        )
+        val matcher = amountPattern.matcher(body)
+        return if (matcher.find()) {
+            matcher.group(1)?.replace(",", "")?.toDoubleOrNull()
+        } else null
+    }
+
+    /**
+     * Query the SMS inbox for the paired NCBA generic debit SMS within 2 minutes
+     * and extract the bank reference (Ref: FTC...).
+     */
+    private fun lookupCardDebitRefFromInbox(context: Context, approvalTimestamp: Long): String? {
+        val windowMs = 2 * 60 * 1000L // 2 minutes
+        val body = findNcbaDebitSmsBody(context, approvalTimestamp, windowMs) ?: return null
+
+        val refPattern = Pattern.compile("Ref:\\s*(\\S+)", Pattern.CASE_INSENSITIVE)
+        val matcher = refPattern.matcher(body)
+        return if (matcher.find()) matcher.group(1)?.trimEnd('.') else null
+    }
+
+    /**
+     * Find the closest NCBA debit SMS body from the inbox within a time window.
+     */
+    private fun findNcbaDebitSmsBody(context: Context, targetTimestamp: Long, windowMs: Long): String? {
+        try {
+            val minTime = (targetTimestamp - windowMs).toString()
+            val maxTime = targetTimestamp.toString()
+
+            val cursor = context.contentResolver.query(
+                Uri.parse("content://sms/inbox"),
+                arrayOf("body", "date"),
+                "address LIKE ? AND date >= ? AND date <= ? AND body LIKE ?",
+                arrayOf("%NCBA%", minTime, maxTime, "%has been debited%"),
+                "date DESC"
+            )
+
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    return it.getString(0)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying SMS inbox for card debit", e)
+        }
+        return null
     }
 
     companion object {

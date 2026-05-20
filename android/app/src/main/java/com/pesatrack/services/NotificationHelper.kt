@@ -390,6 +390,93 @@ object NotificationHelper {
         notificationManager.notify(notificationId, notification)
     }
 
+    // ==================== Monthly Review (Insights & Reports v1.1) ====================
+
+    private const val MONTHLY_REVIEW_CHANNEL_ID = "pesatrack_monthly_review"
+    private const val MONTHLY_REVIEW_CHANNEL_NAME = "Monthly Review"
+    private const val MONTHLY_REVIEW_CHANNEL_DESCRIPTION =
+        "Your monthly spending review (1st of each month)."
+    private const val MONTHLY_REVIEW_NOTIFICATION_ID = 420_001
+
+    /**
+     * Create the Monthly Review notification channel.
+     */
+    fun createMonthlyReviewChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                MONTHLY_REVIEW_CHANNEL_ID,
+                MONTHLY_REVIEW_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = MONTHLY_REVIEW_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show the Monthly Review notification.
+     *
+     * Title: "{monthName} in review"
+     * Body: "KES {total} spent in {monthName} {arrow} {pct}% vs previous month. Headroom: KES {headroom}."
+     */
+    fun showMonthlyReviewNotification(
+        context: Context,
+        snapshotId: Long,
+        monthName: String,
+        totalSpent: Double,
+        deltaPercent: Double?,
+        headroom: Double?
+    ) {
+        createMonthlyReviewChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "monthly_review")
+            putExtra("report_snapshot_id", snapshotId)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            MONTHLY_REVIEW_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedTotal = String.format("KES %,.0f", totalSpent)
+        val body = buildString {
+            append("$formattedTotal spent in $monthName")
+            if (deltaPercent != null) {
+                val arrow = if (deltaPercent >= 0.0) "\u2191" else "\u2193"
+                append(" $arrow ${String.format("%.0f", kotlin.math.abs(deltaPercent))}% vs previous month.")
+            } else {
+                append(".")
+            }
+            if (headroom != null) {
+                val formattedHeadroom = String.format("KES %,.0f", headroom)
+                append(" Headroom this month: $formattedHeadroom.")
+            }
+        }
+
+        val notification = NotificationCompat.Builder(context, MONTHLY_REVIEW_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("$monthName in review")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(MONTHLY_REVIEW_NOTIFICATION_ID, notification)
+    }
+
     // ==================== Weekly Review (Insights & Reports v1.0) ====================
 
     /**
@@ -477,5 +564,238 @@ object NotificationHelper {
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
         notificationManager.notify(WEEKLY_REVIEW_NOTIFICATION_ID, notification)
+    }
+    // ==================== Quarterly Review (Insights & Reports v1.3) ====================
+
+    private const val QUARTERLY_REVIEW_CHANNEL_ID = "pesatrack_quarterly_review"
+    private const val QUARTERLY_REVIEW_CHANNEL_NAME = "Quarterly Review"
+    private const val QUARTERLY_REVIEW_CHANNEL_DESCRIPTION =
+        "Your quarterly spending review (1st of Apr/Jul/Oct/Jan)."
+    private const val QUARTERLY_REVIEW_NOTIFICATION_ID = 430_001
+
+    /**
+     * Create the Quarterly Review notification channel.
+     */
+    fun createQuarterlyReviewChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                QUARTERLY_REVIEW_CHANNEL_ID,
+                QUARTERLY_REVIEW_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = QUARTERLY_REVIEW_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show the Quarterly Review notification.
+     *
+     * Template: "Your Q{n} {year} review is ready. You spent KES {total} ({↑/↓} {delta}% vs Q{prev})."
+     */
+    fun showQuarterlyReviewNotification(
+        context: Context,
+        snapshotId: Long,
+        periodLabel: String,
+        totalSpent: Double,
+        deltaPercent: Double?
+    ) {
+        createQuarterlyReviewChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "quarterly_review")
+            putExtra("report_snapshot_id", snapshotId)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            QUARTERLY_REVIEW_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedTotal = String.format("KES %,.0f", totalSpent)
+        val body = buildString {
+            append("Your $periodLabel review is ready. You spent $formattedTotal")
+            if (deltaPercent != null) {
+                val arrow = if (deltaPercent >= 0.0) "\u2191" else "\u2193"
+                append(" ($arrow ${String.format("%.0f", kotlin.math.abs(deltaPercent))}% vs previous quarter).")
+            } else {
+                append(".")
+            }
+        }
+
+        val notification = NotificationCompat.Builder(context, QUARTERLY_REVIEW_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("$periodLabel in review")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(QUARTERLY_REVIEW_NOTIFICATION_ID, notification)
+    }
+
+    // ==================== Budget Burn-Down (Insights & Reports v1.3) ====================
+
+    private const val BURN_DOWN_CHANNEL_ID = "pesatrack_budget_burndown"
+    private const val BURN_DOWN_CHANNEL_NAME = "Budget Burn-Down"
+    private const val BURN_DOWN_CHANNEL_DESCRIPTION =
+        "Notifications when a budget category is projected to run out early."
+
+    /**
+     * Create the Budget Burn-Down notification channel.
+     */
+    fun createBudgetBurnDownChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                BURN_DOWN_CHANNEL_ID,
+                BURN_DOWN_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = BURN_DOWN_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show a budget burn-down notification.
+     * Copy: "At today's pace your {category} budget runs out on the {dayOrdinal} ({daysEarly} days early)."
+     */
+    fun showBudgetBurnDownNotification(
+        context: Context,
+        categoryId: Int,
+        categoryName: String,
+        exhaustionDay: Int,
+        daysEarly: Int
+    ) {
+        createBudgetBurnDownChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "budget")
+        }
+
+        val notificationId = 440_000 + categoryId
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dayOrdinal = ordinal(exhaustionDay)
+        val body = "At today's pace your $categoryName budget runs out on the $dayOrdinal ($daysEarly days early)."
+
+        val notification = NotificationCompat.Builder(context, BURN_DOWN_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("$categoryName: budget running low")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(notificationId, notification)
+    }
+
+    private fun ordinal(day: Int): String {
+        val suffix = when {
+            day in 11..13 -> "th"
+            day % 10 == 1 -> "st"
+            day % 10 == 2 -> "nd"
+            day % 10 == 3 -> "rd"
+            else -> "th"
+        }
+        return "$day$suffix"
+    }
+
+    // ==================== Yearly Review (Insights & Reports v1.4) ====================
+
+    private const val YEARLY_REVIEW_CHANNEL_ID = "pesatrack_yearly_review"
+    private const val YEARLY_REVIEW_CHANNEL_NAME = "Year in Review"
+    private const val YEARLY_REVIEW_CHANNEL_DESCRIPTION =
+        "Your annual spending review (end of December)."
+    private const val YEARLY_REVIEW_NOTIFICATION_ID = 450_001
+
+    /**
+     * Create the Yearly Review notification channel.
+     */
+    fun createYearlyReviewChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                YEARLY_REVIEW_CHANNEL_ID,
+                YEARLY_REVIEW_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = YEARLY_REVIEW_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show the Year-in-Review notification.
+     *
+     * Template: "Your {year} Year in Review is ready. You spent KES {total} across the year."
+     */
+    fun showYearlyReviewNotification(
+        context: Context,
+        year: Int,
+        totalSpent: Double
+    ) {
+        createYearlyReviewChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "year_in_review")
+            putExtra("year", year)
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            YEARLY_REVIEW_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedTotal = String.format("KES %,.0f", totalSpent)
+        val body = "Your $year Year in Review is ready. You spent $formattedTotal across the year."
+
+        val notification = NotificationCompat.Builder(context, YEARLY_REVIEW_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("$year Year in Review")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify(YEARLY_REVIEW_NOTIFICATION_ID, notification)
     }
 }

@@ -12,7 +12,15 @@ import com.pesatrack.domain.models.RecurringExpense
 import com.pesatrack.domain.models.YearComparison
 
 /**
- * Tab selection for the Analytics screen
+ * Top-level tab selection for the Analytics screen: Insights feed vs Charts
+ */
+enum class InsightsTab {
+    INSIGHTS,
+    CHARTS
+}
+
+/**
+ * Sub-tab within the Charts section: Monthly or Yearly
  */
 enum class AnalyticsTab {
     MONTHLY,
@@ -20,12 +28,60 @@ enum class AnalyticsTab {
 }
 
 /**
+ * Data for the Pace insight card.
+ * Shows projected month-end spending based on current daily run rate.
+ */
+data class PaceCardData(
+    val dailyRunRate: Double,
+    val projected: Double,
+    val lastMonthTotal: Double,
+    val delta: Double,
+    val monthName: String,
+    val prevMonthName: String
+)
+
+/**
+ * Data for the Quiet Leak insight card.
+ * Categories with many small transactions that add up.
+ */
+data class QuietLeakData(
+    val categoryName: String,
+    val transactionCount: Int,
+    val total: Double,
+    val categoryId: Int
+)
+
+/**
  * UI State for the Analytics screen
  */
 data class AnalyticsUiState(
     val isLoading: Boolean = true,
 
-    /** Selected tab: Monthly or Yearly */
+    // ==================== Top-level Tab (Insights vs Charts) ====================
+
+    /** Selected top-level tab: Insights feed or Charts */
+    val selectedInsightsTab: InsightsTab = InsightsTab.INSIGHTS,
+
+    // ==================== Insight Cards ====================
+
+    /** Pace card data — projected month-end spending */
+    val paceData: PaceCardData? = null,
+    /** Whether to show the pace card (day of month >= 7) */
+    val showPaceCard: Boolean = false,
+
+    /** Quiet leak categories (≥8 txns, avg ≤ KES 300) */
+    val quietLeaks: List<QuietLeakData> = emptyList(),
+    /** Whether to show the quiet leak card */
+    val showQuietLeakCard: Boolean = false,
+
+    /** Percentage of total spend that is uncategorized */
+    val uncategorizedPercentage: Double = 0.0,
+    /** Whether to show the categorization nudge (>15%) */
+    val showCategorizationNudge: Boolean = false,
+
+    // ==================== Charts Sub-Tab ====================
+
+    /** Selected charts sub-tab: Monthly or Yearly */
     val selectedTab: AnalyticsTab = AnalyticsTab.MONTHLY,
 
     // ==================== Monthly Tab ====================
@@ -138,5 +194,22 @@ data class AnalyticsUiState(
     /** Budget ceiling value for the total budget (null if no total budget exists) */
     val budgetCeiling: Double? = null,
 
+    // ==================== Budget Burn-Down (v1.3) ====================
+
+    /** Categories projected to exhaust budget ≥3 days before month end */
+    val budgetBurnDowns: List<BudgetBurnDownData> = emptyList(),
+    /** Whether to show the burn-down card */
+    val showBudgetBurnDown: Boolean = false,
+
     val error: String? = null
+)
+
+/**
+ * Data for a single budget category projected to run out early.
+ */
+data class BudgetBurnDownData(
+    val categoryName: String,
+    val exhaustionDay: Int,
+    val daysEarly: Int,
+    val categoryId: Int
 )

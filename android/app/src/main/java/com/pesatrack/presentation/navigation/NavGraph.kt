@@ -20,8 +20,11 @@ import com.pesatrack.presentation.screens.category_management.CategoryManagement
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.about.AboutScreen
 import com.pesatrack.presentation.screens.pin.PinSetupScreen
+import com.pesatrack.presentation.screens.monthly_review.MonthlyReviewScreen
+import com.pesatrack.presentation.screens.quarterly_review.QuarterlyReviewScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
 import com.pesatrack.presentation.screens.weekly_review.WeeklyReviewScreen
+import com.pesatrack.presentation.screens.year_in_review.YearInReviewScreen
 
 /**
  * Main navigation graph for the app
@@ -72,6 +75,24 @@ fun NavGraph(
             AnalyticsScreen(
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
+                },
+                onNavigateToWeeklyReview = {
+                    navController.navigate(Screen.WeeklyReview.createRoute())
+                },
+                onNavigateToMonthlyReview = {
+                    navController.navigate(Screen.MonthlyReview.createRoute())
+                },
+                onNavigateToQuarterlyReview = {
+                    navController.navigate(Screen.QuarterlyReview.createRoute())
+                },
+                onNavigateToYearInReview = {
+                    navController.navigate(Screen.YearInReview.createRoute())
+                },
+                onNavigateToExpenseList = { /* categoryId filter — navigate to expenses */ _ ->
+                    navController.navigate(Screen.Expenses.route)
+                },
+                onNavigateToCategorize = {
+                    navController.navigate(Screen.BatchCategorize.route)
                 }
             )
         }
@@ -177,9 +198,6 @@ fun NavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(Screen.About.route)
-                },
-                onNavigateToWeeklyReview = {
-                    navController.navigate(Screen.WeeklyReview.createRoute())
                 }
             )
         }
@@ -255,6 +273,57 @@ fun NavGraph(
             val rawId = backStackEntry.arguments?.getLong(Screen.WeeklyReview.ARG_SNAPSHOT_ID) ?: -1L
             WeeklyReviewScreen(
                 snapshotId = if (rawId > 0L) rawId else null,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Monthly Review (Insights & Reports v1.1)
+        composable(
+            route = Screen.MonthlyReview.route,
+            arguments = listOf(
+                navArgument(Screen.MonthlyReview.ARG_SNAPSHOT_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStackEntry ->
+            val rawId = backStackEntry.arguments?.getLong(Screen.MonthlyReview.ARG_SNAPSHOT_ID) ?: -1L
+            MonthlyReviewScreen(
+                snapshotId = if (rawId > 0L) rawId else null,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Quarterly Review (Insights & Reports v1.3)
+        composable(
+            route = Screen.QuarterlyReview.route,
+            arguments = listOf(
+                navArgument(Screen.QuarterlyReview.ARG_SNAPSHOT_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStackEntry ->
+            val rawId = backStackEntry.arguments?.getLong(Screen.QuarterlyReview.ARG_SNAPSHOT_ID) ?: -1L
+            QuarterlyReviewScreen(
+                snapshotId = if (rawId > 0L) rawId else null,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Year-in-Review (Insights & Reports v1.4)
+        composable(
+            route = Screen.YearInReview.route,
+            arguments = listOf(
+                navArgument(Screen.YearInReview.ARG_YEAR) {
+                    type = NavType.IntType
+                    defaultValue = -1
+                }
+            )
+        ) { backStackEntry ->
+            val rawYear = backStackEntry.arguments?.getInt(Screen.YearInReview.ARG_YEAR) ?: -1
+            YearInReviewScreen(
+                year = if (rawYear > 0) rawYear else null,
                 onBack = { navController.popBackStack() }
             )
         }

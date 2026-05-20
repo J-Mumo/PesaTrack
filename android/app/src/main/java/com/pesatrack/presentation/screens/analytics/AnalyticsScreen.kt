@@ -1,6 +1,7 @@
 package com.pesatrack.presentation.screens.analytics
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,15 +55,564 @@ import kotlin.math.absoluteValue
 fun AnalyticsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
+    onNavigateToWeeklyReview: () -> Unit = {},
+    onNavigateToMonthlyReview: () -> Unit = {},
+    onNavigateToQuarterlyReview: () -> Unit = {},
+    onNavigateToYearInReview: () -> Unit = {},
+    onNavigateToExpenseList: (categoryId: Int) -> Unit = {},
+    onNavigateToCategorize: () -> Unit = {},
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Tab Row: Monthly / Yearly
+        // Top-level Tab Row: Insights / Charts
+        TabRow(
+            selectedTabIndex = if (uiState.selectedInsightsTab == InsightsTab.INSIGHTS) 0 else 1,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Tab(
+                selected = uiState.selectedInsightsTab == InsightsTab.INSIGHTS,
+                onClick = { viewModel.selectInsightsTab(InsightsTab.INSIGHTS) },
+                text = { Text("Insights") }
+            )
+            Tab(
+                selected = uiState.selectedInsightsTab == InsightsTab.CHARTS,
+                onClick = { viewModel.selectInsightsTab(InsightsTab.CHARTS) },
+                text = { Text("Charts") }
+            )
+        }
+
+        when (uiState.selectedInsightsTab) {
+            InsightsTab.INSIGHTS -> InsightsTabContent(
+                uiState = uiState,
+                onNavigateToWeeklyReview = onNavigateToWeeklyReview,
+                onNavigateToMonthlyReview = onNavigateToMonthlyReview,
+                onNavigateToQuarterlyReview = onNavigateToQuarterlyReview,
+                onNavigateToYearInReview = onNavigateToYearInReview,
+                onNavigateToExpenseList = onNavigateToExpenseList,
+                onNavigateToCategorize = onNavigateToCategorize
+            )
+            InsightsTab.CHARTS -> ChartsTabContent(
+                uiState = uiState,
+                viewModel = viewModel,
+                onNavigateToBudget = onNavigateToBudget,
+                onNavigateToWeeklyReview = onNavigateToWeeklyReview,
+                onNavigateToMonthlyReview = onNavigateToMonthlyReview
+            )
+        }
+    }
+}
+
+// ==================== Insights Tab (new) ====================
+
+@Composable
+fun InsightsTabContent(
+    uiState: AnalyticsUiState,
+    onNavigateToWeeklyReview: () -> Unit,
+    onNavigateToMonthlyReview: () -> Unit,
+    onNavigateToQuarterlyReview: () -> Unit,
+    onNavigateToYearInReview: () -> Unit = {},
+    onNavigateToExpenseList: (categoryId: Int) -> Unit,
+    onNavigateToCategorize: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // 1. Weekly Snapshot Card (rolling 7 days vs previous 7 days)
+        if (uiState.weeklyTotal > 0 || uiState.previousWeekTotal > 0) {
+            item {
+                WeeklySnapshotCard(
+                    weekDateLabel = uiState.weekDateLabel,
+                    weeklyTotal = uiState.weeklyTotal,
+                    previousWeekTotal = uiState.previousWeekTotal,
+                    weekOverWeekChange = uiState.weekOverWeekChange,
+                    topCategoryName = uiState.topCategoryThisWeek,
+                    topCategoryAmount = uiState.topCategoryThisWeekAmount
+                )
+            }
+        }
+
+        // 2. Weekly Review navigation card
+        item {
+            val weeklyArrow = if (uiState.weekOverWeekChange >= 0) "↑" else "↓"
+            val weeklyPct = String.format("%.0f", uiState.weekOverWeekChange.absoluteValue)
+            val weeklySummary = if (uiState.weeklyTotal > 0) {
+                "${uiState.weeklyTotal.formatAsCurrency()} spent this week $weeklyArrow ${weeklyPct}% vs last week."
+            } else {
+                "No spending recorded this week yet."
+            }
+            val biggestChangeText = uiState.topCategoryThisWeek?.let { cat ->
+                "Top category: $cat (${uiState.topCategoryThisWeekAmount.formatAsCurrency()})"
+            } ?: ""
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNavigateToWeeklyReview
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Insights,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Your week in review",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = weeklySummary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (biggestChangeText.isNotEmpty()) {
+                                Text(
+                                    text = biggestChangeText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open Weekly Review",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 2. Monthly Review summary card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNavigateToMonthlyReview
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Column {
+                            Text(
+                                text = "Monthly Review",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "${uiState.selectedMonthLabel}: ${uiState.totalForMonth.formatAsCurrency()}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open Monthly Review",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 3. Pace Card — shown after 7th of month
+        if (uiState.showPaceCard && uiState.paceData != null) {
+            item {
+                PaceInsightCard(paceData = uiState.paceData!!)
+            }
+        }
+
+        // 4. Quiet Leak Card
+        if (uiState.showQuietLeakCard) {
+            item {
+                QuietLeakInsightCard(
+                    quietLeaks = uiState.quietLeaks,
+                    onCategoryTap = onNavigateToExpenseList
+                )
+            }
+        }
+
+        // 5. Categorization Nudge Card
+        if (uiState.showCategorizationNudge) {
+            item {
+                CategorizationNudgeCard(
+                    percentage = uiState.uncategorizedPercentage,
+                    onTap = onNavigateToCategorize
+                )
+            }
+        }
+
+        // 6. Quarterly Review summary card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNavigateToQuarterlyReview
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Column {
+                            Text(
+                                text = "Quarterly Review",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "See your spending patterns across 3 months",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open Quarterly Review",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 7. Year-in-Review summary card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNavigateToYearInReview
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Column {
+                            Text(
+                                text = "Year in Review",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "See your annual spending summary",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open Year in Review",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 8. Budget Burn-Down Card
+        if (uiState.showBudgetBurnDown) {
+            item {
+                BudgetBurnDownCard(burnDowns = uiState.budgetBurnDowns)
+            }
+        }
+
+        // Bottom spacer
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+// ==================== Budget Burn-Down Card ====================
+
+@Composable
+fun BudgetBurnDownCard(burnDowns: List<BudgetBurnDownData>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "Budget burn-down",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            burnDowns.forEach { data ->
+                val dayOrdinal = ordinalDay(data.exhaustionDay)
+                Text(
+                    text = "At today\u2019s pace your ${data.categoryName} budget runs out on the $dayOrdinal (${data.daysEarly} days early).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun ordinalDay(day: Int): String {
+    val suffix = when {
+        day in 11..13 -> "th"
+        day % 10 == 1 -> "st"
+        day % 10 == 2 -> "nd"
+        day % 10 == 3 -> "rd"
+        else -> "th"
+    }
+    return "$day$suffix"
+}
+
+// ==================== Pace Insight Card ====================
+
+@Composable
+fun PaceInsightCard(paceData: PaceCardData) {
+    val arrow = if (paceData.delta >= 0) "↑" else "↓"
+    val deltaFormatted = paceData.delta.absoluteValue.formatAsCurrency()
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Speed,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(28.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Spending Pace",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "At today's pace, you'll end ${paceData.monthName} at ${paceData.projected.formatAsCurrency()} ($arrow $deltaFormatted vs ${paceData.prevMonthName})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                )
+            }
+        }
+    }
+}
+
+// ==================== Quiet Leak Insight Card ====================
+
+@Composable
+fun QuietLeakInsightCard(
+    quietLeaks: List<QuietLeakData>,
+    onCategoryTap: (categoryId: Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WaterDrop,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Quiet Leaks",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Text(
+                text = "Small, frequent transactions that add up:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+            )
+            quietLeaks.forEach { leak ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onCategoryTap(leak.categoryId) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${leak.categoryName}: ${leak.transactionCount} transactions",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = leak.total.formatAsCurrency(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==================== Categorization Nudge Card ====================
+
+@Composable
+fun CategorizationNudgeCard(
+    percentage: Double,
+    onTap: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onTap,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Category,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(28.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${String.format("%.0f", percentage)}% of your spend is uncategorized",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Categorizing unlocks category insights.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Categorize",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+// ==================== Charts Tab (existing content restructured) ====================
+
+@Composable
+fun ChartsTabContent(
+    uiState: AnalyticsUiState,
+    viewModel: AnalyticsViewModel,
+    onNavigateToBudget: () -> Unit,
+    onNavigateToWeeklyReview: () -> Unit,
+    onNavigateToMonthlyReview: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Charts sub-tab Row: Monthly / Yearly
         TabRow(
             selectedTabIndex = if (uiState.selectedTab == AnalyticsTab.MONTHLY) 0 else 1,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             Tab(
                 selected = uiState.selectedTab == AnalyticsTab.MONTHLY,
@@ -134,20 +684,6 @@ fun MonthlyTabContent(
             }
         }
 
-        // Weekly Snapshot Card (rolling 7 days vs previous 7 days)
-        if (uiState.weeklyTotal > 0 || uiState.previousWeekTotal > 0) {
-            item {
-                WeeklySnapshotCard(
-                    weekDateLabel = uiState.weekDateLabel,
-                    weeklyTotal = uiState.weeklyTotal,
-                    previousWeekTotal = uiState.previousWeekTotal,
-                    weekOverWeekChange = uiState.weekOverWeekChange,
-                    topCategoryName = uiState.topCategoryThisWeek,
-                    topCategoryAmount = uiState.topCategoryThisWeekAmount
-                )
-            }
-        }
-
         // Summary Stats Row
         item {
             SummaryStatsRow(
@@ -173,33 +709,6 @@ fun MonthlyTabContent(
                 ) {
                     CircularProgressIndicator()
                 }
-            }
-        }
-
-        // Monthly Trend Line Chart
-        if (uiState.monthlyTrend.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Monthly Trend")
-            }
-            item {
-                MonthlyTrendChart(data = uiState.monthlyTrend)
-            }
-        }
-
-        // Variable-Spend Category Trends
-        if (uiState.categoryTrends.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Spending Trends")
-            }
-            item {
-                Text(
-                    text = "Categories with variable monthly spending",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
-            items(uiState.categoryTrends) { trend ->
-                CategoryTrendCard(trend = trend)
             }
         }
 
@@ -310,6 +819,33 @@ fun MonthlyTabContent(
                     totalForMonth = uiState.totalForMonth,
                     topRecurringNames = uiState.topRecurringNames
                 )
+            }
+        }
+
+        // Monthly Trend Line Chart
+        if (uiState.monthlyTrend.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Monthly Trend")
+            }
+            item {
+                MonthlyTrendChart(data = uiState.monthlyTrend)
+            }
+        }
+
+        // Variable-Spend Category Trends
+        if (uiState.categoryTrends.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Spending Trends")
+            }
+            item {
+                Text(
+                    text = "Categories with variable monthly spending",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            items(uiState.categoryTrends) { trend ->
+                CategoryTrendCard(trend = trend)
             }
         }
 
@@ -1144,24 +1680,21 @@ fun ForecastProjectionChart(
 
         if (totalDays == 0) return@LaunchedEffect
 
-        // Series 1: Actual cumulative (solid line) — values for actual days, null/0 for projected days
+        // Series 1: Actual cumulative (solid line)
         val actualSeries = mutableListOf<Number>()
         for (i in 0 until totalDays) {
             if (i < actualDays) {
                 actualSeries.add(cumulativeActual[i])
             } else {
-                // Use last actual value as a bridge point for the first projected day,
-                // then 0 for the rest (won't be rendered since line stops)
                 actualSeries.add(cumulativeActual.lastOrNull() ?: 0.0)
             }
         }
 
-        // Series 2: Projection line (dashed) — 0 for actual days, cumulative projected for rest
+        // Series 2: Projection line (dashed)
         val projSeries = mutableListOf<Number>()
         val lastActual = cumulativeActual.lastOrNull() ?: 0.0
         for (i in 0 until totalDays) {
             if (i < actualDays) {
-                // Bridge: use last actual value at the junction point
                 if (i == actualDays - 1) {
                     projSeries.add(lastActual)
                 } else {

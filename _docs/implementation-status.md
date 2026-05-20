@@ -39,6 +39,10 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Budget Forecasting (4 phases)** | ✅ Complete | 100% |
 | **Recurring Expense Detection** | ✅ Complete | 100% |
 | **Insights & Reports v1.0 (Weekly Review)** | ✅ Complete | 100% |
+| **Insights & Reports v1.1 (Monthly Review)** | ✅ Complete | 100% |
+| **Insights & Reports v1.2 (Insights Section + Insight Cards)** | ✅ Complete | 100% |
+| **Insights & Reports v1.3 (Quarterly Review + Budget Burn-Down)** | ✅ Complete | 100% |
+| **Insights & Reports v1.4 (Year-in-Review + Share-as-Image)** | ✅ Complete | 100% |
 | **Play Store Release (v1.1.0)** | ✅ Published | 100% |
 
 ---
@@ -111,9 +115,8 @@ SMS Sources ──────────────────────�
 | Transaction cost extraction | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:48) | Regex: `"Transaction cost,? Ksh..."` |
 | Non-expense filtering | [`MpesaSmsParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt:56) | Skips Receive Money, Deposit, Reversal |
 | NCBA self-transfer skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:70) | Skips bank→own M-PESA transfers |
-| NCBA Card Payment (debit) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:85) | Pattern: `"has been debited with KES...Ref: FT..."` → KES amount + bank ref |
-| NCBA Card Payment (approval) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:79) | Pattern: `"approved a transaction of USD...at MERCHANT..."` → links merchant name to debit |
-| NCBA generic debit skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:64) | Skips "has been debited" without card ref (non-card debits) |
+| NCBA Card Payment (approval + inbox lookup) | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:71) | Card approval SMS triggers 2-min inbox lookup for paired debit to get KES amount + bank ref |
+| NCBA generic debit skip | [`NcbaBankParser.kt`](../android/app/src/main/java/com/pesatrack/utils/parsers/NcbaBankParser.kt:62) | ALL generic debits skipped ("has been debited") — dedup handled via card approval inbox lookup |
 | SMS Receiver | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Multi-source BroadcastReceiver with bank preference check |
 | Multi-source Import | [`SmsImportService.kt`](../android/app/src/main/java/com/pesatrack/services/SmsImportService.kt:36) | Imports from M-PESA + enabled banks |
 | Duplicate detection | [`SmsReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/SmsReceiver.kt:30) | Checks transactionId before insert |
@@ -199,8 +202,8 @@ SMS Sources ──────────────────────�
 | Feature | File | Description |
 |---------|------|-------------|
 | **Navigation** | | |
-| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 12 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, About |
-| Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions |
+| Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 16 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, About, WeeklyReview, MonthlyReview, QuarterlyReview, YearInReview |
+| Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions (incl. QuarterlyReview, YearInReview) |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:23) | 3 tabs: Home, Analytics, Expenses |
 | **Main Activity** | | |
 | MainActivity | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:48) | Onboarding overlay → PIN lock overlay → main app; biometric setup; notification channel |
@@ -268,9 +271,9 @@ SMS Sources ──────────────────────�
 | ManualEntryUiState | [`ManualEntryUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/manual_entry/ManualEntryUiState.kt:8) | Form fields, validation errors, save state |
 
 | **Analytics Screen** | | |
-| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **Tab-based Monthly/Yearly view**: Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner** when no budgets exist; **Forecast projection chart**; **RecurringBreakdownCard** (recurring vs one-time split with progress bars) |
-| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check, **forecast projection data loading**, **recurring breakdown loading** |
-| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **AnalyticsTab** (MONTHLY/YEARLY), yearly state fields, hasActiveBudgets, **cumulativeActual/cumulativeProjection/totalBudgetCeiling**, **recurringTotal/oneTimeTotal/topRecurringNames** |
+| AnalyticsScreen | [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt:1) | **"Insights" \| "Charts" tab toggle** (Insights default): Insights tab = vertical card feed (Weekly/Monthly Review summaries, Pace Card, Quiet Leak Card, Categorization Nudge, Budget Burn-Down Card); Charts tab = Month selector, MoM comparison, trend line, **variable-spend category trends**, daily columns, category bars, top spenders, payment type breakdown (Vico charts); **Yearly tab**: year selector, YoY card, 12-month overlay chart, yearly breakdowns; **Budget setup banner**; **Forecast projection chart**; **RecurringBreakdownCard** |
+| AnalyticsViewModel | [`AnalyticsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsViewModel.kt:1) | Analytics data loading, month/year navigation, MoM/YoY computation, **CV-based volatile category detection**, yearly data lazy loading, budget status check, **forecast projection data loading**, **recurring breakdown loading**, **pace computation**, **quiet leak detection**, **uncategorized % check**, **budget burn-down detection** |
+| AnalyticsUiState | [`AnalyticsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsUiState.kt:1) | Charts data, summary stats, month/year selection, **categoryTrends**, **InsightsTab** enum, **PaceCardData**, **QuietLeakData**, **BudgetBurnDownData**, yearly state fields, hasActiveBudgets, **cumulativeActual/cumulativeProjection/totalBudgetCeiling**, **recurringTotal/oneTimeTotal/topRecurringNames** |
 | AnalyticsModels | [`AnalyticsModels.kt`](../android/app/src/main/java/com/pesatrack/domain/models/AnalyticsModels.kt:1) | MonthComparison, **YearComparison**, **CategoryTrend** (CV, mean, σ, spend level), **DEFAULT_VARIABLE_SPEND_CATEGORIES** (12 IDs) |
 
 | **Budget Screen** | | |
@@ -467,6 +470,7 @@ app/src/main/java/com/pesatrack/
 │   │   └── preferences/
 │   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle, **recurring reminders toggle + throttle**)
 │   └── repository/
+│       ├── InsightsRepository.kt            ✅ Weekly/Monthly/Quarterly/Yearly review CRUD (generate, store, retrieve snapshots)
 │       ├── ExpenseRepository.kt             ✅ Domain mapping, CRUD
 │       ├── CategoryRepository.kt            ✅ Category CRUD (add/edit/delete groups + sub-categories), expense count checks
 │       ├── CategoryRuleRepository.kt        ✅ Rule CRUD, active rules for categorization pipeline
@@ -479,6 +483,15 @@ app/src/main/java/com/pesatrack/
 │   ├── BudgetForecast.kt                    ✅ BudgetForecast (dailyBurnRate, exhaustionDate, projectedTotal, safeDailyBudget), ForecastStatus enum
 │   ├── RecurringExpense.kt                  ✅ RecurringExpense, RecurrenceCycle, AmountPattern, RecurringExpenseSummary, RecurringPeriodInfo
 │   └── AnalyticsModels.kt                   ✅ MonthComparison + CategoryTrend + DEFAULT_VARIABLE_SPEND_CATEGORIES
+├── domain/insights/
+│   ├── WeeklyReviewSnapshot.kt              ✅ Weekly review domain model
+│   ├── WeeklyReviewGenerator.kt             ✅ Pure function generator for weekly snapshots
+│   ├── MonthlyReviewSnapshot.kt             ✅ Monthly review domain model
+│   ├── MonthlyReviewGenerator.kt            ✅ Pure function generator for monthly snapshots
+│   ├── QuarterlyReviewSnapshot.kt           ✅ Quarterly review domain model (period total, delta, top 5, biggest mover, fees, savings momentum, investment illustration)
+│   ├── QuarterlyReviewGenerator.kt          ✅ Pure function generator for quarterly snapshots
+│   ├── YearInReviewSnapshot.kt              ✅ Year-in-review domain model (annual total, delta, top 5, biggest mover, fees, quiet leaks, savings story, investment illustration, goals progress)
+│   └── YearInReviewGenerator.kt             ✅ Pure function generator for yearly snapshots
 ├── presentation/
 │   ├── MainActivity.kt                      ✅ Onboarding → PIN lock → main app; BiometricPrompt; 3-tab bottom nav; **WorkManager recurring reminder scheduling**
 │   ├── navigation/
@@ -539,6 +552,14 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── PinSetupScreen.kt            ✅ PIN setup/change/disable flow
 │   │   │   ├── PinViewModel.kt              ✅ PIN verification, brute force protection (5 attempts → 30s cooldown)
 │   │   │   └── PinUiState.kt               ✅ PinMode (7 modes), digit entry, error/cooldown state
+│   │   ├── quarterly_review/
+│   │   │   ├── QuarterlyReviewScreen.kt  ✅ Quarterly spending review with top 5, biggest mover, fees, savings momentum, investment illustration
+│   │   │   ├── QuarterlyReviewViewModel.kt ✅ Loads quarterly snapshot from InsightsRepository
+│   │   │   └── QuarterlyReviewUiState.kt ✅ Loading/loaded/error states for quarterly snapshot
+│   │   ├── year_in_review/
+│   │   │   ├── YearInReviewScreen.kt     ✅ Annual review with share-as-image button (ReportRenderer)
+│   │   │   ├── YearInReviewViewModel.kt  ✅ Loads yearly snapshot from InsightsRepository
+│   │   │   └── YearInReviewUiState.kt    ✅ Loading/loaded/error states for yearly snapshot
 │   │   └── settings/
 │   │       ├── SettingsScreen.kt             ✅ Security (PIN, biometric, timeout) + Category mgmt + Budget mgmt + **Month start day picker** + Bank SMS toggles + **Notifications section (recurring reminders)**
 │   │       ├── SettingsViewModel.kt          ✅ Bank + PIN/biometric + month start day + **recurring reminders** preferences management
@@ -546,7 +567,8 @@ app/src/main/java/com/pesatrack/
 │   ├── components/
 │   │   ├── ExpenseCard.kt                   ✅ Payment type icons, category title
 │   │   ├── CategoryChip.kt                  ✅ Selection chip
-│   │   └── GroupedCategoryPicker.kt         ✅ Hierarchical selector
+│   │   ├── GroupedCategoryPicker.kt         ✅ Hierarchical selector
+│   │   └── ReportRenderer.kt               ✅ Generic share-as-image utility (captures composable as bitmap, shares via intent)
 │   └── theme/
 │       ├── Theme.kt                         ✅ Material 3
 │       ├── Color.kt                         ✅ getCategoryColor()
@@ -562,7 +584,9 @@ app/src/main/java/com/pesatrack/
 │   ├── ForecastService.kt                   ✅ Linear burn rate forecasting + **recurring-aware projections** (splits recurring vs discretionary spending)
 │   ├── RecurringExpenseService.kt           ✅ Recurring expense detection engine (interval analysis, 4 cycle types, 15-min cache, period info for forecasting)
 │   ├── RecurringReminderWorker.kt           ✅ Daily WorkManager worker — upcoming/overdue recurring expense notifications (@HiltWorker)
-│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel**
+│   ├── QuarterlyReviewWorker.kt             ✅ Fires 1st of Apr/Jul/Oct/Jan at 09:00 — generates quarterly review + notification (@HiltWorker)
+│   ├── YearInReviewWorker.kt                ✅ Fires Dec 28 at 18:00 — generates year-in-review + notification (@HiltWorker)
+│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel** + **quarterly_review channel** + **yearly_review channel** + **budget_burndown channel**
 │   ├── DataManagementService.kt             ✅ Export, backup/restore, data reset
 │   ├── SampleDataService.kt                 ✅ Sample data generation for testing/demo
 │   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
@@ -613,6 +637,12 @@ backend/
 
 ### Recent Features
 
+- **Insights & Reports v1.4 — Year-in-Review + Share-as-Image** — `YearInReviewSnapshot` domain model (annual total, delta, top 5, biggest mover, fees, quiet leaks, savings story, investment illustration, goals progress). `YearInReviewGenerator` pure function. `InsightsRepository` yearly CRUD. Full screen (YearInReviewScreen + ViewModel + UiState) at `Screen.YearInReview`. `YearInReviewWorker` fires Dec 28 at 18:00, posts notification on `yearly_review` channel. `ReportRenderer.kt` generic share-as-image utility (captures composable as bitmap, shares via intent) — wired into YearInReviewScreen. Unit tested: `YearInReviewGeneratorTest.kt`.
+
+- **Insights & Reports v1.3 — Quarterly Review + Budget Burn-Down** — `QuarterlyReviewSnapshot` domain model (period total, delta, top 5, biggest mover, fees, savings momentum, investment illustration). `QuarterlyReviewGenerator` pure function (8 unit tests). `InsightsRepository` quarterly CRUD. Full screen (QuarterlyReviewScreen + ViewModel + UiState) at `Screen.QuarterlyReview`. `QuarterlyReviewWorker` fires 1st of Apr/Jul/Oct/Jan at 09:00, posts notification on `quarterly_review` channel. Budget Burn-Down Card in Insights tab (categories exhausting ≥3 days early) with `budget_burndown` notification channel.
+
+- **Insights & Reports v1.2 — Insights Section + Insight Cards** — Restructured Analytics screen with "Insights" | "Charts" tab toggle (Insights default). Existing chart content moved under "Charts" tab. Insights tab is a vertical feed of cards: Weekly Review summary (→ WeeklyReview), Monthly Review summary (→ MonthlyReview), Pace Card (shown after 7th of month, projected month-end vs last month), Quiet Leak Card (categories with ≥8 txns and avg ≤ KES 300), Categorization Nudge Card (>15% uncategorized). Added `InsightsTab` enum, `PaceCardData`, `QuietLeakData` to AnalyticsUiState. AnalyticsViewModel computes pace, quiet leaks, uncategorized %.
+
 - **Insights & Reports v1.0 — Weekly Review** (DB v15 → v16) — New `report_snapshots` table persists weekly spending reviews (with previous-period totals, Top 5 categories incl. "others" rollup, biggest-change category, fees-paid surfaced separately, optional headroom against monthly income). Pure-function `WeeklyReviewGenerator` (in `domain/insights/`) shapes a DAO breakdown into a `WeeklyReviewSnapshot` and is fully unit-tested. `WeeklyReviewWorker` (`@HiltWorker`, 7-day periodic, initial delay aligned to next Thursday 18:00 local) runs `InsightsRepository.generateAndStoreWeeklyReview()` and posts a notification on the new `pesatrack_weekly_review` channel (IMPORTANCE_DEFAULT). Notification deep-links to `Screen.WeeklyReview` carrying the snapshot id so the screen shows the exact report it advertised. Settings exposes a "Reports & Insights" section with toggle (`weekly_review_enabled` DataStore key). Honors AGENTS principles: neutral copy, fees not collapsed into discretionary spend, `limitedData=true` suppresses honest-only-when-comparable percentage delta.
 
 ### Completed Bug Fixes
@@ -628,6 +658,7 @@ backend/
 11. **NCBA new SMS format (Till + Paybill)** — NCBA changed their SMS format: Till messages no longer include the till number (was `"to 8933372 THE FIG AND OLIVE..."`, now `"to JAZA MUTHIGA BANK REF. ..."`), and Paybill messages no longer include the "account" keyword (was `"to NAME account number ACCT..."`, now `"to NAME BANK REF. ..."`). Added `tillPaymentPatternB` (name-only, no till number) and `paybillPatternC` (name-only, no account keyword) in `NcbaBankParser.kt`. Old patterns (A/B) kept as higher-priority fallbacks for backward compatibility. Renamed the original `tillPaymentPattern` to `tillPaymentPatternA` for clarity.
 9. **Bottom Nav: Analytics → Home broken** — `restoreState = true` silently fails when the start destination (Home) has no previously-saved state. Navigation appears to do nothing — no exception thrown. Fixed by special-casing the start destination: `inclusive = true` + `saveState = false` + `restoreState = false` for Home tab; other tabs retain save/restore for state preservation.
 10. **Onboarding "Import Now" → Home instead of Import screen** — The "Import Now" button on onboarding page 4 called `onImportHistory()` (a no-op) then `onComplete()`, which marked onboarding done and showed the Home screen. Fixed by using a `pendingImportNavigation` state flag: `onImportHistory` sets the flag, and after onboarding completes, `MainScreen` uses a `LaunchedEffect` to navigate to `Screen.ImportHistory`.
+12. **NCBA duplicate SMS (card payments + M-PESA transfers)** — Generic debit SMS (`"Your account...has been debited..."`) was being parsed as a `CARD_PAYMENT` when it contained `Ref: FT...`, creating duplicates with the detailed M-PESA confirmation SMS. Fixed by skipping ALL generic debits in `NcbaBankParser`. For card payments, the card approval SMS (`"approved a transaction of USD...at MERCHANT..."`) now triggers a 2-minute SMS inbox lookup in `SmsReceiver` to find the paired debit SMS and extract the KES amount + bank ref. This eliminates duplicates while preserving both merchant name and local currency amount.
 
 ### Implemented Features
 
@@ -719,6 +750,9 @@ backend/
 | — | Database Backup/Restore | ✅ Complete | .zip backup via SAF (database + settings.json); restore with SQLite validation + app restart |
 | — | Cloud sync | ⏳ Pending | Backup/restore across devices |
 | — | Recurring expense tracking | ✅ Complete | Detection engine + analytics split + recurring-aware forecasting + daily reminder notifications |
+| — | Insights & Reports v1.2 | ✅ Complete | Insights tab on Analytics (card feed: Weekly/Monthly Review, Pace, Quiet Leak, Categorization Nudge) |
+| — | Insights & Reports v1.3 | ✅ Complete | Quarterly Review screen + Budget Burn-Down card + QuarterlyReviewWorker + 8 unit tests |
+| — | Insights & Reports v1.4 | ✅ Complete | Year-in-Review screen + YearInReviewWorker + ReportRenderer share-as-image + unit tests |
 
 ---
 

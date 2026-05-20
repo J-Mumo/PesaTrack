@@ -26,8 +26,6 @@ data class SettingsUiState(
     /** Day of the month when budget periods start (1–28, default 1). */
     val monthStartDay: Int = 1,
     // Insights & Reports (v1.0)
-    /** Whether the Thursday Weekly Review notification is enabled. */
-    val weeklyReviewEnabled: Boolean = true,
     // Data Management
     val isExporting: Boolean = false,
     val isBackingUp: Boolean = false,
