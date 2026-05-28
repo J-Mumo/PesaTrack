@@ -41,6 +41,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Notification action receiver for Ignore/Undo from notification -->
+        <receiver
+            android:name=".services.NotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Disable default WorkManager initializer (we provide our own via HiltWorkerFactory) -->
         <provider
             android:name="androidx.startup.InitializationProvider"

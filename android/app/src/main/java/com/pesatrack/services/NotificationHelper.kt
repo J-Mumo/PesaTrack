@@ -88,6 +88,31 @@ object NotificationHelper {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+        // "Categorize" action button — same deep link as tapping the notification
+        val categorizeIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "categorize")
+            putExtra("expense_id", expenseId)
+        }
+        val categorizePendingIntent = PendingIntent.getActivity(
+            context,
+            (expenseId + 500_000).toInt(),
+            categorizeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // "Ignore" action button — handled by NotificationActionReceiver
+        val ignoreIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = "com.pesatrack.ACTION_IGNORE_EXPENSE"
+            putExtra("expense_id", expenseId)
+        }
+        val ignorePendingIntent = PendingIntent.getBroadcast(
+            context,
+            (expenseId + 600_000).toInt(),
+            ignoreIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         
         val formattedAmount = String.format("KES %,.2f", amount)
         
@@ -97,6 +122,8 @@ object NotificationHelper {
             .setContentText("To $recipient — Tap to categorize")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "Categorize", categorizePendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "Ignore", ignorePendingIntent)
             .setAutoCancel(true)
             .build()
         

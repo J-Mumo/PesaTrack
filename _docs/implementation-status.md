@@ -298,6 +298,7 @@ SMS Sources ──────────────────────�
 | Recurring Reminder Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:297) | Shows "🔔 Rent due tomorrow ~KES 35,000" for upcoming and "⏰ Rent appears overdue" for late |
 | Recurring Reminder Worker | [`RecurringReminderWorker.kt`](../android/app/src/main/java/com/pesatrack/services/RecurringReminderWorker.kt:1) | Daily WorkManager worker — detects upcoming/overdue recurring expenses, sends notifications |
 | Tap-to-Categorize | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:64) | PendingIntent opens categorize screen |
+| Ignore from Notification | [`NotificationActionReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationActionReceiver.kt:1) | "Categorize" + "Ignore" action buttons on expense notification; 5s undo window before persisting exclude |
 | Channel Init on Launch | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:51) | Created in `onCreate()` (expense + recurring reminders channels) |
 
 ---
@@ -586,7 +587,8 @@ app/src/main/java/com/pesatrack/
 │   ├── RecurringReminderWorker.kt           ✅ Daily WorkManager worker — upcoming/overdue recurring expense notifications (@HiltWorker)
 │   ├── QuarterlyReviewWorker.kt             ✅ Fires 1st of Apr/Jul/Oct/Jan at 09:00 — generates quarterly review + notification (@HiltWorker)
 │   ├── YearInReviewWorker.kt                ✅ Fires Dec 28 at 18:00 — generates year-in-review + notification (@HiltWorker)
-│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel** + **quarterly_review channel** + **yearly_review channel** + **budget_burndown channel**
+│   ├── NotificationActionReceiver.kt        ✅ BroadcastReceiver for notification "Ignore" action — 5s undo window before persisting exclude
+│   ├── NotificationHelper.kt               ✅ Expense channel + Budget Alerts channel + **forecast notifications** + **Recurring Reminders channel** + **quarterly_review channel** + **yearly_review channel** + **budget_burndown channel** + **Categorize/Ignore action buttons**
 │   ├── DataManagementService.kt             ✅ Export, backup/restore, data reset
 │   ├── SampleDataService.kt                 ✅ Sample data generation for testing/demo
 │   ├── PinManager.kt                        ✅ SHA-256 + salt PIN hashing, verification, timeout logic
