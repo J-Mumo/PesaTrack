@@ -249,17 +249,7 @@ fun HomeScreen(
             }
         }
 
-        // Low-engagement friction prompt (Stage 1E)
-        if (uiState.showLowEngagementFeedbackPrompt) {
-            item {
-                LowEngagementFeedbackCard(
-                    onSubmit = { reason, other ->
-                        viewModel.submitLowEngagementFeedback(reason, other)
-                    },
-                    onDismiss = { viewModel.dismissLowEngagementPrompt() }
-                )
-            }
-        }
+        // Low-engagement friction prompt (Stage 1E) — rendered as modal below.
 
         
         // Import History Card
@@ -324,6 +314,17 @@ fun HomeScreen(
             }
         }
     }
+    }
+
+    // Stage 1E: low-engagement friction prompt as a blocking modal so we capture
+    // reason data from users who would otherwise uninstall without feedback.
+    if (uiState.showLowEngagementFeedbackPrompt) {
+        LowEngagementFeedbackDialog(
+            onSubmit = { reason, other ->
+                viewModel.submitLowEngagementFeedback(reason, other)
+            },
+            onDismiss = { viewModel.dismissLowEngagementPrompt() }
+        )
     }
 }
 
@@ -444,7 +445,7 @@ private fun StructuredFeedbackPromptCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LowEngagementFeedbackCard(
+private fun LowEngagementFeedbackDialog(
     onSubmit: (reason: String, otherText: String?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -460,85 +461,84 @@ private fun LowEngagementFeedbackCard(
     var otherText by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
             Text(
-                text = "What blocked setup for you?",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                text = "Quick question — what's blocking you?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
-            ) {
-                OutlinedTextField(
-                    value = selected ?: "",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Select one") },
-                    placeholder = { Text("Choose an option") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
+        },
+        text = {
+            Column {
+                Text(
+                    text = "We noticed PesaTrack isn't fully set up yet. Your honest feedback helps us fix it for everyone.",
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                ExposedDropdownMenu(
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ExposedDropdownMenuBox(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onExpandedChange = { expanded = !expanded }
                 ) {
-                    options.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                selected = option
-                                expanded = false
-                            }
-                        )
+                    OutlinedTextField(
+                        value = selected ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Select one") },
+                        placeholder = { Text("Choose an option") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        options.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    selected = option
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
-            }
 
-            if (selected == "Other") {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = otherText,
-                    onValueChange = { otherText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Tell us more") },
-                    minLines = 2
-                )
+                if (selected == "Other") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = otherText,
+                        onValueChange = { otherText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Tell us more") },
+                        minLines = 2
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        val choice = selected ?: return@Button
-                        val freeText = otherText.takeIf { choice == "Other" }
-                        onSubmit(choice, freeText)
-                    },
-                    enabled = selected != null,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Submit")
-                }
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Not now")
-                }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val choice = selected ?: return@Button
+                    val freeText = otherText.takeIf { choice == "Other" }
+                    onSubmit(choice, freeText)
+                },
+                enabled = selected != null
+            ) {
+                Text("Submit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Not now")
             }
         }
-    }
+    )
 }
 
 @Composable

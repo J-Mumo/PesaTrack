@@ -37,8 +37,10 @@ class HomeViewModel @Inject constructor(
         private const val REVIEW_COOLDOWN_DAYS = 90L
         private const val REVIEW_MAX_PROMPT_COUNT = 2
         private const val STRUCTURED_MIN_QUALIFIED_SESSIONS = 5
-        private const val LOW_ENGAGEMENT_SMS_GRACE_HOURS = 24L
-        private const val LOW_ENGAGEMENT_FIRST_VALUE_GRACE_HOURS = 72L
+        // Tightened thresholds: most uninstalls happen within the first 24h, so we need
+        // to capture friction feedback while users are still in the app, not days later.
+        private const val LOW_ENGAGEMENT_SMS_GRACE_MINUTES = 30L
+        private const val LOW_ENGAGEMENT_FIRST_VALUE_GRACE_MINUTES = 15L
         private const val LOW_ENGAGEMENT_RETURN_CHECK_DAYS = 3L
     }
     
@@ -474,7 +476,7 @@ class HomeViewModel @Inject constructor(
 
                 val now = System.currentTimeMillis()
                 val sinceInstall = now - installTs
-                val hourMs = 60 * 60 * 1000L
+                val minuteMs = 60 * 1000L
                 val dayMs = 24 * 60 * 60 * 1000L
 
                 val hasFirstValue = metrics.firstSmsParsed ||
@@ -484,11 +486,12 @@ class HomeViewModel @Inject constructor(
 
                 val onboardingCompleted = metrics.onboardingSmsGranted || metrics.onboardingSmsSkipped
 
-                val conditionA = onboardingCompleted && !hasSmsPermission && sinceInstall >= LOW_ENGAGEMENT_SMS_GRACE_HOURS * hourMs
+                val conditionA = onboardingCompleted && !hasSmsPermission &&
+                    sinceInstall >= LOW_ENGAGEMENT_SMS_GRACE_MINUTES * minuteMs
 
                 val firstValueDeadlineChecked = appPreferences.isFirstValueDeadlineChecked()
-                val conditionB = hasSmsPermission && !hasFirstValue &&
-                    sinceInstall >= LOW_ENGAGEMENT_FIRST_VALUE_GRACE_HOURS * hourMs
+                val conditionB = onboardingCompleted && !hasFirstValue &&
+                    sinceInstall >= LOW_ENGAGEMENT_FIRST_VALUE_GRACE_MINUTES * minuteMs
 
                 if (conditionB && !firstValueDeadlineChecked) {
                     appPreferences.markFirstValueDeadlineChecked()
