@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.3.1** | 8 | 2026-05-29 | Production | 🟡 Pending upload |
 | **1.3.0** | 7 | 2026-05-20 | Production | 🟡 Pending upload |
 | **1.2.1** | 6 | 2026-05-01 | Production | 🟡 Pending upload |
 | **1.2.0** | 5 | 2026-04-29 | Production | 🟡 Pending upload |
@@ -15,6 +16,39 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.3.1 (versionCode 8) — 2026-05-29
+
+**Focus:** Onboarding activation — reduce drop-offs from ambushed SMS permission prompt
+
+### 🐛 Bug Fixes
+- **Onboarding SMS Permission Ambush** — Removed the auto-launch of the system SMS permission dialog that fired the instant users landed on onboarding page 3 (added in v1.3.0). Users were being prompted before they could read the context, triggering reflexive denials. Play Console data showed uninstall ratio rising from ~35% pre-auto-prompt to ~49% after v1.3.0. Now uses the standard primer pattern: page 3 shows context and a "Grant SMS Permission" button that the user taps to initiate the dialog.
+- **Live SMS Auto-Categorization Gap** — `SmsReceiver` was skipping the keyword rules engine entirely, so expenses like NCBA card payments to OPENAI, UBER, KPLC, NAIVAS etc. landed uncategorized even though `KeywordRulesEngine` had explicit rules for them. PDF statement imports had always worked because `StatementImportService` calls `CategorizationService`. Wired `CategorizationService` into `SmsReceiver.applyAutoCategorization` as a third fallback step (after deterministic rules and recipient mapping), restoring parity. Live SMS now gets the same auto-categorization treatment as PDF imports.
+
+### ✨ UX Improvements
+- **Explicit Skip Path on SMS Page** — When SMS permission isn't granted, the page 3 "Next" button is relabeled "Skip — I'll add manually" (outlined style) so users see the alternative path instead of feeling stuck.
+- **Reassurance-First Permission Copy** — Page 3 body rewritten to lead with what matters: "Nothing leaves your phone — PesaTrack has no internet permission, so it cannot send your data anywhere." Explicitly mentions the manual-entry fallback.
+- **Encouraging Skip Copy on Import Page** — Page 4 fallback copy (when SMS is skipped) rewritten from scolding ("permission is needed… grant on previous page") to forward-looking ("No problem — you can add expenses manually as you spend. To import past SMS later, grant access from Home or Settings anytime.").
+- **Tighter Low-Engagement Feedback (Stage 1E)** — Reduced friction-prompt thresholds from 24h/72h to 30min/15min so the prompt actually reaches churning users in their first session. Converted from inline card to a Material 3 modal dialog so it's visible regardless of scroll position. Title rewritten to neutral framing: "Quick question — what's blocking you?"
+
+### 📦 Technical
+- `OnboardingScreen.kt`: removed `LaunchedEffect` auto-prompt, removed `smsAutoPrompted` saveable state, removed unused `rememberSaveable` import, removed `delay` import
+- `HomeViewModel.kt`: `LOW_ENGAGEMENT_SMS_GRACE_MINUTES=30`, `LOW_ENGAGEMENT_FIRST_VALUE_GRACE_MINUTES=15`; condition B no longer gated on `hasSmsPermission`
+- `HomeScreen.kt`: `LowEngagementFeedbackCard` (LazyColumn item) replaced by `LowEngagementFeedbackDialog` (AlertDialog) rendered outside Scaffold
+- `SmsReceiver.kt`: added `CategorizationService` injection; `applyAutoCategorization` now runs the user-rules + keyword engine as a third step after recipient mapping
+- New `scripts/analyze_playstats.ps1` helper for parsing Play Console CSV exports
+
+### 🏪 Play Store Release Notes
+```
+What's New:
+• Smoother onboarding — SMS permission is now requested when you're ready, not the moment the page loads
+• Clearer "Skip — I'll add manually" option for users who prefer to enter expenses by hand
+• More honest, reassuring copy: nothing leaves your phone, ever
+• More expenses auto-categorize on the spot (OpenAI, Uber, KPLC, supermarkets, etc.)
+• Better in-app feedback prompts to help us fix what's not working
+```
 
 ---
 

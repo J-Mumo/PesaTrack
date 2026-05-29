@@ -53,6 +53,9 @@ class SmsReceiver : BroadcastReceiver() {
     @Inject
     lateinit var expenseDao: ExpenseDao
 
+    @Inject
+    lateinit var categorizationService: CategorizationService
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -208,6 +211,8 @@ class SmsReceiver : BroadcastReceiver() {
      * Apply auto-categorization rules to an expense:
      * 1. Deterministic rules (Airtime → category 202)
      * 2. Recipient mapping (learned from user categorizations)
+     * 3. CategorizationService (user rules + built-in KeywordRulesEngine —
+     *    e.g. OPENAI → AI Subscriptions for card payments)
      */
     private suspend fun applyAutoCategorization(
         expense: com.pesatrack.domain.models.Expense
@@ -238,6 +243,27 @@ class SmsReceiver : BroadcastReceiver() {
             Log.d(TAG, "Auto-categorized ${expense.recipientName ?: expense.recipient} via mapping → category $mappedCategory")
             return expense.copy(
                 categoryId = mappedCategory,
+                isCategorized = true
+            )
+        }
+
+        // 3. CategorizationService (user rules + built-in keyword engine)
+        val recipientKey = (expense.recipientName?.trim()?.lowercase()
+            ?: expense.recipient.trim().lowercase())
+        val displayName = expense.recipientName ?: expense.recipient
+        val recipientInfo = RecipientInfo(
+            recipientKey = recipientKey,
+            displayName = displayName,
+            paymentType = expense.paymentType.name,
+            totalAmount = expense.amount,
+            transactionCount = 1
+        )
+        val result = categorizationService.suggestCategories(listOf(recipientInfo))
+        val suggestion = result.suggestions[recipientKey]
+        if (suggestion != null) {
+            Log.d(TAG, "Auto-categorized $displayName via rules engine → category ${suggestion.categoryId} (${suggestion.categoryName})")
+            return expense.copy(
+                categoryId = suggestion.categoryId,
                 isCategorized = true
             )
         }
