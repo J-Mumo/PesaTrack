@@ -12,7 +12,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,28 +67,18 @@ fun OnboardingScreen(
         }
     }
 
-    // Notification permission launcher (Android 13+)
-    val notifPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> /* No action needed — just request it */ }
-
-    // Auto-launch the system SMS permission dialog as soon as the user lands
-    // on the SMS page. Mirrors how the notification permission is requested
-    // (system dialog) so users can't miss it by tapping "Next" too quickly.
-    // We only auto-prompt once per session; if the user denies it they can
-    // still tap the in-page "Grant SMS Permission" button to retry.
-    var smsAutoPrompted by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(pagerState.currentPage, smsPermissionGranted) {
-        if (pagerState.currentPage == 2 && !smsPermissionGranted && !smsAutoPrompted) {
-            smsAutoPrompted = true
-            smsPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.READ_SMS,
-                    Manifest.permission.RECEIVE_SMS
-                )
-            )
-        }
-    }
+    // SMS permission uses the primer pattern: page 3 shows context and a
+    // prominent "Grant SMS Permission" button. The user initiates the system
+    // dialog by tapping that button, which produces a materially higher grant
+    // rate than auto-launching the dialog on page entry (especially in Kenya,
+    // where users have been conditioned to reflexively deny SMS asks). If the
+    // user prefers not to grant, the Next button is relabeled
+    // "Skip — I'll add manually" so the alternative path is explicit.
+    //
+    // Notification permission is intentionally NOT requested here either.
+    // MainActivity.requestNotificationPermission() runs after onComplete(), so
+    // the user sees at most one dialog during onboarding (SMS) and the
+    // notification ask follows once they reach Home — avoids dialog fatigue.
 
     Scaffold { paddingValues ->
         Column(
@@ -191,24 +180,43 @@ fun OnboardingScreen(
 
                 // Next / Get Started button
                 if (pagerState.currentPage < 3) {
-                    Button(
-                        onClick = {
-                            // Record SMS skipped if leaving page 2 without granting
-                            if (pagerState.currentPage == 2 && !smsPermissionGranted) {
+                    // On page 3 (SMS permission), if not granted, label the
+                    // Next button as an explicit skip so users see the
+                    // alternative path instead of feeling stuck.
+                    val isSmsPageWithoutPermission =
+                        pagerState.currentPage == 2 && !smsPermissionGranted
+                    val buttonLabel = if (isSmsPageWithoutPermission) {
+                        "Skip \u2014 I'll add manually"
+                    } else {
+                        "Next"
+                    }
+                    val buttonColors = if (isSmsPageWithoutPermission) {
+                        ButtonDefaults.outlinedButtonColors()
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    }
+                    if (isSmsPageWithoutPermission) {
+                        OutlinedButton(
+                            onClick = {
                                 onSmsPermissionSkipped()
-                            }
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                            }
-                            // Request notification permission when leaving page 2
-                            if (pagerState.currentPage == 2) {
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                                    notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                 }
                             }
+                        ) {
+                            Text(buttonLabel)
                         }
-                    ) {
-                        Text("Next")
+                    } else {
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                            },
+                            colors = buttonColors
+                        ) {
+                            Text(buttonLabel)
+                        }
                     }
                 } else {
                     Button(onClick = {
@@ -279,10 +287,12 @@ private fun SmsPermissionPage(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "PesaTrack needs SMS permission to read your M-PESA " +
-                    "and bank messages.\n\n" +
-                    "We only read SMS from MPESA and supported banks — " +
-                    "never your personal messages.",
+            text = "PesaTrack reads only M-PESA and bank SMS to track your " +
+                    "expenses. We ignore all other messages.\n\n" +
+                    "Nothing leaves your phone \u2014 PesaTrack has no internet " +
+                    "permission, so it cannot send your data anywhere.\n\n" +
+                    "Prefer not to grant SMS access? You can add expenses " +
+                    "manually \u2014 just tap Skip below.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -357,9 +367,9 @@ private fun ImportHistoryPage(
                         "This scans your message history for M-PESA transactions " +
                         "and adds them to PesaTrack."
             } else {
-                "SMS permission is needed to import past transactions.\n\n" +
-                        "You can grant permission on the previous page, " +
-                        "or import later from the Import screen."
+                "No problem \u2014 you can add expenses manually as you spend.\n\n" +
+                        "To import past M-PESA SMS later, grant SMS access from " +
+                        "the Home screen or Settings anytime."
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
