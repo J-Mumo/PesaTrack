@@ -36,7 +36,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Phase 2 M8: Custom Categories & Auto-Rules** | ✅ Complete | 100% |
 | **PIN Lock + Biometric Unlock** | ✅ Complete | 100% |
 | **Onboarding Flow** | ✅ Complete | 100% |
-| **Budget Forecasting (4 phases)** | ✅ Complete | 100% |
+| **Budget Forecasting (4 phases)** | ❌ Removed | n/a (see 2026 cleanup note) |
 | **Recurring Expense Detection** | ✅ Complete | 100% |
 | **Insights & Reports v1.0 (Weekly Review)** | ✅ Complete | 100% |
 | **Insights & Reports v1.1 (Monthly Review)** | ✅ Complete | 100% |
@@ -636,6 +636,12 @@ backend/
 ---
 
 ## Bug Fixes & Improvements History
+
+### Recent Features
+
+- **Investment illustration — principal-source bug + honest lump-sum copy** — In Monthly Review the "What your savings could become" card was showing a principal equal to the month's *total spending minus fees* (e.g. KES ~353k) instead of the actual invested amount (e.g. KES 55k). Root cause: `InsightsRepository.toMonthlyDomain()` re-hydrates persisted `ReportSnapshotEntity` rows but the entity doesn't store the investment illustration, so it was fabricating one with `principalAmount = periodTotal − feesTotal` and `source = HEADROOM`. Fix: made `toMonthlyDomain` `suspend`, re-query the live investment total via `ExpenseDao.getInvestmentTotalInRange(periodStart, periodEnd)` plus stored income (falling back to `headroomAmount + periodTotal`), then call `MonthlyReviewGenerator.buildInvestmentIllustration(...)` — the same path used at generation. Also rewrote the illustration copy across Monthly/Quarterly/Year-in-Review screens to honestly reflect the **lump-sum** future-value math (was implying monthly contribution / "powerful habit / X per month"): HEADROOM heading "What your savings could become" → "Your unspent income this {month/quarter/year}"; bodies reworded to "If invested at 10% p.a. for 5 years it could grow to KES X"; NUDGE_TARGET dropped the misleading "20% of income" claim for users without income set; disclaimer updated to "Assumes a single deposit … left to grow at 10% annual return compounded monthly." Files: [InsightsRepository.kt](android/app/src/main/java/com/pesatrack/data/repository/InsightsRepository.kt), [MonthlyReviewGenerator.kt](android/app/src/main/java/com/pesatrack/domain/insights/MonthlyReviewGenerator.kt), [MonthlyReviewScreen.kt](android/app/src/main/java/com/pesatrack/presentation/screens/monthly_review/MonthlyReviewScreen.kt), [QuarterlyReviewScreen.kt](android/app/src/main/java/com/pesatrack/presentation/screens/quarterly_review/QuarterlyReviewScreen.kt), [YearInReviewScreen.kt](android/app/src/main/java/com/pesatrack/presentation/screens/year_in_review/YearInReviewScreen.kt).
+
+- **Forecasting feature removed; budget remaining + chart polish** — Per product principle ("no projections without showing assumptions") and user feedback that the projections were faulty and that per-day suggestions were unhelpful for non-daily expenses, the entire budget forecasting subsystem was removed: deleted `ForecastService.kt`, `BudgetForecast.kt`, `ForecastProjectionChart` composable, `ForecastCard` on Home, forecast notifications throttle (`canSendForecastNotification` / `FORECAST_NOTIF_PREFIX` / `KEY_COUNT_FORECAST_VIEWS` / `incrementForecastViewsCount`), and all forecast call sites in `HomeViewModel`, `BudgetViewModel`, `AnalyticsViewModel`, `BudgetService`, `SmsReceiver`, `NotificationHelper`. Replaced per-day budget suggestion with a neutral "KES X remaining for N days" line on each `BudgetProgressCard` (new `BudgetRemaining` domain model computed from the active period range). Fixed the daily-spending column chart that previously rendered as a single bar by zero-filling missing days in `AnalyticsViewModel.loadMonthData` so every day in the selected month appears on the X axis. Added visible point markers (Vico `LineCartesianLayer.point` + pill `ShapeComponent`) to the monthly trend line and the 12-month year-over-year overlay so individual data points are readable. Rewrote `CategoryBreakdownChart` in Insights from horizontal bars to a tabular layout (Category / Amount / %) with a colored category dot, divider rows, and right-aligned numeric columns.
 
 ### Recent Features
 

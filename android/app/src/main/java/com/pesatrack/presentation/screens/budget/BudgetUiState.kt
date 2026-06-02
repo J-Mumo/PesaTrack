@@ -1,9 +1,9 @@
 package com.pesatrack.presentation.screens.budget
 
 import com.pesatrack.domain.models.Budget
-import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
+import com.pesatrack.domain.models.BudgetRemaining
 
 /**
  * UI State for the Budget screen (period-first flow).
@@ -66,10 +66,10 @@ data class BudgetUiState(
     val showDeleteConfirmation: Boolean = false,
     val budgetToDelete: Budget? = null,
 
-    // ==================== Forecasts ====================
+    // ==================== Remaining (per period) ====================
 
-    /** Map of budget ID → BudgetForecast for the selected period */
-    val forecastMap: Map<Long, BudgetForecast> = emptyMap(),
+    /** Map of budget ID → BudgetRemaining for the selected period */
+    val remainingMap: Map<Long, BudgetRemaining> = emptyMap(),
 
     val error: String? = null,
     val saveSuccess: Boolean = false

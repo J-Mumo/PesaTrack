@@ -525,7 +525,7 @@ class BudgetRepository @Inject constructor(
     /**
      * Compute BudgetProgress for budgets affected by a specific expense category.
      * Returns progress for: Total Spending budget (categoryId=null) + group budget + sub-category budget.
-     * Used by ForecastService for scoped forecast notifications (max ~3 budgets).
+     * Used for scoped budget notifications (max ~3 budgets).
      *
      * @param groupId The category group ID.
      * @param subcategoryId The sub-category ID.

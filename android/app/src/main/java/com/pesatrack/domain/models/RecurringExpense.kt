@@ -138,7 +138,7 @@ data class RecurringExpenseSummary(
 /**
  * Recurring expense info for a specific budget period.
  *
- * Used by [com.pesatrack.services.ForecastService] to separate recurring spending
+ * Used to separate recurring spending
  * from discretionary spending for more accurate burn rate projections.
  *
  * Example: In a monthly period where rent (KES 35,000) was paid on day 1 and

@@ -23,7 +23,7 @@ object MonthlyReviewGenerator {
     private const val INVESTMENT_ANNUAL_RATE = 0.10
     private const val INVESTMENT_COMPOUNDING_PERIODS = 12
     private const val INVESTMENT_HORIZON_MONTHS = 60 // 5 years
-    private const val INVESTMENT_DISCLAIMER = "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
+    private const val INVESTMENT_DISCLAIMER = "Illustration only. Assumes a single deposit of this amount left to grow at 10% annual return compounded monthly. Actual returns vary."
     private const val RECOMMENDED_INVESTMENT_PERCENT = 0.20
 
     /**

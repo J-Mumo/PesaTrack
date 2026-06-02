@@ -1,7 +1,6 @@
 package com.pesatrack.presentation.screens.home
 
 import com.pesatrack.data.local.database.dao.MonthlyTotal
-import com.pesatrack.domain.models.BudgetForecast
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
@@ -40,13 +39,6 @@ data class HomeUiState(
     val budgetPromptAmount: Double? = null,
     /** Category group ID to pre-select when navigating to budget screen from prompt */
     val budgetPromptGroupId: Long? = null,
-
-    // ==================== Forecast ====================
-
-    /** Budget forecasts for active budgets (sorted by projected overspend, max 4) */
-    val budgetForecasts: List<BudgetForecast> = emptyList(),
-    /** Whether to show the forecast card (≥1 budget + ≥5 days elapsed in period) */
-    val showForecastCard: Boolean = false,
 
     // ==================== In-App Review ====================
 

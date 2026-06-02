@@ -423,24 +423,26 @@ private fun YearInvestmentCard(snapshot: YearInReviewSnapshot) {
                 else -> "You've started investing"
             }
         }
-        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "What your savings could become"
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "Your unspent income this year"
         com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> "A small redirect goes far"
     }
 
+    val ratePct = (illust.annualRate * 100).toInt()
+    val years = illust.horizonMonths / 12
     val body = when (illust.source) {
         com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
             val base = "You invested ${illust.principalAmount.formatAsCurrency()} this year"
             val pctStr = illust.currentPercent?.let { " (${String.format("%.0f", it)}% of income)" } ?: ""
-            val growth = ". At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}"
+            val growth = ". If left to grow at $ratePct% p.a. for $years years it could become ${illust.futureValue.formatAsCurrency()}"
             val next = if (illust.nextTargetPercent != null) {
                 ". Next milestone: ${String.format("%.0f", illust.nextTargetPercent)}%."
             } else ". Your money is growing faster than most."
             "$base$pctStr$growth$next"
         }
         com.pesatrack.domain.insights.InvestmentSource.HEADROOM ->
-            "You saved ${illust.principalAmount.formatAsCurrency()} this year. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+            "You had ${illust.principalAmount.formatAsCurrency()} left over this year. If invested at $ratePct% p.a. for $years years it could grow to ${illust.futureValue.formatAsCurrency()}."
         com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET ->
-            "20% of income invested consistently adds up. That's ${illust.principalAmount.formatAsCurrency()}/year. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+            "Redirecting just ${illust.principalAmount.formatAsCurrency()} this year and leaving it to grow at $ratePct% p.a. for $years years could become ${illust.futureValue.formatAsCurrency()}."
     }
 
     Card(

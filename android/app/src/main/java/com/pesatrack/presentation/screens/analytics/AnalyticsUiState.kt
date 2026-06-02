@@ -1,7 +1,6 @@
 package com.pesatrack.presentation.screens.analytics
 
 import com.pesatrack.data.local.database.dao.CategoryTotal
-import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
@@ -94,7 +93,6 @@ data class AnalyticsUiState(
     // Chart data
     val monthlyTrend: List<MonthlyTotal> = emptyList(),
     val categoryBreakdown: List<CategoryTotal> = emptyList(),
-    val dailySpending: List<DailyTotal> = emptyList(),
     val topSpenders: List<TopSpender> = emptyList(),
     val paymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
 
@@ -181,18 +179,6 @@ data class AnalyticsUiState(
 
     /** Whether the user has any active budgets (used to show/hide budget banner) */
     val hasActiveBudgets: Boolean = false,
-
-    // ==================== Forecast Projection ====================
-
-    /**
-     * Projected cumulative daily spending from today to month-end.
-     * Each entry: day number (1-based) → projected cumulative total.
-     * Only populated when viewing the current month and total budget exists.
-     */
-    val projectionLine: List<DailyTotal> = emptyList(),
-
-    /** Budget ceiling value for the total budget (null if no total budget exists) */
-    val budgetCeiling: Double? = null,
 
     // ==================== Budget Burn-Down (v1.3) ====================
 

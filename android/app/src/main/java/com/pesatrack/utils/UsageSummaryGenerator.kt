@@ -36,7 +36,6 @@ class UsageSummaryGenerator @Inject constructor(
         if (metrics.countSmsParsed > 0) features += "SMS"
         if (metrics.countBudgetsCreated > 0) features += "Budgets"
         if (metrics.countAnalyticsViews > 0) features += "Analytics"
-        if (metrics.countForecastViews > 0) features += "Forecasting"
         if (metrics.countExcelImports > 0) features += "Excel"
 
         val featuresLabel = if (features.isEmpty()) "None yet" else features.joinToString(", ")
@@ -81,7 +80,6 @@ class UsageSummaryGenerator @Inject constructor(
             put("countCategorizations", metrics.countCategorizations)
             put("countBudgetsCreated", metrics.countBudgetsCreated)
             put("countAnalyticsViews", metrics.countAnalyticsViews)
-            put("countForecastViews", metrics.countForecastViews)
             put("countExcelImports", metrics.countExcelImports)
             put("countExports", metrics.countExports)
             put("countBackups", metrics.countBackups)

@@ -94,15 +94,6 @@ class AppPreferences @Inject constructor(
          */
         private val KEY_SMS_BANNER_DISMISSED = booleanPreferencesKey("sms_banner_dismissed")
 
-        // ── Forecast Notifications ──
-
-        /**
-         * Key prefix for forecast notification throttle.
-         * Stores the last timestamp (epoch millis) a forecast notification was sent for each budget.
-         * Dynamic key: "forecast_notif_{budgetId}"
-         */
-        private const val FORECAST_NOTIF_PREFIX = "forecast_notif_"
-
         // ── Recurring Expense Reminders ──
 
         /**
@@ -175,7 +166,6 @@ class AppPreferences @Inject constructor(
         val KEY_COUNT_CATEGORIZATIONS = intPreferencesKey("count_categorizations")
         val KEY_COUNT_BUDGETS_CREATED = intPreferencesKey("count_budgets_created")
         val KEY_COUNT_ANALYTICS_VIEWS = intPreferencesKey("count_analytics_views")
-        val KEY_COUNT_FORECAST_VIEWS = intPreferencesKey("count_forecast_views")
         val KEY_COUNT_EXCEL_IMPORTS = intPreferencesKey("count_excel_imports")
         val KEY_COUNT_EXPORTS = intPreferencesKey("count_exports")
         val KEY_COUNT_BACKUPS = intPreferencesKey("count_backups")
@@ -419,41 +409,6 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[KEY_SMS_BANNER_DISMISSED] = true
         }
-    }
-
-    // ==================== Forecast Notification Throttle ====================
-
-    /**
-     * Get the period key for which a forecast notification was already sent for a budget.
-     * Returns empty string if never sent.
-     *
-     * One-shot per period: a forecast notification fires once when a budget's projection
-     * first crosses 75%. The period key ensures it doesn't fire again in the same period.
-     * A new period (e.g. next month) automatically resets the trigger.
-     */
-    suspend fun getForecastNotifPeriodKey(budgetId: Long): String {
-        val key = stringPreferencesKey("${FORECAST_NOTIF_PREFIX}${budgetId}_period")
-        return context.dataStore.data.first()[key] ?: ""
-    }
-
-    /**
-     * Record that a forecast notification was sent for a budget in the given period.
-     * Prevents re-firing for the same budget in the same period.
-     */
-    suspend fun setForecastNotifPeriodKey(budgetId: Long, periodKey: String) {
-        val key = stringPreferencesKey("${FORECAST_NOTIF_PREFIX}${budgetId}_period")
-        context.dataStore.edit { prefs ->
-            prefs[key] = periodKey
-        }
-    }
-
-    /**
-     * Check if a forecast notification can be sent for a budget in the given period.
-     * Returns true only if no notification has been sent for this budget in this period.
-     */
-    suspend fun canSendForecastNotification(budgetId: Long, currentPeriodKey: String): Boolean {
-        val lastPeriodKey = getForecastNotifPeriodKey(budgetId)
-        return lastPeriodKey != currentPeriodKey
     }
 
     // ==================== Recurring Expense Reminders ====================
@@ -701,7 +656,6 @@ class AppPreferences @Inject constructor(
         val countCategorizations: Int,
         val countBudgetsCreated: Int,
         val countAnalyticsViews: Int,
-        val countForecastViews: Int,
         val countExcelImports: Int,
         val countExports: Int,
         val countBackups: Int
@@ -731,7 +685,6 @@ class AppPreferences @Inject constructor(
             countCategorizations = prefs[KEY_COUNT_CATEGORIZATIONS] ?: 0,
             countBudgetsCreated = prefs[KEY_COUNT_BUDGETS_CREATED] ?: 0,
             countAnalyticsViews = prefs[KEY_COUNT_ANALYTICS_VIEWS] ?: 0,
-            countForecastViews = prefs[KEY_COUNT_FORECAST_VIEWS] ?: 0,
             countExcelImports = prefs[KEY_COUNT_EXCEL_IMPORTS] ?: 0,
             countExports = prefs[KEY_COUNT_EXPORTS] ?: 0,
             countBackups = prefs[KEY_COUNT_BACKUPS] ?: 0
@@ -760,7 +713,6 @@ class AppPreferences @Inject constructor(
     suspend fun incrementCategorizationsCount() = incrementCounter(KEY_COUNT_CATEGORIZATIONS)
     suspend fun incrementBudgetsCreatedCount() = incrementCounter(KEY_COUNT_BUDGETS_CREATED)
     suspend fun incrementAnalyticsViewsCount() = incrementCounter(KEY_COUNT_ANALYTICS_VIEWS)
-    suspend fun incrementForecastViewsCount() = incrementCounter(KEY_COUNT_FORECAST_VIEWS)
     suspend fun incrementExcelImportsCount() = incrementCounter(KEY_COUNT_EXCEL_IMPORTS)
     suspend fun incrementExportsCount() = incrementCounter(KEY_COUNT_EXPORTS)
     suspend fun incrementBackupsCount() = incrementCounter(KEY_COUNT_BACKUPS)

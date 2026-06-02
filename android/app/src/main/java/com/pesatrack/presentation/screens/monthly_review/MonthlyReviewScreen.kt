@@ -384,15 +384,17 @@ private fun InvestmentIllustrationCard(snapshot: MonthlyReviewSnapshot) {
                 else -> "You've started investing"
             }
         }
-        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "What your savings could become"
+        com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> "Your unspent income this month"
         com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> "A small redirect goes far"
     }
 
+    val ratePct = (illust.annualRate * 100).toInt()
+    val years = illust.horizonMonths / 12
     val body = when (illust.source) {
         com.pesatrack.domain.insights.InvestmentSource.ACTUAL_INVESTMENT -> {
-            val base = "You invested ${illust.principalAmount.formatAsCurrency()}"
+            val base = "You invested ${illust.principalAmount.formatAsCurrency()} this month"
             val pctStr = illust.currentPercent?.let { " (${String.format("%.0f", it)}% of income)" } ?: ""
-            val growth = ". At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}"
+            val growth = ". If left to grow at $ratePct% p.a. for $years years it could become ${illust.futureValue.formatAsCurrency()}"
             val nextTarget = if (illust.nextTargetPercent != null && illust.gapAmount != null) {
                 ". Next milestone: ${String.format("%.0f", illust.nextTargetPercent)}% — just ${illust.gapAmount.formatAsCurrency()} more."
             } else {
@@ -401,10 +403,10 @@ private fun InvestmentIllustrationCard(snapshot: MonthlyReviewSnapshot) {
             "$base$pctStr$growth$nextTarget"
         }
         com.pesatrack.domain.insights.InvestmentSource.HEADROOM -> {
-            "You saved ${illust.principalAmount.formatAsCurrency()} but haven't invested yet. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+            "You had ${illust.principalAmount.formatAsCurrency()} left over this month. If invested at $ratePct% p.a. for $years years it could grow to ${illust.futureValue.formatAsCurrency()}."
         }
         com.pesatrack.domain.insights.InvestmentSource.NUDGE_TARGET -> {
-            "Investing 20% of income is a powerful habit. That's ${illust.principalAmount.formatAsCurrency()}/month. At ${(illust.annualRate * 100).toInt()}% p.a. for ${illust.horizonMonths / 12} years → ${illust.futureValue.formatAsCurrency()}."
+            "Redirecting just ${illust.principalAmount.formatAsCurrency()} this month and leaving it to grow at $ratePct% p.a. for $years years could become ${illust.futureValue.formatAsCurrency()}."
         }
     }
 

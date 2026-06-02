@@ -168,7 +168,8 @@ class InsightsRepository @Inject constructor(
 
     /** List previous monthly snapshots (newest first). */
     suspend fun getPreviousMonthlySnapshots(limit: Int = 6): List<MonthlyReviewSnapshot> =
-        reportSnapshotDao.getRecentForCadence(CADENCE_MONTHLY, limit).mapNotNull { it.toMonthlyDomain() }
+        reportSnapshotDao.getRecentForCadence(CADENCE_MONTHLY, limit)
+            .mapNotNull { entity -> entity.toMonthlyDomain() }
 
     /** Fetch a stored monthly snapshot by id. */
     suspend fun getMonthlySnapshot(id: Long): MonthlyReviewSnapshot? =
@@ -322,7 +323,7 @@ class InsightsRepository @Inject constructor(
         )
     }
 
-    private fun ReportSnapshotEntity.toMonthlyDomain(): MonthlyReviewSnapshot? {
+    private suspend fun ReportSnapshotEntity.toMonthlyDomain(): MonthlyReviewSnapshot? {
         val start = Instant.ofEpochMilli(periodStart).atZone(ZoneId.systemDefault()).toLocalDate()
         val end = Instant.ofEpochMilli(periodEnd).atZone(ZoneId.systemDefault()).toLocalDate().minusDays(1)
         val categories = topCategories
@@ -352,8 +353,18 @@ class InsightsRepository @Inject constructor(
                 changePercent = 0.0
             )
         }
-        val discretionary = (periodTotal - feesTotal).coerceAtLeast(0.0)
-        val fv = discretionary * Math.pow(1.0 + 0.10 / 12.0, 12.0)
+        // Re-query live data so the illustration reflects actual investments,
+        // not a derived "discretionary" figure from total spending.
+        val investmentTotal = expenseDao.getInvestmentTotalInRange(periodStart, periodEnd)
+        val storedIncome = incomeDao.getByYearMonth(monthYearKeyFor(periodStart))?.amount
+        val derivedIncome = headroomAmount?.let { it + periodTotal }
+        val monthlyIncome = storedIncome ?: derivedIncome
+        val illustration = MonthlyReviewGenerator.buildInvestmentIllustration(
+            actualInvestmentAmount = investmentTotal,
+            monthlyIncome = monthlyIncome,
+            totalSpent = periodTotal,
+            feesPaid = feesTotal
+        )
         return MonthlyReviewSnapshot(
             id = id.toString(),
             monthStart = start,
@@ -369,17 +380,9 @@ class InsightsRepository @Inject constructor(
             biggestChangeCategory = biggestChange,
             feesPaid = feesTotal,
             headroom = headroomAmount,
-            monthlyIncome = if (headroomAmount != null) headroomAmount + periodTotal else null,
+            monthlyIncome = monthlyIncome,
             pace = averagePerDay * periodDays,
-            investmentIllustration = com.pesatrack.domain.insights.InvestmentIllustration(
-                source = com.pesatrack.domain.insights.InvestmentSource.HEADROOM,
-                principalAmount = discretionary,
-                annualRate = 0.10,
-                compoundingPeriodsPerYear = 12,
-                horizonMonths = 60,
-                futureValue = fv,
-                disclaimer = "Illustration only. Assumes 10% annual return compounded monthly. Actual returns vary."
-            ),
+            investmentIllustration = illustration,
             generatedAt = generatedAt
         )
     }

@@ -10,7 +10,6 @@ import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
-import com.pesatrack.services.ForecastService
 import com.pesatrack.utils.UsageSummaryGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -26,7 +25,6 @@ class HomeViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val budgetRepository: BudgetRepository,
     private val appPreferences: AppPreferences,
-    private val forecastService: ForecastService,
     private val usageSummaryGenerator: UsageSummaryGenerator
 ) : ViewModel() {
 
@@ -215,15 +213,11 @@ class HomeViewModel @Inject constructor(
                                 showBudgetPrompt = false
                             )
                         }
-                        // Load forecasts when budgets exist
-                        loadForecastData()
                     } else {
                         // No budgets — clear and check prompt
                         _uiState.update {
                             it.copy(
-                                budgetProgressList = emptyList(),
-                                budgetForecasts = emptyList(),
-                                showForecastCard = false
+                                budgetProgressList = emptyList()
                             )
                         }
                         checkBudgetPrompt()
@@ -231,33 +225,6 @@ class HomeViewModel @Inject constructor(
                 } catch (_: Exception) {
                     // Non-critical — silently fail
                 }
-            }
-        }
-    }
-
-    /**
-     * Load budget burn rate forecasts for all active budgets.
-     * Only shows forecasts with ≥5 days elapsed (reliable data).
-     * Sorted by projected overspend (worst first), max 4 items.
-     */
-    private suspend fun loadForecastData() {
-        try {
-            val forecasts = forecastService.getForecastsForActiveBudgets()
-                .sortedByDescending { it.projectedPercentage }
-                .take(4)
-            _uiState.update {
-                it.copy(
-                    budgetForecasts = forecasts,
-                    showForecastCard = forecasts.isNotEmpty()
-                )
-            }
-            // Track forecast view counter (fire-and-forget)
-            if (forecasts.isNotEmpty()) {
-                appPreferences.incrementForecastViewsCount()
-            }
-        } catch (_: Exception) {
-            _uiState.update {
-                it.copy(budgetForecasts = emptyList(), showForecastCard = false)
             }
         }
     }

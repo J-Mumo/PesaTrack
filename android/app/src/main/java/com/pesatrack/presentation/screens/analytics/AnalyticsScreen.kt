@@ -18,26 +18,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottom
 import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStart
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.layer.point
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
+import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
 import com.patrykandpatrick.vico.compose.common.fill
 import com.patrykandpatrick.vico.core.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.core.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
-import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
-import com.patrykandpatrick.vico.core.cartesian.layer.ColumnCartesianLayer
+import com.patrykandpatrick.vico.core.cartesian.layer.LineCartesianLayer
+import com.patrykandpatrick.vico.core.common.shape.CorneredShape
 import com.pesatrack.data.local.database.dao.CategoryTotal
-import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
@@ -712,30 +713,6 @@ fun MonthlyTabContent(
             }
         }
 
-        // Daily Spending Column Chart
-        if (uiState.dailySpending.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Daily Spending")
-            }
-            item {
-                DailySpendingChart(data = uiState.dailySpending)
-            }
-        }
-
-        // Forecast Projection Chart (current month only, when projection data exists)
-        if (uiState.projectionLine.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Spending Projection")
-            }
-            item {
-                ForecastProjectionChart(
-                    dailySpending = uiState.dailySpending,
-                    projectionLine = uiState.projectionLine,
-                    budgetCeiling = uiState.budgetCeiling
-                )
-            }
-        }
-
         // Category Breakdown
         if (uiState.categoryBreakdown.isNotEmpty()) {
             item {
@@ -1209,9 +1186,37 @@ fun YearlyOverlayChart(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val currentColor = MaterialTheme.colorScheme.primary
+            val previousColor = MaterialTheme.colorScheme.outline
+            val currentPoint = rememberShapeComponent(
+                fill = fill(currentColor),
+                shape = CorneredShape.Pill,
+            )
+            val previousPoint = rememberShapeComponent(
+                fill = fill(previousColor),
+                shape = CorneredShape.Pill,
+            )
+            val currentLine = LineCartesianLayer.rememberLine(
+                fill = LineCartesianLayer.LineFill.single(fill(currentColor)),
+                pointProvider = LineCartesianLayer.PointProvider.single(
+                    LineCartesianLayer.point(component = currentPoint, size = 7.dp)
+                ),
+            )
+            val previousLine = LineCartesianLayer.rememberLine(
+                fill = LineCartesianLayer.LineFill.single(fill(previousColor)),
+                pointProvider = LineCartesianLayer.PointProvider.single(
+                    LineCartesianLayer.point(component = previousPoint, size = 7.dp)
+                ),
+            )
+            val lineProvider = if (hasPreviousData) {
+                LineCartesianLayer.LineProvider.series(currentLine, previousLine)
+            } else {
+                LineCartesianLayer.LineProvider.series(currentLine)
+            }
+
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
+                    rememberLineCartesianLayer(lineProvider = lineProvider),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(
                         valueFormatter = CartesianValueFormatter { _, value, _ ->
@@ -1583,9 +1588,22 @@ fun MonthlyTrendChart(data: List<MonthlyTotal>) {
             .height(200.dp)
     ) {
         Box(modifier = Modifier.padding(12.dp)) {
+            val lineColor = MaterialTheme.colorScheme.primary
+            val pointShape = rememberShapeComponent(
+                fill = fill(lineColor),
+                shape = CorneredShape.Pill,
+            )
+            val line = LineCartesianLayer.rememberLine(
+                fill = LineCartesianLayer.LineFill.single(fill(lineColor)),
+                pointProvider = LineCartesianLayer.PointProvider.single(
+                    LineCartesianLayer.point(component = pointShape, size = 7.dp)
+                ),
+            )
             CartesianChartHost(
                 chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
+                    rememberLineCartesianLayer(
+                        lineProvider = LineCartesianLayer.LineProvider.series(line)
+                    ),
                     startAxis = VerticalAxis.rememberStart(),
                     bottomAxis = HorizontalAxis.rememberBottom(
                         valueFormatter = CartesianValueFormatter { _, value, _ ->
@@ -1600,206 +1618,6 @@ fun MonthlyTrendChart(data: List<MonthlyTotal>) {
     }
 }
 
-// ==================== Daily Spending Column Chart ====================
-
-@Composable
-fun DailySpendingChart(data: List<DailyTotal>) {
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    LaunchedEffect(data) {
-        modelProducer.runTransaction {
-            columnSeries {
-                series(data.map { it.total })
-            }
-        }
-    }
-
-    val dayLabels = remember(data) {
-        data.mapIndexed { index, dt -> index to dt.dayOfMonth.toString() }.toMap()
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-    ) {
-        Box(modifier = Modifier.padding(12.dp)) {
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberColumnCartesianLayer(
-                        columnProvider = ColumnCartesianLayer.ColumnProvider.series(
-                            rememberLineComponent(
-                                fill = fill(MaterialTheme.colorScheme.primary),
-                                thickness = 6.dp,
-                            )
-                        )
-                    ),
-                    startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(
-                        valueFormatter = CartesianValueFormatter { _, value, _ ->
-                            dayLabels[value.toInt()] ?: ""
-                        }
-                    ),
-                ),
-                modelProducer = modelProducer,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-    }
-}
-
-// ==================== Forecast Projection Chart ====================
-
-/**
- * Cumulative spending projection chart.
- * Shows: solid line (actual cumulative) + dashed projection (burn rate to month-end)
- * + optional horizontal budget ceiling line.
- */
-@Composable
-fun ForecastProjectionChart(
-    dailySpending: List<DailyTotal>,
-    projectionLine: List<DailyTotal>,
-    budgetCeiling: Double?
-) {
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    // Build cumulative actual data and merge with projection
-    LaunchedEffect(dailySpending, projectionLine, budgetCeiling) {
-        // Build cumulative actual
-        val cumulativeActual = mutableListOf<Double>()
-        var runningTotal = 0.0
-        for (dt in dailySpending) {
-            runningTotal += dt.total
-            cumulativeActual.add(runningTotal)
-        }
-
-        // Total days = last actual day + projection days
-        val actualDays = dailySpending.size
-        val projDays = projectionLine.size
-        val totalDays = actualDays + projDays
-
-        if (totalDays == 0) return@LaunchedEffect
-
-        // Series 1: Actual cumulative (solid line)
-        val actualSeries = mutableListOf<Number>()
-        for (i in 0 until totalDays) {
-            if (i < actualDays) {
-                actualSeries.add(cumulativeActual[i])
-            } else {
-                actualSeries.add(cumulativeActual.lastOrNull() ?: 0.0)
-            }
-        }
-
-        // Series 2: Projection line (dashed)
-        val projSeries = mutableListOf<Number>()
-        val lastActual = cumulativeActual.lastOrNull() ?: 0.0
-        for (i in 0 until totalDays) {
-            if (i < actualDays) {
-                if (i == actualDays - 1) {
-                    projSeries.add(lastActual)
-                } else {
-                    projSeries.add(0)
-                }
-            } else {
-                val projIndex = i - actualDays
-                if (projIndex < projectionLine.size) {
-                    projSeries.add(projectionLine[projIndex].total)
-                } else {
-                    projSeries.add(0)
-                }
-            }
-        }
-
-        // Series 3: Budget ceiling (horizontal line)
-        val ceilingSeries = mutableListOf<Number>()
-        if (budgetCeiling != null && budgetCeiling > 0) {
-            for (i in 0 until totalDays) {
-                ceilingSeries.add(budgetCeiling)
-            }
-        }
-
-        modelProducer.runTransaction {
-            if (ceilingSeries.isNotEmpty()) {
-                lineSeries {
-                    series(actualSeries)
-                    series(projSeries)
-                    series(ceilingSeries)
-                }
-            } else {
-                lineSeries {
-                    series(actualSeries)
-                    series(projSeries)
-                }
-            }
-        }
-    }
-
-    // Build day labels
-    val dayLabels = remember(dailySpending, projectionLine) {
-        val labels = mutableMapOf<Int, String>()
-        dailySpending.forEachIndexed { index, dt ->
-            labels[index] = dt.dayOfMonth.toString()
-        }
-        projectionLine.forEachIndexed { index, dt ->
-            labels[dailySpending.size + index] = dt.dayOfMonth.toString()
-        }
-        labels
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // Legend row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                LegendDot(color = MaterialTheme.colorScheme.primary, label = "Actual")
-                LegendDot(color = Color.Gray, label = "Projected")
-                if (budgetCeiling != null) {
-                    LegendDot(color = MaterialTheme.colorScheme.error, label = "Budget")
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberLineCartesianLayer(),
-                    startAxis = VerticalAxis.rememberStart(),
-                    bottomAxis = HorizontalAxis.rememberBottom(
-                        valueFormatter = CartesianValueFormatter { _, value, _ ->
-                            dayLabels[value.toInt()] ?: ""
-                        }
-                    ),
-                ),
-                modelProducer = modelProducer,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-    }
-}
-
-@Composable
-private fun LegendDot(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-    }
-}
-
 // ==================== Category Breakdown ====================
 
 @Composable
@@ -1808,53 +1626,81 @@ fun CategoryBreakdownChart(
     totalForMonth: Double
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            data.forEach { category ->
-                val proportion = if (totalForMonth > 0) {
-                    (category.total / totalForMonth).toFloat()
-                } else 0f
-                val barColor = category.categoryColor?.let {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            // Header row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Category",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "Amount",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(96.dp)
+                )
+                Text(
+                    text = "%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(48.dp)
+                )
+            }
+            HorizontalDivider()
+
+            data.forEachIndexed { index, category ->
+                val pct = if (totalForMonth > 0) (category.total / totalForMonth) * 100.0 else 0.0
+                val dotColor = category.categoryColor?.let {
                     try { getCategoryColor(it) } catch (_: Exception) { MaterialTheme.colorScheme.primary }
                 } ?: MaterialTheme.colorScheme.primary
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Category name
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = category.categoryName,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.width(100.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // Bar
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(fraction = proportion.coerceIn(0.01f, 1f))
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(barColor)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Amount
                     Text(
                         text = category.total.formatAsCurrency(),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.width(90.dp)
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(96.dp)
                     )
+                    Text(
+                        text = String.format("%.0f%%", pct),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(48.dp)
+                    )
+                }
+                if (index < data.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
         }

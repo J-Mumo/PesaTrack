@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.pesatrack.domain.models.BudgetForecast
+import com.pesatrack.domain.models.BudgetRemaining
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
@@ -125,7 +125,7 @@ fun BudgetScreen(
                     items(uiState.budgetProgressList) { progress ->
                         BudgetProgressCard(
                             progress = progress,
-                            forecast = uiState.forecastMap[progress.budget.id],
+                            remaining = uiState.remainingMap[progress.budget.id],
                             onEdit = { viewModel.showEditDialog(progress.budget) },
                             onDelete = { viewModel.showDeleteConfirmation(progress.budget) }
                         )
@@ -541,7 +541,7 @@ fun EmptyBudgetContent(
 @Composable
 fun BudgetProgressCard(
     progress: BudgetProgress,
-    forecast: BudgetForecast? = null,
+    remaining: BudgetRemaining? = null,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -657,57 +657,17 @@ fun BudgetProgressCard(
                 }
             }
 
-            // Forecast subtitle
-            if (forecast != null) {
+            // Remaining-for-N-days subtitle (replaces the old projection text)
+            if (remaining != null && remaining.daysRemaining > 0) {
                 Spacer(modifier = Modifier.height(6.dp))
-                ForecastSubtitle(forecast = forecast)
+                val dayWord = if (remaining.daysRemaining == 1) "day" else "days"
+                Text(
+                    text = "${remaining.remaining.formatAsCurrency()} remaining for ${remaining.daysRemaining} $dayWord",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
             }
         }
-    }
-}
-
-/**
- * Forecast subtitle shown below the budget progress bar.
- * Shows projected end-of-period status and safe daily spend.
- */
-@Composable
-private fun ForecastSubtitle(forecast: BudgetForecast) {
-    val subtitleColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-
-    val forecastText = when {
-        forecast.daysElapsed < BudgetForecast.MIN_DAYS_FOR_FORECAST -> {
-            "📊 Not enough data for forecast"
-        }
-        forecast.exhaustionDate != null -> {
-            val dateStr = SimpleDateFormat("MMM d", Locale.getDefault())
-                .format(Date(forecast.exhaustionDate))
-            "⚠️ Projected ${String.format("%.0f", forecast.projectedPercentage)}% — runs out ~$dateStr"
-        }
-        forecast.isProjectedOverBudget -> {
-            "⚠️ Projected ${String.format("%.0f", forecast.projectedPercentage)}% by period end"
-        }
-        else -> {
-            "✅ On track — projected ${String.format("%.0f", forecast.projectedPercentage)}% by period end"
-        }
-    }
-
-    Text(
-        text = forecastText,
-        style = MaterialTheme.typography.bodySmall,
-        color = when {
-            forecast.isProjectedOverBudget -> MaterialTheme.colorScheme.error
-            forecast.projectedPercentage >= 80 -> Color(0xFFFF9800)
-            else -> subtitleColor
-        }
-    )
-
-    if (forecast.daysRemaining > 0 && forecast.daysElapsed >= BudgetForecast.MIN_DAYS_FOR_FORECAST) {
-        val safeDailyFormatted = String.format("KES %,.0f", forecast.safeDailyBudget)
-        Text(
-            text = "Safe: $safeDailyFormatted/day for ${forecast.daysRemaining} remaining days",
-            style = MaterialTheme.typography.bodySmall,
-            color = subtitleColor
-        )
     }
 }
 

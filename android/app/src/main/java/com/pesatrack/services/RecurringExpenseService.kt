@@ -28,7 +28,7 @@ import kotlin.math.sqrt
  *
  * Used by:
  * - [AnalyticsViewModel] for recurring vs one-time spending split
- * - [ForecastService] for recurring-aware budget projections
+ * - Budget projections (recurring-aware)
  * - [RecurringReminderWorker] for upcoming/overdue notifications
  */
 @Singleton
@@ -96,7 +96,7 @@ class RecurringExpenseService @Inject constructor(
      *
      * Determines which detected recurring expenses fall within the period,
      * which have already been paid, and which are still upcoming.
-     * Used by [ForecastService] for recurring-aware projections.
+     * Used for recurring-aware projections.
      *
      * @param periodStart Start timestamp of the budget period (inclusive)
      * @param periodEnd End timestamp of the budget period (exclusive)

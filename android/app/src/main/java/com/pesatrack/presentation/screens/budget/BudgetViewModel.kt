@@ -7,7 +7,7 @@ import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetPeriod
-import com.pesatrack.services.ForecastService
+import com.pesatrack.domain.models.BudgetRemaining
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +21,6 @@ import javax.inject.Inject
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
-    private val forecastService: ForecastService,
     private val appPreferences: AppPreferences
 ) : ViewModel() {
 
@@ -101,15 +100,24 @@ class BudgetViewModel @Inject constructor(
                 )
                 val totalBudgeted = budgetRepository.getTotalBudgetedForPeriod(periodType)
 
-                // Load forecasts for the selected period
-                val forecasts = forecastService.getForecastsForPeriod(periodType, periodCalendar)
-                val forecastMap = forecasts.associateBy { it.budget.id }
+                // Compute simple remaining + days-remaining for each budget (no projection).
+                val (_, periodEndMs) = budgetRepository.getPeriodRange(periodType, periodCalendar)
+                val nowMs = System.currentTimeMillis()
+                val daysRemaining = (((periodEndMs - nowMs) / 86_400_000L).toInt()).coerceAtLeast(0)
+                val remainingMap = progressList.associate { progress ->
+                    val remaining = (progress.budget.amount - progress.spent).coerceAtLeast(0.0)
+                    progress.budget.id to BudgetRemaining(
+                        budgetId = progress.budget.id,
+                        remaining = remaining,
+                        daysRemaining = daysRemaining
+                    )
+                }
 
                 _uiState.update {
                     it.copy(
                         budgetProgressList = progressList.sortedByDescending { bp -> bp.percentage },
                         totalBudgeted = totalBudgeted,
-                        forecastMap = forecastMap,
+                        remainingMap = remainingMap,
                         isLoading = false,
                         error = null
                     )
