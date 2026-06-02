@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.3.2** | 9 | 2026-06-02 | Production | 🟡 Pending upload |
 | **1.3.1** | 8 | 2026-05-29 | Production | 🟡 Pending upload |
 | **1.3.0** | 7 | 2026-05-20 | Production | 🟡 Pending upload |
 | **1.2.1** | 6 | 2026-05-01 | Production | 🟡 Pending upload |
@@ -16,6 +17,40 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.3.2 (versionCode 9) — 2026-06-02
+
+**Focus:** Honest analytics — remove projections that were lying, fix monthly review investment illustration, polish charts.
+
+### 🐛 Bug Fixes
+- **Monthly Review Investment Illustration showed wrong principal** — The "What your savings could become" card was rendering principal = total monthly spending minus fees (e.g. ~KES 353,000) instead of the user's actual investment for the month (e.g. KES 55,000). Root cause: when a persisted monthly snapshot was re-hydrated from `ReportSnapshotEntity`, `InsightsRepository.toMonthlyDomain()` was fabricating the illustration locally with `principalAmount = periodTotal − feesTotal` and `source = HEADROOM` because the entity doesn't store the illustration. Fix: re-query the live investment total and stored income, then call `MonthlyReviewGenerator.buildInvestmentIllustration(...)` — the same path used at generation time.
+
+### ✨ UX Improvements
+- **Investment illustration copy now honest about lump-sum math** — Headings and body text across Monthly, Quarterly, and Year-in-Review reviews previously implied a recurring "habit" / "X per month" contribution but the math was a single deposit grown for 5 years. Rewrote: HEADROOM heading "What your savings could become" → "Your unspent income this {month/quarter/year}"; body now reads "If invested at 10% p.a. for 5 years it could grow to KES X"; NUDGE_TARGET copy stopped claiming "20% of income" when income isn't set; disclaimer updated to "Assumes a single deposit … left to grow at 10% annual return compounded monthly."
+- **Forecasting feature removed** — Per the product principle "no projections without showing assumptions," the entire budget-forecasting subsystem (`ForecastService`, `BudgetForecast` model, `ForecastProjectionChart`, forecast cards on Home, forecast notifications) was removed. The projections it produced were faulty for typical irregular income/spend patterns. Replaced with a neutral "KES X remaining for N days" line on each `BudgetProgressCard`.
+- **Daily spending bar chart removed** — Was redundant with the monthly trend line and frequently rendered as a single-bar ambiguity at the start of a month.
+- **Trend chart point markers** — Added visible point markers (Vico `LineCartesianLayer.point` + pill `ShapeComponent`) to the monthly trend line and the 12-month year-over-year overlay so individual data points are readable.
+- **Category breakdown rewritten as a table** — `CategoryBreakdownChart` in Insights changed from horizontal bars to a tabular layout (Category / Amount / %) with a colored category dot, divider rows, and right-aligned numeric columns.
+
+### 📦 Technical
+- Deleted: `domain/models/BudgetForecast.kt`, `services/ForecastService.kt`, `ForecastCard` composable, forecast notification throttle and DataStore keys, all forecast call sites in `HomeViewModel`, `BudgetViewModel`, `AnalyticsViewModel`, `BudgetService`, `SmsReceiver`, `NotificationHelper`.
+- New: `domain/models/BudgetRemaining.kt` — neutral remaining-amount + days-remaining model used by `BudgetProgressCard`.
+- `data/repository/InsightsRepository.kt`: `toMonthlyDomain()` is now `suspend`, re-queries `ExpenseDao.getInvestmentTotalInRange(periodStart, periodEnd)` and `IncomeDao.getByYearMonth(...)` (with `headroomAmount + periodTotal` fallback), then delegates to `MonthlyReviewGenerator.buildInvestmentIllustration(...)`.
+- `domain/insights/MonthlyReviewGenerator.kt`: `INVESTMENT_DISCLAIMER` updated to disclose the single-deposit assumption.
+- `presentation/screens/{monthly_review,quarterly_review,year_in_review}/*.kt`: rewrote investment illustration heading + body strings.
+- New plan file: [`plans/income-tracking-plan.md`](../plans/income-tracking-plan.md) (scoping document, not shipped behavior).
+
+### 🏪 Play Store Release Notes
+```
+What's New:
+• Monthly Review investment illustration now uses your actual invested amount, not a derived figure
+• Honest copy: "If invested once at 10% p.a. for 5 years, it could grow to…" — no more misleading "per month" framing
+• Removed budget forecasting that produced inaccurate month-end projections
+• Cleaner charts: visible data-point markers on trend lines, tidy table for category breakdown
+• Daily-spending bar chart removed (it was redundant with the monthly trend)
+```
 
 ---
 
