@@ -278,6 +278,19 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Get the [limit] categories with the most recent activity in [month] of [year],
+     * ordered by MAX(timestamp) DESC.
+     */
+    suspend fun getRecentlyActiveCategoryTotalsForMonth(
+        year: Int,
+        month: Int,
+        limit: Int
+    ): List<CategoryTotal> {
+        val (start, end) = getMonthRange(year, month)
+        return expenseDao.getRecentlyActiveCategoryTotalsForMonth(start, end, limit)
+    }
+
+    /**
      * Get daily totals for a specific month.
      */
     suspend fun getDailyTotalsForMonth(year: Int, month: Int): List<DailyTotal> {

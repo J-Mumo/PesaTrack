@@ -5,7 +5,23 @@ package com.pesatrack.presentation.navigation
  */
 sealed class Screen(val route: String) {
     object Home : Screen("home")
-    object Analytics : Screen("analytics")
+
+    /**
+     * Analytics tab. Accepts an optional `section` query argument used to
+     * deep-link callers (e.g. the Home screen's "By Category → View All"
+     * link) into a specific section of the Charts → Monthly tab.
+     */
+    object Analytics : Screen("analytics?section={section}") {
+        const val ARG_SECTION = "section"
+        /** Deep-link target: Charts → Monthly → By Category. */
+        const val SECTION_BY_CATEGORY = "byCategory"
+
+        /** Base route used by the bottom navigation tab (no arguments). */
+        const val BASE_ROUTE = "analytics"
+
+        fun createRoute(section: String? = null): String =
+            if (section == null) BASE_ROUTE else "$BASE_ROUTE?section=$section"
+    }
     object Expenses : Screen("expenses")
     object Categorize : Screen("categorize/{expenseId}") {
         fun createRoute(expenseId: Long) = "categorize/$expenseId"
@@ -76,6 +92,6 @@ enum class BottomNavItem(
     val icon: String
 ) {
     HOME(Screen.Home.route, "Home", "home"),
-    ANALYTICS(Screen.Analytics.route, "Analytics", "bar_chart"),
+    ANALYTICS(Screen.Analytics.BASE_ROUTE, "Analytics", "bar_chart"),
     EXPENSES(Screen.Expenses.route, "Expenses", "receipt_long")
 }

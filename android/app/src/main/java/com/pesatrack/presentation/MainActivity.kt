@@ -386,7 +386,11 @@ fun MainScreen(
                     NavigationBarItem(
                         icon = { Icon(icon, contentDescription = label) },
                         label = { Text(label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
+                        selected = currentDestination?.hierarchy?.any { dest ->
+                            // Compare ignoring optional query args ("route?arg={arg}") so
+                            // destinations like Analytics still highlight the tab.
+                            dest.route?.substringBefore("?") == item.route
+                        } == true,
                         onClick = {
                             // Special-case the start destination (Home):
                             // restoreState = true silently fails when there is

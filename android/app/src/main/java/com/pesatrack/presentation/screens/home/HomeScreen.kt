@@ -50,6 +50,7 @@ import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.presentation.components.ExpenseCard
+import com.pesatrack.presentation.screens.analytics.CategoryBreakdownChart
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
 import java.util.*
@@ -65,6 +66,7 @@ fun HomeScreen(
     onNavigateToBatchCategorize: () -> Unit = {},
     onNavigateToManualEntry: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToAnalyticsByCategory: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -269,6 +271,33 @@ fun HomeScreen(
             }
         }
         
+        // By Category — top 5 categories with the most recent activity this month.
+        // Mirrors the "By Category" table in Analytics → Monthly so users can see
+        // where money has been moving without leaving Home.
+        if (uiState.recentCategoryBreakdown.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "By Category",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    TextButton(onClick = onNavigateToAnalyticsByCategory) {
+                        Text("View All")
+                    }
+                }
+            }
+            item {
+                CategoryBreakdownChart(
+                    data = uiState.recentCategoryBreakdown,
+                    totalForMonth = uiState.totalThisMonth
+                )
+            }
+        }
+
         // Recent Expenses Header
         item {
             Row(

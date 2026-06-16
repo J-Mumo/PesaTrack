@@ -62,9 +62,20 @@ fun AnalyticsScreen(
     onNavigateToYearInReview: () -> Unit = {},
     onNavigateToExpenseList: (categoryId: Int) -> Unit = {},
     onNavigateToCategorize: () -> Unit = {},
+    initialSection: String? = null,
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Honour a deep-link section by switching to Charts → Monthly on first
+    // composition. The scroll-to behaviour is handled inside MonthlyTabContent.
+    var pendingSection by remember { mutableStateOf(initialSection) }
+    LaunchedEffect(initialSection) {
+        if (initialSection == com.pesatrack.presentation.navigation.Screen.Analytics.SECTION_BY_CATEGORY) {
+            viewModel.selectInsightsTab(InsightsTab.CHARTS)
+            viewModel.selectTab(AnalyticsTab.MONTHLY)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Top-level Tab Row: Insights / Charts
@@ -99,7 +110,9 @@ fun AnalyticsScreen(
                 viewModel = viewModel,
                 onNavigateToBudget = onNavigateToBudget,
                 onNavigateToWeeklyReview = onNavigateToWeeklyReview,
-                onNavigateToMonthlyReview = onNavigateToMonthlyReview
+                onNavigateToMonthlyReview = onNavigateToMonthlyReview,
+                pendingSection = pendingSection,
+                onSectionConsumed = { pendingSection = null }
             )
         }
     }
@@ -607,7 +620,9 @@ fun ChartsTabContent(
     viewModel: AnalyticsViewModel,
     onNavigateToBudget: () -> Unit,
     onNavigateToWeeklyReview: () -> Unit,
-    onNavigateToMonthlyReview: () -> Unit
+    onNavigateToMonthlyReview: () -> Unit,
+    pendingSection: String? = null,
+    onSectionConsumed: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Charts sub-tab Row: Monthly / Yearly
@@ -636,7 +651,9 @@ fun ChartsTabContent(
                 canGoNext = viewModel.canGoNext(),
                 onNavigateToBudget = onNavigateToBudget,
                 onSearchRecipient = { viewModel.searchRecipient(it) },
-                onClearSearch = { viewModel.clearRecipientSearch() }
+                onClearSearch = { viewModel.clearRecipientSearch() },
+                pendingSection = pendingSection,
+                onSectionConsumed = onSectionConsumed
             )
             AnalyticsTab.YEARLY -> YearlyTabContent(
                 uiState = uiState,
@@ -660,9 +677,31 @@ fun MonthlyTabContent(
     canGoNext: Boolean,
     onNavigateToBudget: () -> Unit = {},
     onSearchRecipient: (String) -> Unit = {},
-    onClearSearch: () -> Unit = {}
+    onClearSearch: () -> Unit = {},
+    pendingSection: String? = null,
+    onSectionConsumed: () -> Unit = {}
 ) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Index of the "By Category" SectionHeader inside the LazyColumn below.
+    // Items above it: MonthSelectorRow(0) + MonthComparisonCard placeholder(1)
+    // + SummaryStatsRow(2), plus optional BudgetSetupBanner and loading row.
+    val byCategoryHeaderIndex = 3 +
+        (if (!uiState.hasActiveBudgets) 1 else 0) +
+        (if (uiState.isLoading) 1 else 0)
+
+    LaunchedEffect(pendingSection, uiState.categoryBreakdown.isNotEmpty()) {
+        if (pendingSection ==
+                com.pesatrack.presentation.navigation.Screen.Analytics.SECTION_BY_CATEGORY &&
+            uiState.categoryBreakdown.isNotEmpty()
+        ) {
+            listState.animateScrollToItem(byCategoryHeaderIndex)
+            onSectionConsumed()
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),

@@ -62,7 +62,12 @@ fun NavGraph(
                     navController.navigate(Screen.ManualEntry.route)
                 },
                 onNavigateToAnalytics = {
-                    navController.navigate(Screen.Analytics.route)
+                    navController.navigate(Screen.Analytics.createRoute())
+                },
+                onNavigateToAnalyticsByCategory = {
+                    navController.navigate(
+                        Screen.Analytics.createRoute(Screen.Analytics.SECTION_BY_CATEGORY)
+                    )
                 },
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
@@ -71,8 +76,19 @@ fun NavGraph(
         }
 
         // Analytics Screen
-        composable(route = Screen.Analytics.route) {
+        composable(
+            route = Screen.Analytics.route,
+            arguments = listOf(
+                navArgument(Screen.Analytics.ARG_SECTION) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val section = backStackEntry.arguments?.getString(Screen.Analytics.ARG_SECTION)
             AnalyticsScreen(
+                initialSection = section,
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
                 },

@@ -331,6 +331,34 @@ interface ExpenseDao {
     ): List<CategoryTotal>
 
     /**
+     * Get category totals for a month, ordered by the most recent expense timestamp
+     * within each category (descending) and capped at [limit] rows.
+     * Used by the Home screen "By Category" card to surface categories with the
+     * most recent movement rather than the largest totals.
+     */
+    @Query("""
+        SELECT
+            c.id AS categoryId,
+            COALESCE(c.name, 'Uncategorized') AS categoryName,
+            c.color AS categoryColor,
+            c.parentId AS parentId,
+            COALESCE(SUM(e.amount), 0.0) AS total,
+            COUNT(e.id) AS transactionCount
+        FROM expenses e
+        LEFT JOIN categories c ON e.categoryId = c.id
+        WHERE e.isExcluded = 0
+          AND e.timestamp >= :startOfMonth AND e.timestamp < :endOfMonth
+        GROUP BY e.categoryId
+        ORDER BY MAX(e.timestamp) DESC
+        LIMIT :limit
+    """)
+    suspend fun getRecentlyActiveCategoryTotalsForMonth(
+        startOfMonth: Long,
+        endOfMonth: Long,
+        limit: Int
+    ): List<CategoryTotal>
+
+    /**
      * Get category totals grouped by parent group for a date range.
      * Sub-categories are rolled up into their parent group.
      * Categories without a parent are treated as their own group.

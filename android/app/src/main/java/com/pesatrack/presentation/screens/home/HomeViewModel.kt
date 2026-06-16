@@ -115,6 +115,19 @@ class HomeViewModel @Inject constructor(
                     }
                 }
         }
+
+        // Load top 5 categories with the most recent activity this month.
+        // Re-fetched whenever the month's expense set changes.
+        viewModelScope.launch {
+            expenseRepository.getExpensesForCurrentMonth().collect {
+                val now = Calendar.getInstance()
+                val year = now.get(Calendar.YEAR)
+                val month = now.get(Calendar.MONTH) + 1
+                val breakdown = expenseRepository
+                    .getRecentlyActiveCategoryTotalsForMonth(year, month, 5)
+                _uiState.update { state -> state.copy(recentCategoryBreakdown = breakdown) }
+            }
+        }
         
         // Load uncategorized count
         viewModelScope.launch {

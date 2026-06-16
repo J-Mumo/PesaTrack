@@ -1,5 +1,6 @@
 package com.pesatrack.presentation.screens.home
 
+import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.MonthComparison
@@ -14,6 +15,8 @@ data class HomeUiState(
     /** Total invested this month (Investment & Savings group 18) */
     val investmentThisMonth: Double = 0.0,
     val recentExpenses: List<ExpenseWithCategory> = emptyList(),
+    /** Up to 5 categories with the most recent activity in the current month. */
+    val recentCategoryBreakdown: List<CategoryTotal> = emptyList(),
     val uncategorizedCount: Int = 0,
     val error: String? = null,
     /** Last 6 months spending trend for mini chart */
