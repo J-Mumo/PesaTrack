@@ -146,9 +146,15 @@ fun AboutScreen(
                                     appendLine()
                                     append(usageSummary)
                                 }
+                                val subject = "PesaTrack Feedback"
+                                // Subject/body must live inside the mailto URI — Gmail and
+                                // several clients ignore EXTRA_SUBJECT/EXTRA_TEXT here.
+                                val mailto = "mailto:$CONTACT_EMAIL" +
+                                    "?subject=" + Uri.encode(subject) +
+                                    "&body=" + Uri.encode(body)
                                 val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:$CONTACT_EMAIL")
-                                    putExtra(Intent.EXTRA_SUBJECT, "PesaTrack Feedback")
+                                    data = Uri.parse(mailto)
+                                    putExtra(Intent.EXTRA_SUBJECT, subject)
                                     putExtra(Intent.EXTRA_TEXT, body)
                                 }
                                 context.startActivity(intent)

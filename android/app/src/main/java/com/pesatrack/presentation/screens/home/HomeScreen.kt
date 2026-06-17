@@ -365,8 +365,13 @@ private tailrec fun Context.findActivity(): Activity? {
 }
 
 private fun createFeedbackEmailIntent(subject: String, body: String): Intent {
+    // Subject/body must live inside the mailto URI as query params — Gmail and several
+    // other clients ignore EXTRA_SUBJECT/EXTRA_TEXT on ACTION_SENDTO mailto intents.
+    val mailto = "mailto:joelmumo.jm@gmail.com" +
+        "?subject=" + Uri.encode(subject) +
+        "&body=" + Uri.encode(body)
     return Intent(Intent.ACTION_SENDTO).apply {
-        data = Uri.parse("mailto:joelmumo.jm@gmail.com")
+        data = Uri.parse(mailto)
         putExtra(Intent.EXTRA_SUBJECT, subject)
         putExtra(Intent.EXTRA_TEXT, body)
     }
