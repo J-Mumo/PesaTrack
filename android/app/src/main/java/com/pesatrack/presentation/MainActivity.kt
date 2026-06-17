@@ -86,6 +86,7 @@ class MainActivity : FragmentActivity() {
     private val pendingNavigateTo = mutableStateOf<String?>(null)
     private val pendingExpenseId = mutableStateOf<Long?>(null)
     private val pendingSnapshotId = mutableStateOf<Long?>(null)
+    private val pendingYear = mutableStateOf<Int?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,12 +125,16 @@ class MainActivity : FragmentActivity() {
         val navigateTo = intent?.getStringExtra("navigate_to") ?: return
         val expenseId = intent.getLongExtra("expense_id", -1L)
         val snapshotId = intent.getLongExtra("report_snapshot_id", -1L)
+        val year = intent.getIntExtra("year", -1)
         pendingNavigateTo.value = navigateTo
         if (expenseId != -1L) {
             pendingExpenseId.value = expenseId
         }
         if (snapshotId != -1L) {
             pendingSnapshotId.value = snapshotId
+        }
+        if (year != -1) {
+            pendingYear.value = year
         }
     }
 
@@ -230,16 +235,19 @@ class MainActivity : FragmentActivity() {
             val deepLinkTarget by pendingNavigateTo
             val deepLinkExpenseId by pendingExpenseId
             val deepLinkSnapshotId by pendingSnapshotId
+            val deepLinkYear by pendingYear
             MainScreen(
                 navigateToImport = navigateToImport,
                 onImportNavigated = onImportNavigated,
                 deepLinkTarget = deepLinkTarget,
                 deepLinkExpenseId = deepLinkExpenseId,
                 deepLinkSnapshotId = deepLinkSnapshotId,
+                deepLinkYear = deepLinkYear,
                 onDeepLinkHandled = {
                     pendingNavigateTo.value = null
                     pendingExpenseId.value = null
                     pendingSnapshotId.value = null
+                    pendingYear.value = null
                 }
             )
         }
@@ -337,6 +345,7 @@ fun MainScreen(
     deepLinkTarget: String? = null,
     deepLinkExpenseId: Long? = null,
     deepLinkSnapshotId: Long? = null,
+    deepLinkYear: Int? = null,
     onDeepLinkHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -363,6 +372,21 @@ fun MainScreen(
             "weekly_review" -> {
                 navController.navigate(
                     Screen.WeeklyReview.createRoute(deepLinkSnapshotId)
+                )
+            }
+            "monthly_review" -> {
+                navController.navigate(
+                    Screen.MonthlyReview.createRoute(deepLinkSnapshotId)
+                )
+            }
+            "quarterly_review" -> {
+                navController.navigate(
+                    Screen.QuarterlyReview.createRoute(deepLinkSnapshotId)
+                )
+            }
+            "year_in_review" -> {
+                navController.navigate(
+                    Screen.YearInReview.createRoute(deepLinkYear)
                 )
             }
         }
