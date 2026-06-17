@@ -274,14 +274,7 @@ No new tab. Income is a destination from Home secondary line, Budget detected-li
 
 ### 6.8 Onboarding
 
-Insert a new page between current pages 3 (SMS permission) and 4 (Import) — _Set your monthly income (optional)_:
-
-- KES input with comma formatting.
-- Helper text: "We use this to show how much of your income you keep. You can skip this — if you grant SMS access we'll try to detect your income from your salary message automatically."
-- Two buttons: "Save" (writes a `MonthlyIncomeBudget` row for the current month) and "Skip for now" (advances).
-- Skipping is not a dead-end: the Home screen and Budget screen both expose the same input later.
-
-Per the existing onboarding pattern, this is _not_ a hard requirement.
+**Deferred.** No new onboarding page in this plan. The existing Budget screen "Edit Income" dialog remains the single place to set the manual override, and SMS-detected income arrives automatically once permission is granted via the existing onboarding flow. Revisit only if telemetry / qualitative feedback shows users can't find where to set income.
 
 ### 6.9 Categories
 
@@ -334,11 +327,11 @@ Each phase is shippable on its own.
 - Income source breakdown on Monthly Review screen.
 - Update copy in About + privacy policy.
 
-### Phase 4 — Onboarding & Analytics polish
-- Onboarding optional-income page.
+### Phase 4 — Analytics polish
 - Savings Rate insight card.
 - Income vs spend mini-chart on Analytics.
 - Investment illustration disclaimer cites the income source.
+- _(Deferred: onboarding optional-income page — see §6.8.)_
 
 ### Phase 5 — Follow-ons (separate plans when scoped)
 - Lifestyle creep detection (income vs spend trend) — feeds [pro-launch-plan.md](pro-launch-plan.md).

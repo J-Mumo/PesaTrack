@@ -5,14 +5,17 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Monthly income record.
- *
- * Stores the user's manually entered income for a specific month.
- * Used by the Budget screen to compare total budgeted amounts against
- * actual income, warning when budgets exceed income.
+ * Manual monthly income budget / override.
  *
  * One row per month — yearMonth is unique-indexed so upserting
  * naturally replaces the previous value for that month.
+ *
+ * This is the user-set "expected income" used as a fallback when
+ * SMS-detected income (see [IncomeTransactionEntity]) is missing or
+ * suspiciously low. Reconciliation lives in `IncomeRepository`.
+ *
+ * The on-disk table is still named "income" — only the Kotlin type
+ * has been renamed for clarity (Phase 1 of the income tracking plan).
  */
 @Entity(
     tableName = "income",
@@ -20,7 +23,7 @@ import androidx.room.PrimaryKey
         Index(value = ["yearMonth"], unique = true)
     ]
 )
-data class IncomeEntity(
+data class MonthlyIncomeBudgetEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
 

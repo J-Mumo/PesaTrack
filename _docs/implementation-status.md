@@ -14,7 +14,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 |-----------|--------|------------|
 | **SMS Parsing (7 expense types)** | ✅ Complete | 100% |
 | **Transaction Cost Auto-Tracking** | ✅ Complete | 100% |
-| **Room Database (v16)** | ✅ Complete | 100% |
+| **Room Database (v17)** | ✅ Complete | 100% |
 | **Category System (18 groups + custom)** | ✅ Complete | 100% |
 | **Expense Management UI** | ✅ Complete | 100% |
 | **Notifications** | ✅ Complete | 100% |
@@ -141,17 +141,21 @@ SMS Sources ──────────────────────�
 | Migration 12→13 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:895) | Added `income` table for manual monthly income tracking |
 | Migration 13→14 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:925) | Added `customStartDate` and `customEndDate` columns to budgets table (CUSTOM period support — later replaced by global month-start-day setting) |
 | Migration 14→15 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:938) | Added "Family & Friends Support" (id=507) sub-category under Faith & Giving (group 5) |
+| Migration 15→16 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:970) | Added `report_snapshots` table for Insights & Reports (Weekly/Monthly/Quarterly/Yearly snapshots) |
+| Migration 16→17 | [`PesaTrackDatabase.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt:1) | Added `income_transactions` table for transaction-level income (income tracking Phase 1) |
 | Expense Entity | [`ExpenseEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/ExpenseEntity.kt:11) | Full schema with FK to categories + isExcluded flag |
 | Category Entity | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:12) | Hierarchical categories with parent-child |
 | Category Rule Entity | [`CategoryRuleEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryRuleEntity.kt:1) | User-defined auto-categorization rules (pattern, matchType, categoryId, priority) |
 | Budget Entity | [`BudgetEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/BudgetEntity.kt:1) | Budget limits per category group, sub-category, or total, with period + isActive + isGroupBudget |
-| Income Entity | [`IncomeEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/IncomeEntity.kt:1) | Monthly income records (amount, yearMonth unique, note) for budget allocation checking |
+| Monthly Income Budget Entity | [`MonthlyIncomeBudgetEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/MonthlyIncomeBudgetEntity.kt:1) | Manual monthly income override (amount, yearMonth unique, note). Table name `income` retained on disk. Renamed from `IncomeEntity` in income tracking Phase 1 |
+| Income Transaction Entity | [`IncomeTransactionEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/IncomeTransactionEntity.kt:1) | Transaction-level income row (one per detected SMS / statement / manual entry). Unique `transactionId` for free dedupe; `source` stores `IncomeSource` enum name |
 | Default Categories | [`CategoryEntity.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/entities/CategoryEntity.kt:57) | 17 groups, 95+ sub-categories |
 | Expense DAO | [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt:10) | CRUD + month queries + duplicate check + budget spending queries (total, group, sub-category) |
 | Category DAO | [`CategoryDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryDao.kt:11) | CRUD + search + default seeding + expense count queries + group management |
 | Category Rule DAO | [`CategoryRuleDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/CategoryRuleDao.kt:1) | Rule CRUD + active rules query |
 | Budget DAO | [`BudgetDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/BudgetDao.kt:1) | Budget CRUD + active budget queries + affected budget lookups (group + sub-category) |
-| Income DAO | [`IncomeDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/IncomeDao.kt:1) | Income upsert + getByYearMonth + observe as Flow |
+| Monthly Income Budget DAO | [`MonthlyIncomeBudgetDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/MonthlyIncomeBudgetDao.kt:1) | Manual income override upsert + getByYearMonth + observe as Flow (renamed from `IncomeDao` in income tracking Phase 1) |
+| Income Transaction DAO | [`IncomeTransactionDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/IncomeTransactionDao.kt:1) | Insert-if-new by `transactionId`, range queries, source/exclude updates, `sumForRange` + `sumForRangeBySources` for savings-rate denominators |
 | **Preferences** | | |
 | AppPreferences | [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt:1) | DataStore for phone number, bank preferences, budget prompt dismissal, month start day (1–28) |
 | **Repositories** | | |
@@ -159,8 +163,9 @@ SMS Sources ──────────────────────�
 | Category Repository | [`CategoryRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRepository.kt:18) | Category CRUD (add/edit/delete groups + sub-categories), default init, expense count checks |
 | Category Rule Repository | [`CategoryRuleRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/CategoryRuleRepository.kt:1) | Rule CRUD, active rules loading for categorization pipeline |
 | Budget Repository | [`BudgetRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt:1) | Budget CRUD, period range computation (with month-start-day offset), spending aggregation (total/group/sub-category), progress/alert calculation, monthly income get/set, total budgeted computation |
+| Income Repository | [`IncomeRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/IncomeRepository.kt:1) | Income transaction CRUD (insert-if-new with dedupe), per-source breakdown, and `effectiveMonthlyIncome(yearMonth)` reconciliation (detected vs manual override per plan §6.4 — `EffectiveIncomeSource` of `NONE` / `MANUAL_OVERRIDE` / `DETECTED` / `DETECTED_BELOW_OVERRIDE`) |
 | **Dependency Injection** | | |
-| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v15 with all migrations), DAOs (including BudgetDao, CategoryRuleDao, IncomeDao) |
+| Hilt App Module | [`AppModule.kt`](../android/app/src/main/java/com/pesatrack/di/AppModule.kt:19) | Database (v17 with all migrations), DAOs (including BudgetDao, CategoryRuleDao, MonthlyIncomeBudgetDao, IncomeTransactionDao, ReportSnapshotDao) |
 
 ---
 
@@ -449,24 +454,26 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 app/src/main/java/com/pesatrack/
 ├── PesaTrackApp.kt                          ✅ Hilt Application class + ProcessLifecycleOwner (PIN lock) + WorkManager Configuration.Provider
 ├── di/
-│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao, IncomeDao)
+│   └── AppModule.kt                         ✅ Database, DAOs (incl. BudgetDao, CategoryRuleDao, MonthlyIncomeBudgetDao, IncomeTransactionDao)
 ├── data/
 │   ├── local/
 │   │   ├── database/
-│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v15 with migrations (v14→v15: Family & Friends Support category)
+│   │   │   ├── PesaTrackDatabase.kt         ✅ Room v17 with migrations (v16→v17: `income_transactions` table for income tracking Phase 1)
 │   │   │   ├── dao/
 │   │   │   │   ├── ExpenseDao.kt            ✅ CRUD + month queries + duplicate check + budget spending queries
 │   │   │   │   ├── CategoryDao.kt           ✅ CRUD + search + default seeding + expense count queries + group mgmt
 │   │   │   │   ├── CategoryRuleDao.kt       ✅ Rule CRUD + active rules query for categorization pipeline
 │   │   │   │   ├── BudgetDao.kt             ✅ Budget CRUD + active queries + affected budget lookups
-│   │   │   │   ├── IncomeDao.kt             ✅ Income upsert + getByYearMonth + observe as Flow
+│   │   │   │   ├── MonthlyIncomeBudgetDao.kt ✅ Manual income override upsert + getByYearMonth + observe (table `income`)
+│   │   │   │   ├── IncomeTransactionDao.kt  ✅ Income txn CRUD with dedupe-by-transactionId, range sums, source filters
 │   │   │   │   └── RecipientCategoryMappingDao.kt ✅ Recipient→category learned mappings CRUD
 │   │   │   └── entities/
 │   │   │       ├── ExpenseEntity.kt          ✅ Full schema with FK to categories
 │   │   │       ├── CategoryEntity.kt         ✅ 17 groups, 95+ categories
 │   │   │       ├── CategoryRuleEntity.kt     ✅ User-defined auto-categorization rules (pattern, matchType, priority)
 │   │   │       ├── BudgetEntity.kt           ✅ Budget limits per group/sub-category/total with period + isActive + isGroupBudget
-│   │   │       ├── IncomeEntity.kt           ✅ Monthly income records (amount, yearMonth, note)
+│   │   │       ├── MonthlyIncomeBudgetEntity.kt ✅ Manual monthly income override (amount, yearMonth, note). Table `income`
+│   │   │       ├── IncomeTransactionEntity.kt ✅ Transaction-level income row (unique transactionId, source enum, parserSource, isExcluded)
 │   │   │       └── RecipientCategoryMappingEntity.kt ✅ Learned recipient→category associations
 │   │   └── preferences/
 │   │       └── AppPreferences.kt            ✅ DataStore (phone number, bank prefs, budget prompt, PIN lock settings, month start day, forecast notification throttle, **recurring reminders toggle + throttle**)
@@ -638,6 +645,8 @@ backend/
 ## Bug Fixes & Improvements History
 
 ### Recent Features
+
+- **Income tracking Phase 1 — data foundation** (DB v16 → v17) — Per [plans/income-tracking-plan.md](../plans/income-tracking-plan.md), laid the data layer for transaction-level income before any UI surfaces. Renamed `IncomeEntity`/`IncomeDao` → `MonthlyIncomeBudgetEntity`/`MonthlyIncomeBudgetDao` to clarify that the existing one-row-per-month table is the manual **override / expected income**, not a transaction log (table name `income` retained on disk). Added new `IncomeTransactionEntity` + `IncomeTransactionDao` (`income_transactions` table) with unique `transactionId` for free SMS-replay dedupe, indexes on `timestamp` + `source`, and `sumForRange` / `sumForRangeBySources` queries usable as savings-rate denominators. New domain types: `IncomeSource` enum (SALARY, BUSINESS, REFUND, INTEREST, FAMILY, TRANSFER_IN, OTHER, UNCATEGORIZED — each carrying an `isInflow` flag so self-transfers can be excluded from "% of income" math), `IncomeTransaction` model, `EffectiveIncome` + `EffectiveIncomeSource`. New `IncomeRepository` exposes `effectiveMonthlyIncome(yearMonth)` implementing the reconciliation rules from plan §6.4 (`NONE` / `MANUAL_OVERRIDE` / `DETECTED` / `DETECTED_BELOW_OVERRIDE`); reconciliation is exposed as a pure `reconcile()` function for table-driven JVM testing. Fixed a pre-existing bug in quarterly analytics: `InsightsRepository.generateAndStoreQuarterlyReview()` was using only the **first month of the quarter's** manual income as a proxy for the whole quarter (under-reporting whenever income varied or was set on later months) — now averages effective monthly income across the months in the quarter so far and hands the average to `QuarterlyReviewGenerator` (which still multiplies by 3 internally). Added `IncomeRepositoryReconcileTest` (9 JVM cases covering every row of §6.4 plus the ±10% boundary) and `IncomeTransactionDaoTest` (instrumented — dedupe, exclusion, range sums, source filters, toggle helpers). No user-visible UI change in this phase. Files: [PesaTrackDatabase.kt](../android/app/src/main/java/com/pesatrack/data/local/database/PesaTrackDatabase.kt), [AppModule.kt](../android/app/src/main/java/com/pesatrack/di/AppModule.kt), [BudgetRepository.kt](../android/app/src/main/java/com/pesatrack/data/repository/BudgetRepository.kt), [InsightsRepository.kt](../android/app/src/main/java/com/pesatrack/data/repository/InsightsRepository.kt), [SampleDataService.kt](../android/app/src/main/java/com/pesatrack/services/SampleDataService.kt), [IncomeRepository.kt](../android/app/src/main/java/com/pesatrack/data/repository/IncomeRepository.kt), [MonthlyIncomeBudgetEntity.kt](../android/app/src/main/java/com/pesatrack/data/local/database/entities/MonthlyIncomeBudgetEntity.kt), [MonthlyIncomeBudgetDao.kt](../android/app/src/main/java/com/pesatrack/data/local/database/dao/MonthlyIncomeBudgetDao.kt), [IncomeTransactionEntity.kt](../android/app/src/main/java/com/pesatrack/data/local/database/entities/IncomeTransactionEntity.kt), [IncomeTransactionDao.kt](../android/app/src/main/java/com/pesatrack/data/local/database/dao/IncomeTransactionDao.kt), [IncomeSource.kt](../android/app/src/main/java/com/pesatrack/domain/models/IncomeSource.kt), [IncomeTransaction.kt](../android/app/src/main/java/com/pesatrack/domain/models/IncomeTransaction.kt).
 
 - **Home "By Category" card — top 5 most-recently-active categories** — Added a tabular "By Category" section on the Home screen, placed directly above "Recent Expenses". Mirrors the Charts → Monthly → By Category table from Analytics (reuses the same `CategoryBreakdownChart` composable) but limits the list to 5 categories and orders by `MAX(timestamp) DESC` for the current month so users see where money has been moving rather than which categories are largest. New DAO query `ExpenseDao.getRecentlyActiveCategoryTotalsForMonth(start, end, limit)` and repository wrapper `ExpenseRepository.getRecentlyActiveCategoryTotalsForMonth(year, month, limit)`. `HomeUiState.recentCategoryBreakdown` is loaded reactively in `HomeViewModel` whenever the month's expense set changes. "View All" link on the section header deep-links into Analytics with a new `?section={section}` argument on `Screen.Analytics` (`SECTION_BY_CATEGORY`); `AnalyticsScreen` switches to Charts → Monthly and `MonthlyTabContent` uses a hoisted `LazyListState` + `animateScrollToItem` to bring the By Category header into view. `BottomNavItem.ANALYTICS` switched to `Screen.Analytics.BASE_ROUTE` and bottom-nav selection comparison now ignores optional query args. Files: [`ExpenseDao.kt`](../android/app/src/main/java/com/pesatrack/data/local/database/dao/ExpenseDao.kt), [`ExpenseRepository.kt`](../android/app/src/main/java/com/pesatrack/data/repository/ExpenseRepository.kt), [`HomeUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeUiState.kt), [`HomeViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeViewModel.kt), [`HomeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeScreen.kt), [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt), [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt), [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt), [`AnalyticsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/analytics/AnalyticsScreen.kt).
 

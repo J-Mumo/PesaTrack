@@ -3,9 +3,9 @@ package com.pesatrack.data.repository
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
-import com.pesatrack.data.local.database.dao.IncomeDao
+import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
-import com.pesatrack.data.local.database.entities.IncomeEntity
+import com.pesatrack.data.local.database.entities.MonthlyIncomeBudgetEntity
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetAlert
@@ -41,7 +41,7 @@ class BudgetRepository @Inject constructor(
     private val budgetDao: BudgetDao,
     private val expenseDao: ExpenseDao,
     private val categoryDao: CategoryDao,
-    private val incomeDao: IncomeDao,
+    private val incomeDao: MonthlyIncomeBudgetDao,
     private val appPreferences: AppPreferences
 ) {
 
@@ -615,7 +615,7 @@ class BudgetRepository @Inject constructor(
     suspend fun setMonthlyIncome(yearMonth: String, amount: Double, note: String? = null) {
         val existing = incomeDao.getByYearMonth(yearMonth)
         incomeDao.upsert(
-            IncomeEntity(
+            MonthlyIncomeBudgetEntity(
                 id = existing?.id ?: 0,
                 amount = amount,
                 yearMonth = yearMonth,

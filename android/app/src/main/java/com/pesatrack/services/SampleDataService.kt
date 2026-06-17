@@ -14,7 +14,7 @@ class SampleDataService @Inject constructor(
     private val expenseDao: ExpenseDao,
     private val categoryDao: CategoryDao,
     private val budgetDao: BudgetDao,
-    private val incomeDao: IncomeDao
+    private val monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao
 ) {
 
     suspend fun populateSampleData() {
@@ -40,8 +40,8 @@ class SampleDataService @Inject constructor(
         val thisMonthKey = String.format(Locale.US, "%d-%02d", calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1)
 
         // 2. Insert Income
-        incomeDao.upsert(IncomeEntity(amount = 150000.0, yearMonth = lastMonthKey, note = "Salary + Bonus"))
-        incomeDao.upsert(IncomeEntity(amount = 135000.0, yearMonth = thisMonthKey, note = "Salary"))
+        monthlyIncomeBudgetDao.upsert(MonthlyIncomeBudgetEntity(amount = 150000.0, yearMonth = lastMonthKey, note = "Salary + Bonus"))
+        monthlyIncomeBudgetDao.upsert(MonthlyIncomeBudgetEntity(amount = 135000.0, yearMonth = thisMonthKey, note = "Salary"))
 
         // 3. Insert Budgets
         budgetDao.insert(BudgetEntity(categoryId = 7, amount = 25000.0, period = "MONTHLY", isGroupBudget = true)) // Food
@@ -102,6 +102,6 @@ class SampleDataService @Inject constructor(
     suspend fun clearAllData() {
         expenseDao.deleteAll()
         budgetDao.deleteAll()
-        incomeDao.deleteAll()
+        monthlyIncomeBudgetDao.deleteAll()
     }
 }

@@ -1,7 +1,7 @@
 package com.pesatrack.data.repository
 
 import com.pesatrack.data.local.database.dao.ExpenseDao
-import com.pesatrack.data.local.database.dao.IncomeDao
+import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.ReportSnapshotDao
 import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
 import com.pesatrack.domain.insights.BiggestChange
@@ -43,7 +43,8 @@ import javax.inject.Singleton
 @Singleton
 class InsightsRepository @Inject constructor(
     private val expenseDao: ExpenseDao,
-    private val incomeDao: IncomeDao,
+    private val monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao,
+    private val incomeRepository: IncomeRepository,
     private val reportSnapshotDao: ReportSnapshotDao
 ) {
 
@@ -70,7 +71,7 @@ class InsightsRepository @Inject constructor(
 
         val monthBounds = monthBoundsFor(periodEnd)
         val monthLabel = monthLabelFor(periodEnd)
-        val monthIncome = incomeDao.getByYearMonth(monthYearKeyFor(periodEnd))?.amount ?: 0.0
+        val monthIncome = monthlyIncomeBudgetDao.getByYearMonth(monthYearKeyFor(periodEnd))?.amount ?: 0.0
         val monthSpendSoFar = if (monthIncome > 0.0) {
             // We only ask for the month total when we actually have an income to compare against.
             expenseDao.getCategoryTotalsForMonth(monthBounds.start, periodEnd).sumOf { it.total }
@@ -138,7 +139,7 @@ class InsightsRepository @Inject constructor(
             .atZone(ZoneId.systemDefault()).toLocalDate()
 
         val monthIncomeKey = monthYearKeyFor(prevMonthBounds.start)
-        val monthlyIncome = incomeDao.getByYearMonth(monthIncomeKey)?.amount
+        val monthlyIncome = monthlyIncomeBudgetDao.getByYearMonth(monthIncomeKey)?.amount
 
         val investmentTotal = expenseDao.getInvestmentTotalInRange(prevMonthBounds.start, prevMonthBounds.endExclusive)
 
@@ -356,7 +357,7 @@ class InsightsRepository @Inject constructor(
         // Re-query live data so the illustration reflects actual investments,
         // not a derived "discretionary" figure from total spending.
         val investmentTotal = expenseDao.getInvestmentTotalInRange(periodStart, periodEnd)
-        val storedIncome = incomeDao.getByYearMonth(monthYearKeyFor(periodStart))?.amount
+        val storedIncome = monthlyIncomeBudgetDao.getByYearMonth(monthYearKeyFor(periodStart))?.amount
         val derivedIncome = headroomAmount?.let { it + periodTotal }
         val monthlyIncome = storedIncome ?: derivedIncome
         val illustration = MonthlyReviewGenerator.buildInvestmentIllustration(
@@ -417,12 +418,24 @@ class InsightsRepository @Inject constructor(
         val currentCategories = expenseDao.getCategoryGroupTotals(quarterStart, quarterEnd)
         val previousCategories = expenseDao.getCategoryGroupTotals(ppStart, ppEnd)
 
-        // Monthly income
-        val monthIncomeKey = monthYearKeyFor(quarterStart)
-        val monthlyIncome = incomeDao.getByYearMonth(monthIncomeKey)?.amount
+        // Monthly income — average of effective monthly incomes across the
+        // quarter months we have data for. Pre-Phase 1 this was the
+        // first-month-of-quarter override only, which under-reported income
+        // whenever it varied across the quarter (or was set only on later
+        // months). The QuarterlyReviewGenerator still multiplies by 3 to
+        // produce a quarterly figure, so we hand it the average here.
+        val monthsInQuarter = currentMonth - firstMonth + 1
+        val monthlyEffectiveIncomes = (0 until monthsInQuarter).map { offset ->
+            val m = firstMonth + offset
+            val bounds = monthBoundsForYearMonth(currentYear, m)
+            incomeRepository.effectiveMonthlyIncome(monthYearKeyFor(bounds.start)).value
+        }
+        val knownIncomes = monthlyEffectiveIncomes.filterNotNull().filter { it > 0.0 }
+        val monthlyIncome: Double? = if (knownIncomes.isNotEmpty()) {
+            knownIncomes.average()
+        } else null
 
         // Monthly totals for savings momentum (months in current quarter so far)
-        val monthsInQuarter = currentMonth - firstMonth + 1
         val monthlyTotals = (0 until monthsInQuarter).map { offset ->
             val m = firstMonth + offset
             val bounds = monthBoundsForYearMonth(currentYear, m)
@@ -582,7 +595,7 @@ class InsightsRepository @Inject constructor(
             val label = monthLabelFor(bounds.start)
             val spend = expenseDao.getCategoryTotalsForMonth(bounds.start, endMs).sumOf { it.total }
             val incomeKey = monthYearKeyFor(bounds.start)
-            val income = incomeDao.getByYearMonth(incomeKey)?.amount ?: 0.0
+            val income = monthlyIncomeBudgetDao.getByYearMonth(incomeKey)?.amount ?: 0.0
             YearInReviewGenerator.MonthData(label = label, income = income, spend = spend)
         }
 

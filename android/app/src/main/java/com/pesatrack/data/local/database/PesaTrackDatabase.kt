@@ -8,14 +8,16 @@ import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
-import com.pesatrack.data.local.database.dao.IncomeDao
+import com.pesatrack.data.local.database.dao.IncomeTransactionDao
+import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import com.pesatrack.data.local.database.dao.ReportSnapshotDao
 import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.CategoryEntity
 import com.pesatrack.data.local.database.entities.CategoryRuleEntity
 import com.pesatrack.data.local.database.entities.ExpenseEntity
-import com.pesatrack.data.local.database.entities.IncomeEntity
+import com.pesatrack.data.local.database.entities.IncomeTransactionEntity
+import com.pesatrack.data.local.database.entities.MonthlyIncomeBudgetEntity
 import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
 import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
 
@@ -49,6 +51,9 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
  * - v15→v16: Added report_snapshots table to persist generated Weekly / Monthly /
  *            Quarterly / Year-in-Review reports for the Insights & Reports feature
  *            (see plans/insights-and-reports-plan.md).
+ * - v16→v17: Added income_transactions table for transaction-level income
+ *            (SMS / statement / manual). The legacy `income` table is now the
+ *            manual monthly override only — see plans/income-tracking-plan.md.
  */
 @Database(
     entities = [
@@ -57,10 +62,11 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
         RecipientCategoryMappingEntity::class,
         BudgetEntity::class,
         CategoryRuleEntity::class,
-        IncomeEntity::class,
+        MonthlyIncomeBudgetEntity::class,
+        IncomeTransactionEntity::class,
         ReportSnapshotEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -70,7 +76,8 @@ abstract class PesaTrackDatabase : RoomDatabase() {
     abstract fun recipientCategoryMappingDao(): RecipientCategoryMappingDao
     abstract fun budgetDao(): BudgetDao
     abstract fun categoryRuleDao(): CategoryRuleDao
-    abstract fun incomeDao(): IncomeDao
+    abstract fun monthlyIncomeBudgetDao(): MonthlyIncomeBudgetDao
+    abstract fun incomeTransactionDao(): IncomeTransactionDao
     abstract fun reportSnapshotDao(): ReportSnapshotDao
 
     companion object {
@@ -999,6 +1006,48 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_report_snapshots_cadence_generatedAt " +
                         "ON report_snapshots(cadence, generatedAt)"
+                )
+            }
+        }
+
+        /**
+         * Migration from version 16 to 17:
+         * Create income_transactions table for transaction-level income
+         * (SMS / statement import / manual entry). The legacy `income` table
+         * is retained as the manual monthly override only.
+         *
+         * Schema mirrors [com.pesatrack.data.local.database.entities.IncomeTransactionEntity].
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS income_transactions (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        transactionId TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        source TEXT NOT NULL,
+                        sender TEXT,
+                        rawSms TEXT,
+                        parserSource TEXT NOT NULL,
+                        note TEXT,
+                        isExcluded INTEGER NOT NULL DEFAULT 0,
+                        isCategorized INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+                database.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_income_transactions_transactionId " +
+                        "ON income_transactions(transactionId)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_income_transactions_timestamp " +
+                        "ON income_transactions(timestamp)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_income_transactions_source " +
+                        "ON income_transactions(source)"
                 )
             }
         }

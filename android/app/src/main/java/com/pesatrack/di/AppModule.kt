@@ -7,7 +7,8 @@ import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
-import com.pesatrack.data.local.database.dao.IncomeDao
+import com.pesatrack.data.local.database.dao.IncomeTransactionDao
+import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import com.pesatrack.data.local.database.dao.ReportSnapshotDao
 import com.pesatrack.services.SampleDataService
@@ -51,7 +52,8 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_12_13,
                 PesaTrackDatabase.MIGRATION_13_14,
                 PesaTrackDatabase.MIGRATION_14_15,
-                PesaTrackDatabase.MIGRATION_15_16
+                PesaTrackDatabase.MIGRATION_15_16,
+                PesaTrackDatabase.MIGRATION_16_17
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -89,8 +91,14 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideIncomeDao(database: PesaTrackDatabase): IncomeDao {
-        return database.incomeDao()
+    fun provideMonthlyIncomeBudgetDao(database: PesaTrackDatabase): MonthlyIncomeBudgetDao {
+        return database.monthlyIncomeBudgetDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideIncomeTransactionDao(database: PesaTrackDatabase): IncomeTransactionDao {
+        return database.incomeTransactionDao()
     }
 
     @Provides
@@ -105,8 +113,8 @@ object AppModule {
         expenseDao: ExpenseDao,
         categoryDao: CategoryDao,
         budgetDao: BudgetDao,
-        incomeDao: IncomeDao
+        monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao
     ): SampleDataService {
-        return SampleDataService(expenseDao, categoryDao, budgetDao, incomeDao)
+        return SampleDataService(expenseDao, categoryDao, budgetDao, monthlyIncomeBudgetDao)
     }
 }
