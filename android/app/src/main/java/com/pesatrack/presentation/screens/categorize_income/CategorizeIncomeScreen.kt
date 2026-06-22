@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,13 +21,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -156,52 +153,34 @@ fun CategorizeIncomeScreen(
                     ) {
                         IncomeSource.entries.forEach { source ->
                             FilterChip(
-                                selected = uiState.selectedSource == source,
+                                selected = uiState.selectedSource == source && !uiState.isExcluded,
                                 onClick = { viewModel.selectSource(source) },
                                 label = { Text(source.displayName) },
                                 colors = FilterChipDefaults.filterChipColors(),
+                                enabled = !uiState.isExcluded,
                             )
                         }
+                        // Dedicated "Not income" chip — mirrors the isExcluded
+                        // flag, so the user can mark a one-off transfer / refund
+                        // / cash-back as something that should be filtered out
+                        // of all income analytics.
+                        FilterChip(
+                            selected = uiState.isExcluded,
+                            onClick = { viewModel.toggleExcluded() },
+                            label = { Text("Not income") },
+                            colors = FilterChipDefaults.filterChipColors(),
+                        )
                     }
 
-                    HorizontalDivider()
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Exclude from analytics",
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            Text(
-                                text = "Use for one-off transfers, refunds you already counted, or rounding noise.",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = uiState.isExcluded,
-                            onCheckedChange = { viewModel.toggleExcluded() },
-                            modifier = Modifier.wrapContentWidth(Alignment.End),
+                    if (uiState.isExcluded) {
+                        Text(
+                            text = "This won't count toward income totals, savings rate, or analytics. You can undo with a long-press on the row.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         )
                     }
                 }
             }
         }
     }
-}
-
-// Re-export androidx Row for the layout above to keep import surface tight.
-@Composable
-private fun Row(
-    modifier: Modifier = Modifier,
-    verticalAlignment: Alignment.Vertical = Alignment.Top,
-    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
-) {
-    androidx.compose.foundation.layout.Row(
-        modifier = modifier,
-        verticalAlignment = verticalAlignment,
-        content = content,
-    )
 }

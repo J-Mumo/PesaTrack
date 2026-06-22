@@ -1,7 +1,9 @@
 package com.pesatrack.presentation.screens.income
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,18 +45,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.IncomeSource
 import com.pesatrack.domain.models.IncomeSourceTotal
@@ -72,6 +79,18 @@ fun IncomeScreen(
     viewModel: IncomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Refresh whenever the screen comes back to the foreground (e.g. after the
+    // user changes the source / excluded flag on CategorizeIncomeScreen and
+    // navigates back).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -103,6 +122,8 @@ fun IncomeScreen(
             contentPadding = padding,
             onPeriodChange = viewModel::setPeriod,
             onIncomeClick = onNavigateToCategorizeIncome,
+            onIncomeLongPress = viewModel::markAsNotIncome,
+            onRestoreIncome = viewModel::restoreIncome,
         )
     }
 
@@ -127,6 +148,8 @@ private fun IncomeContent(
     contentPadding: PaddingValues,
     onPeriodChange: (IncomePeriod) -> Unit,
     onIncomeClick: (Long) -> Unit,
+    onIncomeLongPress: (Long) -> Unit,
+    onRestoreIncome: (Long) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -156,7 +179,13 @@ private fun IncomeContent(
             }
         } else {
             items(uiState.transactions, key = { it.id }) { tx ->
-                IncomeRow(tx = tx, onClick = { onIncomeClick(tx.id) })
+                IncomeRow(
+                    tx = tx,
+                    onClick = { onIncomeClick(tx.id) },
+                    onLongClick = {
+                        if (tx.isExcluded) onRestoreIncome(tx.id) else onIncomeLongPress(tx.id)
+                    },
+                )
             }
         }
     }
@@ -308,27 +337,40 @@ private fun colorForSource(source: IncomeSource): Color = when (source) {
     IncomeSource.UNCATEGORIZED -> Color(0xFFB0BEC5) // grey-blue
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun IncomeRow(tx: IncomeTransaction, onClick: () -> Unit) {
+private fun IncomeRow(
+    tx: IncomeTransaction,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     val dateFmt = remember { SimpleDateFormat("MMM d", Locale.getDefault()) }
+    val rowAlpha = if (tx.isExcluded) 0.45f else 1f
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
         shape = RoundedCornerShape(12.dp),
         tonalElevation = 1.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .alpha(rowAlpha),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(RoundedCornerShape(5.dp))
-                    .background(colorForSource(tx.source)),
+                    .background(
+                        if (tx.isExcluded) MaterialTheme.colorScheme.outline
+                        else colorForSource(tx.source)
+                    ),
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -336,12 +378,20 @@ private fun IncomeRow(tx: IncomeTransaction, onClick: () -> Unit) {
                     text = tx.amount.formatAsCurrency(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    textDecoration = if (tx.isExcluded)
+                        androidx.compose.ui.text.style.TextDecoration.LineThrough
+                    else null,
                 )
-                Text(
-                    text = listOfNotNull(
+                val subtitle = if (tx.isExcluded) {
+                    "Not income" + (tx.sender?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+                } else {
+                    listOfNotNull(
                         tx.source.displayName,
                         tx.sender?.takeIf { it.isNotBlank() }
-                    ).joinToString(" · "),
+                    ).joinToString(" · ")
+                }
+                Text(
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )

@@ -123,6 +123,34 @@ class IncomeViewModel @Inject constructor(
         _uiState.update { it.copy(dialogNote = value) }
     }
 
+    /**
+     * Mark an income row as "not income" — sets the `isExcluded` flag so the
+     * row is filtered out of totals, savings-rate, and source breakdowns but
+     * is kept on disk for SMS-replay dedupe and audit.
+     */
+    fun markAsNotIncome(id: Long) {
+        viewModelScope.launch {
+            try {
+                incomeRepository.setExcluded(id, true)
+                reload()
+            } catch (_: Exception) {
+                _uiState.update { it.copy(error = "Could not update") }
+            }
+        }
+    }
+
+    /** Restore a previously-excluded income row. */
+    fun restoreIncome(id: Long) {
+        viewModelScope.launch {
+            try {
+                incomeRepository.setExcluded(id, false)
+                reload()
+            } catch (_: Exception) {
+                _uiState.update { it.copy(error = "Could not update") }
+            }
+        }
+    }
+
     fun saveManualEntry() {
         val state = _uiState.value
         val amount = state.dialogAmount.toDoubleOrNull()
