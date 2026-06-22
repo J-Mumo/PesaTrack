@@ -91,8 +91,14 @@ class SmsReceiver : BroadcastReceiver() {
             val body = bodyBuilder.toString()
             val smsDate = smsTimestamps[sender] ?: System.currentTimeMillis()
 
-            // M-PESA SMS — always processed (no preference check needed)
-            if (SmsParser.isMpesaSms(sender) && SmsParser.isTransactionSms(body)) {
+            // M-PESA SMS — always processed (no preference check needed).
+            // We only gate on the universal M-PESA transaction marker
+            // "Confirmed"; the parser itself decides whether the body is an
+            // expense, an income, or NotARelevantMessage. The previous
+            // `SmsParser.isTransactionSms` gate only matched expense keywords
+            // and silently dropped income SMS (received / salary / business /
+            // M-Shwari / Offnet B2C), so no income notification ever fired.
+            if (SmsParser.isMpesaSms(sender) && body.contains("Confirmed", ignoreCase = true)) {
                 processTransaction(context, sender, body, smsDate)
                 continue
             }
