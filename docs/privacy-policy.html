@@ -81,14 +81,14 @@
         </div>
 
         <h2>1. What PesaTrack Does</h2>
-        <p>PesaTrack is a passive expense tracker for Android. It reads incoming M-PESA and bank
-        SMS messages, parses transaction details (amount, recipient, date, transaction code),
+        <p>PesaTrack is a passive expense tracker for Android. It reads both incoming and outgoing M-PESA and
+        bank SMS messages, parses transaction details (amount, recipient, date, transaction code),
         and saves them locally on your device for categorization, budgeting, and review.</p>
 
         <h2>2. SMS Data We Access</h2>
         <p>PesaTrack requests the following Android permissions:</p>
         <ul>
-            <li><strong>RECEIVE_SMS</strong> — To detect incoming M-PESA and supported bank SMS messages in real time</li>
+            <li><strong>RECEIVE_SMS</strong> — To detect M-PESA and supported bank SMS messages (incoming and outgoing transactions) in real time</li>
             <li><strong>READ_SMS</strong> — To import historical transaction SMS from your message inbox (user-initiated only)</li>
         </ul>
         <p>PesaTrack <strong>only reads SMS from specific senders</strong>:</p>

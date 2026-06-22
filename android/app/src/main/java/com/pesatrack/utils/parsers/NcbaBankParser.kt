@@ -3,6 +3,8 @@ package com.pesatrack.utils.parsers
 import android.util.Log
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
+import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
 import java.util.regex.Pattern
@@ -54,9 +56,25 @@ class NcbaBankParser : SmsParserStrategy {
 
     // --- Skip patterns ---
 
-    // Credit notification (skip — not an expense)
+    // Credit notification — used to be silently skipped. Phase 2: detect & emit as income.
     private val creditPattern = Pattern.compile(
         "has been credited", Pattern.CASE_INSENSITIVE
+    )
+
+    // Credit amount: "credited with KES 50,000.00" or "credited with KES. 50,000"
+    private val creditAmountPattern = Pattern.compile(
+        "credited with KES\\.?\\s*([\\d,]+(?:\\.\\d{2})?)", Pattern.CASE_INSENSITIVE
+    )
+
+    // Credit sender (best-effort): "from JOHN DOE" or "from JOHN DOE 2547XXXXXXX"
+    private val creditFromPattern = Pattern.compile(
+        "from\\s+(.+?)(?:\\s+(?:Ref\\.?|on|via)\\s|\\.\\s|$)",
+        Pattern.CASE_INSENSITIVE
+    )
+
+    // Credit ref (best-effort): "Ref ABC123" or "Ref: ABC123"
+    private val creditRefPattern = Pattern.compile(
+        "Ref\\.?:?\\s*([A-Z0-9]{6,})", Pattern.CASE_INSENSITIVE
     )
 
     // Generic debit notification (skip — ALL generic debits are skipped)
@@ -146,27 +164,32 @@ class NcbaBankParser : SmsParserStrategy {
         // 1. M-PESA transfers (Send/Till/Paybill)
         // 2. Card approval alerts
         // 3. Generic debits (handled to explicitly skip them)
+        // 4. Credits (income tracking Phase 2)
         return body.contains("MPESA transfer", ignoreCase = true) ||
                 body.contains("Mpesa Till transfer", ignoreCase = true) ||
                 body.contains("Mpesa Paybill transfer", ignoreCase = true) ||
                 body.contains("approved a transaction of", ignoreCase = true) ||
-                body.contains("has been debited", ignoreCase = true)
+                body.contains("has been debited", ignoreCase = true) ||
+                body.contains("has been credited", ignoreCase = true)
     }
 
-    override fun parse(body: String, smsDate: Long): SmsParser.ParsedTransaction? {
-        // Skip credit notifications
+    override fun parseSms(body: String, smsDate: Long): ParsedSms {
+        // Income: bank credit notifications
         if (creditPattern.matcher(body).find()) {
-            Log.d(TAG, "Skipping NCBA credit notification (not an expense)")
-            return null
+            val income = tryParseIncome(body, smsDate)
+            return if (income != null) ParsedSms.IncomeResult(income) else ParsedSms.NotARelevantMessage
         }
+        return tryParseExpense(body, smsDate)
+    }
 
+    private fun tryParseExpense(body: String, smsDate: Long): ParsedSms {
         try {
             // 0. Skip ALL generic debit notifications.
             // For card payments, the card approval SMS triggers an inbox lookup
             // in SmsReceiver to find the paired debit and extract the KES amount.
             if (genericDebitPattern.matcher(body).find()) {
                 Log.d(TAG, "Skipping NCBA generic debit notification")
-                return null
+                return ParsedSms.NotARelevantMessage
             }
 
             // 1. Card approval: "approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
@@ -179,7 +202,7 @@ class NcbaBankParser : SmsParserStrategy {
 
                     Log.d(TAG, "Parsed NCBA card approval: $currency $amount at $merchant (card *$cardLast4)")
 
-                    return SmsParser.ParsedTransaction(
+                    return ParsedSms.ExpenseResult(
                         expense = Expense(
                             transactionId = null, // No ref in card approval SMS
                             amount = amount ?: 0.0, // Foreign currency amount as fallback
@@ -209,7 +232,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(5)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef ?: bankRef,
                                 amount = amount,
@@ -235,7 +258,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(4)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef ?: bankRef,
                                 amount = amount,
@@ -263,7 +286,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(6)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef ?: bankRef,
                                 amount = amount,
@@ -291,7 +314,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(5)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef ?: bankRef,
                                 amount = amount,
@@ -318,7 +341,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(4)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef ?: bankRef,
                                 amount = amount,
@@ -344,7 +367,7 @@ class NcbaBankParser : SmsParserStrategy {
                     val mpesaRef = m.group(4)?.trim()
 
                     if (amount != null) {
-                        return SmsParser.ParsedTransaction(
+                        return ParsedSms.ExpenseResult(
                             expense = Expense(
                                 transactionId = mpesaRef,
                                 amount = amount,
@@ -364,15 +387,53 @@ class NcbaBankParser : SmsParserStrategy {
             // 4. Self-transfer (no recipient) — SKIP, not an expense
             if (selfTransferPattern.matcher(body).find()) {
                 Log.d(TAG, "Skipping NCBA self-transfer (bank → own M-PESA)")
-                return null
+                return ParsedSms.NotARelevantMessage
             }
 
             Log.d(TAG, "Unrecognized NCBA SMS format: ${body.take(80)}...")
-            return null
+            return ParsedSms.NotARelevantMessage
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing NCBA SMS: ${e.message}", e)
+            return ParsedSms.NotARelevantMessage
+        }
+    }
+
+    // ==================== Income Detection ====================
+
+    /**
+     * Try to parse [body] as a bank credit. Returns null when the credit pattern
+     * matches but the amount is unrecoverable (so the receiver knows to ignore
+     * vs. when the credit pattern doesn't match at all — caller already filtered).
+     */
+    private fun tryParseIncome(body: String, smsDate: Long): IncomeTransaction? {
+        val amountMatcher = creditAmountPattern.matcher(body)
+        if (!amountMatcher.find()) {
+            Log.d(TAG, "NCBA credit SMS missing parseable amount: ${body.take(80)}...")
             return null
         }
+        val amount = parseAmount(amountMatcher.group(1)) ?: return null
+
+        val senderMatcher = creditFromPattern.matcher(body)
+        val sender = if (senderMatcher.find()) senderMatcher.group(1)?.trim() else null
+
+        val refMatcher = creditRefPattern.matcher(body)
+        val ref = if (refMatcher.find()) refMatcher.group(1)?.trim() else null
+
+        // Bank credits without a ref still need a unique id for dedupe — fall back
+        // to a stable composite of sender+amount+smsDate so duplicate SMS deliveries
+        // are still ignored without colliding with unrelated credits.
+        val transactionId = ref ?: "NCBA-${sender ?: "unknown"}-$amount-$smsDate"
+
+        Log.d(TAG, "Parsed NCBA credit: KES $amount from $sender ref=$ref")
+        return IncomeTransaction(
+            transactionId = transactionId,
+            amount = amount,
+            timestamp = smsDate,
+            source = IncomeSource.UNCATEGORIZED,
+            sender = sender,
+            parserSource = "NCBA",
+            isCategorized = false
+        )
     }
 
     // ==================== Helpers ====================

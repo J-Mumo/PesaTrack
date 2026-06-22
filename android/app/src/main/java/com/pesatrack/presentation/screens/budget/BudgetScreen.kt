@@ -33,6 +33,7 @@ import com.pesatrack.domain.models.BudgetRemaining
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -110,7 +111,10 @@ fun BudgetScreen(
                         totalBudgeted = uiState.totalBudgeted,
                         periodLabel = uiState.selectedPeriodLabel,
                         periodType = uiState.selectedPeriodType,
-                        onSetIncome = { viewModel.showIncomeDialog() }
+                        detectedIncome = uiState.detectedIncome,
+                        effectiveIncomeSource = uiState.effectiveIncomeSource,
+                        onSetIncome = { viewModel.showIncomeDialog() },
+                        onUseDetected = { viewModel.useDetectedIncome() }
                     )
                 }
 
@@ -266,6 +270,9 @@ fun PeriodSelector(
  * Income & Budget allocation summary card.
  * Always visible — shows income vs total budgeted for the selected period,
  * with visual warning when over-allocated.
+ *
+ * For monthly periods, also shows detected SMS income and a one-tap
+ * "Use detected" shortcut + reconciliation chip footer (plan §6.3).
  */
 @Composable
 fun IncomeAllocationCard(
@@ -273,7 +280,10 @@ fun IncomeAllocationCard(
     totalBudgeted: Double,
     periodLabel: String,
     periodType: BudgetPeriod,
-    onSetIncome: () -> Unit
+    detectedIncome: Double = 0.0,
+    effectiveIncomeSource: EffectiveIncomeSource? = null,
+    onSetIncome: () -> Unit,
+    onUseDetected: () -> Unit = {}
 ) {
     val incomeLabel = when (periodType) {
         BudgetPeriod.WEEKLY -> "Weekly Income"
@@ -304,6 +314,34 @@ fun IncomeAllocationCard(
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
+            }
+
+            // Detected SMS income line + "Use detected" shortcut.
+            // Only meaningful for monthly periods (plan §6.3).
+            val showDetected = periodType == BudgetPeriod.MONTHLY && detectedIncome > 0.0
+            if (showDetected) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Detected this month: ${detectedIncome.formatAsCurrency()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.weight(1f)
+                    )
+                    val needsApply = monthlyIncome == null ||
+                        (monthlyIncome != null && kotlin.math.abs(monthlyIncome - detectedIncome) > 1.0)
+                    if (needsApply) {
+                        TextButton(
+                            onClick = onUseDetected,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text("Use detected", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -425,6 +463,25 @@ fun IncomeAllocationCard(
                     )
                 }
             }
+
+            // Reconciliation chip footer (plan §6.3) — monthly periods only.
+            val chipText = if (periodType == BudgetPeriod.MONTHLY) {
+                when (effectiveIncomeSource) {
+                    EffectiveIncomeSource.DETECTED -> "Using detected income"
+                    EffectiveIncomeSource.MANUAL_OVERRIDE -> "Using your override"
+                    EffectiveIncomeSource.DETECTED_BELOW_OVERRIDE ->
+                        "Using override — KES ${"%,.0f".format((monthlyIncome ?: 0.0) - detectedIncome)} higher than detected"
+                    EffectiveIncomeSource.NONE, null -> null
+                }
+            } else null
+            if (chipText != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = chipText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
@@ -460,6 +517,11 @@ fun SetIncomeDialog(
                     text = "Enter your expected income for $periodLabel. This helps you see if your budgets are realistic.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = "This is what the app should treat as your income for budgeting. Detected SMS income is shown for reference and is not changed by edits here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
                 OutlinedTextField(
                     value = currentAmount,

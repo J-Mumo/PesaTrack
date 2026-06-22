@@ -44,11 +44,13 @@ import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.domain.models.CategoryTrend
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.presentation.theme.getCategoryColor
 import com.pesatrack.utils.formatAsCurrency
+import java.util.Locale
 import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -285,6 +287,13 @@ fun InsightsTabContent(
             }
         }
 
+        // 5b. Savings Rate Card (Phase 4 — only when we have honest income data)
+        if (uiState.showSavingsRateCard && uiState.savingsRate != null) {
+            item {
+                SavingsRateInsightCard(data = uiState.savingsRate!!)
+            }
+        }
+
         // 6. Quarterly Review summary card
         item {
             Card(
@@ -482,6 +491,58 @@ fun PaceInsightCard(paceData: PaceCardData) {
                     text = "At today's pace, you'll end ${paceData.monthName} at ${paceData.projected.formatAsCurrency()} ($arrow $deltaFormatted vs ${paceData.prevMonthName})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                )
+            }
+        }
+    }
+}
+
+// ==================== Savings Rate Insight Card (Phase 4) ====================
+
+@Composable
+fun SavingsRateInsightCard(data: SavingsRateData) {
+    var showAssumptions by remember { mutableStateOf(false) }
+    val sourceLabel = when (data.effectiveIncomeSource) {
+        EffectiveIncomeSource.DETECTED -> "detected income"
+        EffectiveIncomeSource.DETECTED_BELOW_OVERRIDE -> "the income you set"
+        EffectiveIncomeSource.MANUAL_OVERRIDE -> "the income you set"
+        EffectiveIncomeSource.NONE -> "income"
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { showAssumptions = !showAssumptions },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Savings rate",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "${String.format(Locale.getDefault(), "%.0f", data.currentMonthPct)}% this month",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "${String.format(Locale.getDefault(), "%.0f", data.rollingThreeMonthPct)}% across the last three months",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
+            Text(
+                text = if (showAssumptions) "Hide details" else "Tap for assumptions",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+            )
+            if (showAssumptions) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Based on $sourceLabel of ${data.currentMonthIncome.formatAsCurrency()} and spend of ${data.currentMonthSpend.formatAsCurrency()} this month. Savings rate = (income − spend) ÷ income. Transaction fees count as spend.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                 )
             }
         }
@@ -845,6 +906,23 @@ fun MonthlyTabContent(
             }
             item {
                 MonthlyTrendChart(data = uiState.monthlyTrend)
+            }
+        }
+
+        // Income vs Spend (Phase 4) — only when we have detected income
+        if (uiState.incomeVsSpend.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Income vs Spend")
+            }
+            item {
+                Text(
+                    text = "Last 12 months. Income is from M-PESA and bank SMS only.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            item {
+                IncomeVsSpendChart(data = uiState.incomeVsSpend)
             }
         }
 
@@ -1655,6 +1733,98 @@ fun MonthlyTrendChart(data: List<MonthlyTotal>) {
             )
         }
     }
+}
+
+// ==================== Income vs Spend Chart (Phase 4) ====================
+
+@Composable
+fun IncomeVsSpendChart(data: List<IncomeSpendPoint>) {
+    val modelProducer = remember { CartesianChartModelProducer() }
+    val monthLabels = remember(data) {
+        data.mapIndexed { index, p ->
+            index to p.monthKey.takeLast(2).let { m ->
+                when (m) {
+                    "01" -> "Jan"; "02" -> "Feb"; "03" -> "Mar"
+                    "04" -> "Apr"; "05" -> "May"; "06" -> "Jun"
+                    "07" -> "Jul"; "08" -> "Aug"; "09" -> "Sep"
+                    "10" -> "Oct"; "11" -> "Nov"; "12" -> "Dec"
+                    else -> m
+                }
+            }
+        }.toMap()
+    }
+
+    LaunchedEffect(data) {
+        modelProducer.runTransaction {
+            lineSeries {
+                // Series 0 = income (green), series 1 = spend (red).
+                series(data.map { it.income })
+                series(data.map { it.spend })
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Tiny legend so the two lines are identifiable.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendDot(color = androidx.compose.ui.graphics.Color(0xFF388E3C))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Income",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                LegendDot(color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Spend",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxSize()) {
+                val incomeColor = androidx.compose.ui.graphics.Color(0xFF388E3C)
+                val spendColor = MaterialTheme.colorScheme.error
+                val incomeLine = LineCartesianLayer.rememberLine(
+                    fill = LineCartesianLayer.LineFill.single(fill(incomeColor))
+                )
+                val spendLine = LineCartesianLayer.rememberLine(
+                    fill = LineCartesianLayer.LineFill.single(fill(spendColor))
+                )
+                CartesianChartHost(
+                    chart = rememberCartesianChart(
+                        rememberLineCartesianLayer(
+                            lineProvider = LineCartesianLayer.LineProvider.series(incomeLine, spendLine)
+                        ),
+                        startAxis = VerticalAxis.rememberStart(),
+                        bottomAxis = HorizontalAxis.rememberBottom(
+                            valueFormatter = CartesianValueFormatter { _, value, _ ->
+                                monthLabels[value.toInt()] ?: ""
+                            }
+                        ),
+                    ),
+                    modelProducer = modelProducer,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(color: androidx.compose.ui.graphics.Color) {
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+    )
 }
 
 // ==================== Category Breakdown ====================

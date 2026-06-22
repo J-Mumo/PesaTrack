@@ -45,10 +45,29 @@ object SmsParserRegistry {
      * @param smsDate The SMS received timestamp from the device inbox (millis since epoch).
      *                Used as the transaction timestamp when the parser cannot extract a date
      *                from the SMS body itself. Defaults to current time if not provided.
-     * @return ParsedTransaction if parsing successful, null otherwise
+     * @return ParsedSms result (Expense / Income / NotARelevant), or [ParsedSms.NotARelevantMessage]
+     *         when no registered parser handles the SMS.
      */
+    fun parseSms(sender: String, body: String, smsDate: Long = System.currentTimeMillis()): ParsedSms {
+        return findParser(sender, body)?.parseSms(body, smsDate) ?: ParsedSms.NotARelevantMessage
+    }
+
+    /**
+     * Legacy expense-only entry point.
+     *
+     * Retained for backward compatibility — returns `null` when the SMS is
+     * not an expense (including the new income case). New callers should use
+     * [parseSms] directly so income transactions are not silently dropped.
+     */
+    @Deprecated(
+        "Use parseSms(...) so income transactions are not silently dropped",
+        ReplaceWith("(parseSms(sender, body, smsDate) as? ParsedSms.ExpenseResult)?.let { SmsParser.ParsedTransaction(it.expense, it.transactionCost, it.isCardApprovalUpdate) }")
+    )
     fun parseTransaction(sender: String, body: String, smsDate: Long = System.currentTimeMillis()): SmsParser.ParsedTransaction? {
-        return findParser(sender, body)?.parse(body, smsDate)
+        val result = findParser(sender, body)?.parseSms(body, smsDate) ?: return null
+        return (result as? ParsedSms.ExpenseResult)?.let {
+            SmsParser.ParsedTransaction(it.expense, it.transactionCost, it.isCardApprovalUpdate)
+        }
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.pesatrack.domain.insights
 
+import com.pesatrack.domain.models.EffectiveIncomeSource
+import com.pesatrack.domain.models.IncomeSourceTotal
 import java.time.LocalDate
 
 /**
@@ -44,6 +46,19 @@ data class MonthlyReviewSnapshot(
     val pace: Double,
     /** Investment illustration for discretionary spend. */
     val investmentIllustration: InvestmentIllustration,
+    /**
+     * Per-source detected income breakdown for the month.
+     *
+     * Empty list when no income was detected. Used by Monthly Review to show
+     * a "where your income came from" card alongside the spend breakdown.
+     */
+    val incomeBreakdown: List<IncomeSourceTotal> = emptyList(),
+    /**
+     * How the income figure shown in this snapshot was sourced. Surface this
+     * alongside any income-derived number for honesty.
+     * Null on snapshots produced before the income-tracking feature shipped.
+     */
+    val effectiveIncomeSource: EffectiveIncomeSource? = null,
     /** When the snapshot was generated (epoch millis). */
     val generatedAt: Long
 )

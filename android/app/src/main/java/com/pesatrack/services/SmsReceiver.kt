@@ -9,9 +9,13 @@ import android.util.Log
 import com.pesatrack.data.local.database.dao.ExpenseDao
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
+import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
+import com.pesatrack.utils.parsers.ParsedSms
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +44,9 @@ class SmsReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var expenseRepository: ExpenseRepository
+
+    @Inject
+    lateinit var incomeRepository: IncomeRepository
 
     @Inject
     lateinit var recipientMappingRepository: RecipientMappingRepository
@@ -122,77 +129,113 @@ class SmsReceiver : BroadcastReceiver() {
     private fun processTransaction(context: Context, sender: String, smsBody: String, smsDate: Long = System.currentTimeMillis()) {
         scope.launch {
             try {
-                // Parse the SMS using the registry (dispatches to correct parser)
-                // Pass smsDate so parsers use the actual SMS timestamp instead of current time
-                val parsed = SmsParserRegistry.parseTransaction(sender, smsBody, smsDate) ?: return@launch
-
-                var mainExpense = parsed.expense.copy(rawSms = smsBody)
-
-                // Handle card approval update — look up paired debit from inbox
-                if (parsed.isCardApprovalUpdate) {
-                    handleCardApprovalUpdate(context, mainExpense, smsDate)
-                    return@launch
-                }
-
-                // Check if transaction already exists
-                val transactionId = mainExpense.transactionId
-                if (transactionId != null && expenseRepository.transactionExists(transactionId)) {
-                    Log.d(TAG, "Transaction $transactionId already recorded, skipping")
-                    return@launch
-                }
-
-                // Apply auto-categorization
-                mainExpense = applyAutoCategorization(mainExpense)
-
-                // Save the main expense
-                val expenseId = expenseRepository.saveExpense(mainExpense)
-                Log.d(TAG, "Saved expense: ${mainExpense.paymentType.displayName()} " +
-                        "Ksh${mainExpense.amount} to ${mainExpense.recipientName ?: mainExpense.recipient}" +
-                        " [${mainExpense.source}]" +
-                        if (mainExpense.isCategorized) " (auto-categorized)" else "")
-
-                // Track SMS parsed milestone and counter (fire-and-forget)
-                appPreferences.recordFirstSmsParsed()
-                appPreferences.incrementSmsParsedCount()
-
-                // Show notification to categorize (only if not auto-categorized)
-                if (expenseId > 0 && !mainExpense.isCategorized) {
-                    val recipient = mainExpense.recipientName ?: mainExpense.recipient
-                    showCategorizeNotification(context, expenseId, mainExpense.amount, recipient)
-                }
-
-                // Check budget alerts (only for categorized expenses)
-                if (mainExpense.isCategorized && mainExpense.categoryId != null) {
-                    try {
-                        val alerts = budgetService.checkBudgetsAfterExpense(mainExpense.categoryId)
-                        for (alert in alerts) {
-                            val categoryName = alert.budget.categoryName ?: "Total Spending"
-                            NotificationHelper.showBudgetAlertNotification(
-                                context = context,
-                                budgetId = alert.budget.id,
-                                categoryName = categoryName,
-                                spent = alert.spent,
-                                budgetAmount = alert.budget.amount,
-                                percentage = alert.percentage.toInt(),
-                                threshold = alert.threshold
-                            )
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error checking budget alerts", e)
-                    }
-                }
-
-                // Save the transaction cost as a separate auto-categorized expense
-                val costExpense = parsed.transactionCost?.copy(rawSms = smsBody)
-                if (costExpense != null) {
-                    val costTxId = costExpense.transactionId
-                    if (costTxId != null && !expenseRepository.transactionExists(costTxId)) {
-                        expenseRepository.saveExpense(costExpense)
-                        Log.d(TAG, "Saved transaction cost: Ksh${costExpense.amount}")
-                    }
+                when (val parsed = SmsParserRegistry.parseSms(sender, smsBody, smsDate)) {
+                    is ParsedSms.ExpenseResult -> handleExpenseResult(context, parsed, smsBody, smsDate)
+                    is ParsedSms.IncomeResult -> handleIncomeResult(context, parsed.income, smsBody)
+                    ParsedSms.NotARelevantMessage -> Unit
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing SMS from $sender", e)
+            }
+        }
+    }
+
+    /**
+     * Handle an income SMS — dedupe by `transactionId`, persist, and (for
+     * UNCATEGORIZED sources) prompt the user to pick a source.
+     */
+    private suspend fun handleIncomeResult(context: Context, income: IncomeTransaction, smsBody: String) {
+        val toSave = income.copy(rawSms = smsBody)
+        val rowId = incomeRepository.insertIfNew(toSave)
+        if (rowId == null) {
+            Log.d(TAG, "Income ${income.transactionId} already recorded, skipping")
+            return
+        }
+        Log.d(
+            TAG,
+            "Saved income: Ksh${income.amount} source=${income.source.name} sender=${income.sender} txid=${income.transactionId}"
+        )
+
+        if (income.source == IncomeSource.UNCATEGORIZED) {
+            val displaySender = income.sender ?: "Unknown sender"
+            NotificationHelper.showIncomeNotification(
+                context = context,
+                incomeId = rowId,
+                amount = income.amount,
+                sender = displaySender
+            )
+        }
+    }
+
+    private suspend fun handleExpenseResult(
+        context: Context,
+        parsed: ParsedSms.ExpenseResult,
+        smsBody: String,
+        smsDate: Long
+    ) {
+        var mainExpense = parsed.expense.copy(rawSms = smsBody)
+
+        // Handle card approval update — look up paired debit from inbox
+        if (parsed.isCardApprovalUpdate) {
+            handleCardApprovalUpdate(context, mainExpense, smsDate)
+            return
+        }
+
+        // Check if transaction already exists
+        val transactionId = mainExpense.transactionId
+        if (transactionId != null && expenseRepository.transactionExists(transactionId)) {
+            Log.d(TAG, "Transaction $transactionId already recorded, skipping")
+            return
+        }
+
+        // Apply auto-categorization
+        mainExpense = applyAutoCategorization(mainExpense)
+
+        // Save the main expense
+        val expenseId = expenseRepository.saveExpense(mainExpense)
+        Log.d(TAG, "Saved expense: ${mainExpense.paymentType.displayName()} " +
+                "Ksh${mainExpense.amount} to ${mainExpense.recipientName ?: mainExpense.recipient}" +
+                " [${mainExpense.source}]" +
+                if (mainExpense.isCategorized) " (auto-categorized)" else "")
+
+        // Track SMS parsed milestone and counter (fire-and-forget)
+        appPreferences.recordFirstSmsParsed()
+        appPreferences.incrementSmsParsedCount()
+
+        // Show notification to categorize (only if not auto-categorized)
+        if (expenseId > 0 && !mainExpense.isCategorized) {
+            val recipient = mainExpense.recipientName ?: mainExpense.recipient
+            showCategorizeNotification(context, expenseId, mainExpense.amount, recipient)
+        }
+
+        // Check budget alerts (only for categorized expenses)
+        if (mainExpense.isCategorized && mainExpense.categoryId != null) {
+            try {
+                val alerts = budgetService.checkBudgetsAfterExpense(mainExpense.categoryId)
+                for (alert in alerts) {
+                    val categoryName = alert.budget.categoryName ?: "Total Spending"
+                    NotificationHelper.showBudgetAlertNotification(
+                        context = context,
+                        budgetId = alert.budget.id,
+                        categoryName = categoryName,
+                        spent = alert.spent,
+                        budgetAmount = alert.budget.amount,
+                        percentage = alert.percentage.toInt(),
+                        threshold = alert.threshold
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking budget alerts", e)
+            }
+        }
+
+        // Save the transaction cost as a separate auto-categorized expense
+        val costExpense = parsed.transactionCost?.copy(rawSms = smsBody)
+        if (costExpense != null) {
+            val costTxId = costExpense.transactionId
+            if (costTxId != null && !expenseRepository.transactionExists(costTxId)) {
+                expenseRepository.saveExpense(costExpense)
+                Log.d(TAG, "Saved transaction cost: Ksh${costExpense.amount}")
             }
         }
     }

@@ -1,6 +1,8 @@
 package com.pesatrack.domain.insights
 
 import com.pesatrack.data.local.database.dao.CategoryTotal
+import com.pesatrack.domain.models.EffectiveIncomeSource
+import com.pesatrack.domain.models.IncomeSourceTotal
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -45,6 +47,8 @@ object MonthlyReviewGenerator {
         monthStart: LocalDate,
         monthlyIncome: Double?,
         actualInvestmentAmount: Double = 0.0,
+        incomeBreakdown: List<IncomeSourceTotal> = emptyList(),
+        effectiveIncomeSource: EffectiveIncomeSource? = null,
         currentDate: LocalDate = LocalDate.now()
     ): MonthlyReviewSnapshot {
         val yearMonth = YearMonth.from(monthStart)
@@ -155,7 +159,8 @@ object MonthlyReviewGenerator {
             actualInvestmentAmount = actualInvestmentAmount,
             monthlyIncome = monthlyIncome,
             totalSpent = totalSpent,
-            feesPaid = feesPaid
+            feesPaid = feesPaid,
+            effectiveIncomeSource = effectiveIncomeSource
         )
 
         return MonthlyReviewSnapshot(
@@ -176,6 +181,8 @@ object MonthlyReviewGenerator {
             monthlyIncome = monthlyIncome,
             pace = pace,
             investmentIllustration = investmentIllustration,
+            incomeBreakdown = incomeBreakdown,
+            effectiveIncomeSource = effectiveIncomeSource,
             generatedAt = System.currentTimeMillis()
         )
     }
@@ -198,7 +205,8 @@ object MonthlyReviewGenerator {
         actualInvestmentAmount: Double,
         monthlyIncome: Double?,
         totalSpent: Double,
-        feesPaid: Double = 0.0
+        feesPaid: Double = 0.0,
+        effectiveIncomeSource: EffectiveIncomeSource? = null
     ): InvestmentIllustration {
         val r = INVESTMENT_ANNUAL_RATE
         val n = INVESTMENT_COMPOUNDING_PERIODS
@@ -253,6 +261,23 @@ object MonthlyReviewGenerator {
 
         val futureValue = principal * (1.0 + r / n).pow(n * t)
 
+        // Append source attribution to the disclaimer so the user can see
+        // whether the underlying income figure came from SMS detection or
+        // their own manual override (Phase 4 honesty requirement).
+        val attribution = when (effectiveIncomeSource) {
+            EffectiveIncomeSource.DETECTED ->
+                if (monthlyIncome != null && monthlyIncome > 0.0)
+                    " Based on detected income of KES ${"%,.0f".format(monthlyIncome)}."
+                else ""
+            EffectiveIncomeSource.MANUAL_OVERRIDE,
+            EffectiveIncomeSource.DETECTED_BELOW_OVERRIDE ->
+                if (monthlyIncome != null && monthlyIncome > 0.0)
+                    " Based on the income you set (KES ${"%,.0f".format(monthlyIncome)})."
+                else ""
+            EffectiveIncomeSource.NONE, null -> ""
+        }
+        val disclaimer = INVESTMENT_DISCLAIMER + attribution
+
         return InvestmentIllustration(
             source = source,
             principalAmount = principal,
@@ -263,7 +288,7 @@ object MonthlyReviewGenerator {
             currentPercent = currentPercent,
             nextTargetPercent = nextTargetPercent,
             gapAmount = gapAmount,
-            disclaimer = INVESTMENT_DISCLAIMER
+            disclaimer = disclaimer
         )
     }
 }

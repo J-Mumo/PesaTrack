@@ -37,18 +37,34 @@ interface SmsParserStrategy {
     fun canHandle(sender: String, body: String): Boolean
 
     /**
-     * Parse the SMS body into a [SmsParser.ParsedTransaction].
+     * Parse the SMS body into a [ParsedSms] result.
      *
-     * Returns null if:
-     * - The SMS is not a parseable expense transaction
-     * - The SMS is a non-expense (e.g., receive money, deposit, self-transfer)
-     * - The format is unrecognized
+     * Returns:
+     * - [ParsedSms.ExpenseResult] for outgoing-money SMS (send, pay bill, withdraw, ...).
+     * - [ParsedSms.IncomeResult] for incoming-money SMS (salary, receive, bank credit, ...).
+     * - [ParsedSms.NotARelevantMessage] for SMS the parser recognises but cannot or
+     *   should not turn into a row (reversals, balance reports, unrecognised formats).
      *
      * @param body The SMS message body
      * @param smsDate The SMS received timestamp from the device inbox (millis since epoch).
      *                Used as the transaction timestamp when the parser cannot extract a date
      *                from the SMS body itself. Defaults to current time if not provided.
-     * @return ParsedTransaction if parsing successful, null otherwise
      */
-    fun parse(body: String, smsDate: Long = System.currentTimeMillis()): SmsParser.ParsedTransaction?
+    fun parseSms(body: String, smsDate: Long = System.currentTimeMillis()): ParsedSms
+
+    /**
+     * Legacy expense-only entry point retained for backward compatibility with
+     * [SmsParser.parseSms]. New callers should use [parseSms] directly so income
+     * results are not silently dropped.
+     */
+    @Deprecated(
+        "Use parseSms(...) which returns ParsedSms",
+        ReplaceWith("(parseSms(body, smsDate) as? ParsedSms.ExpenseResult)?.let { SmsParser.ParsedTransaction(it.expense, it.transactionCost, it.isCardApprovalUpdate) }")
+    )
+    fun parse(body: String, smsDate: Long = System.currentTimeMillis()): SmsParser.ParsedTransaction? {
+        val result = parseSms(body, smsDate)
+        return (result as? ParsedSms.ExpenseResult)?.let {
+            SmsParser.ParsedTransaction(it.expense, it.transactionCost, it.isCardApprovalUpdate)
+        }
+    }
 }

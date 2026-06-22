@@ -206,7 +206,7 @@ fun AboutScreen(
                     Text(
                         text = "• No internet permission — PesaTrack cannot send data anywhere\n" +
                                 "• No cloud sync, no ads, no data transmission\n" +
-                                "• Only reads M-PESA and supported bank SMS\n" +
+                                "• Reads both incoming and outgoing M-PESA and bank SMS — nothing leaves your phone\n" +
                                 "• PIN lock + biometric for privacy",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)

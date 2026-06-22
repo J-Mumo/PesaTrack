@@ -85,6 +85,7 @@ class MainActivity : FragmentActivity() {
     /** Deep-link navigation target from notification intent extras. */
     private val pendingNavigateTo = mutableStateOf<String?>(null)
     private val pendingExpenseId = mutableStateOf<Long?>(null)
+    private val pendingIncomeId = mutableStateOf<Long?>(null)
     private val pendingSnapshotId = mutableStateOf<Long?>(null)
     private val pendingYear = mutableStateOf<Int?>(null)
 
@@ -124,11 +125,15 @@ class MainActivity : FragmentActivity() {
     private fun handleDeepLinkIntent(intent: Intent?) {
         val navigateTo = intent?.getStringExtra("navigate_to") ?: return
         val expenseId = intent.getLongExtra("expense_id", -1L)
+        val incomeId = intent.getLongExtra("income_id", -1L)
         val snapshotId = intent.getLongExtra("report_snapshot_id", -1L)
         val year = intent.getIntExtra("year", -1)
         pendingNavigateTo.value = navigateTo
         if (expenseId != -1L) {
             pendingExpenseId.value = expenseId
+        }
+        if (incomeId != -1L) {
+            pendingIncomeId.value = incomeId
         }
         if (snapshotId != -1L) {
             pendingSnapshotId.value = snapshotId
@@ -234,6 +239,7 @@ class MainActivity : FragmentActivity() {
         } else {
             val deepLinkTarget by pendingNavigateTo
             val deepLinkExpenseId by pendingExpenseId
+            val deepLinkIncomeId by pendingIncomeId
             val deepLinkSnapshotId by pendingSnapshotId
             val deepLinkYear by pendingYear
             MainScreen(
@@ -241,11 +247,13 @@ class MainActivity : FragmentActivity() {
                 onImportNavigated = onImportNavigated,
                 deepLinkTarget = deepLinkTarget,
                 deepLinkExpenseId = deepLinkExpenseId,
+                deepLinkIncomeId = deepLinkIncomeId,
                 deepLinkSnapshotId = deepLinkSnapshotId,
                 deepLinkYear = deepLinkYear,
                 onDeepLinkHandled = {
                     pendingNavigateTo.value = null
                     pendingExpenseId.value = null
+                    pendingIncomeId.value = null
                     pendingSnapshotId.value = null
                     pendingYear.value = null
                 }
@@ -344,6 +352,7 @@ fun MainScreen(
     onImportNavigated: () -> Unit = {},
     deepLinkTarget: String? = null,
     deepLinkExpenseId: Long? = null,
+    deepLinkIncomeId: Long? = null,
     deepLinkSnapshotId: Long? = null,
     deepLinkYear: Int? = null,
     onDeepLinkHandled: () -> Unit = {}
@@ -366,6 +375,11 @@ fun MainScreen(
             "categorize" -> {
                 deepLinkExpenseId?.let { id ->
                     navController.navigate(Screen.Categorize.createRoute(id))
+                }
+            }
+            "categorize_income" -> {
+                deepLinkIncomeId?.let { id ->
+                    navController.navigate(Screen.CategorizeIncome.createRoute(id))
                 }
             }
             "budget" -> navController.navigate(Screen.Budget.route)

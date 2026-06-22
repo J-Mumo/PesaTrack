@@ -7,7 +7,9 @@ import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 import com.pesatrack.utils.UsageSummaryGenerator
@@ -24,6 +26,7 @@ class HomeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val budgetRepository: BudgetRepository,
+    private val incomeRepository: IncomeRepository,
     private val appPreferences: AppPreferences,
     private val usageSummaryGenerator: UsageSummaryGenerator
 ) : ViewModel() {
@@ -54,6 +57,7 @@ class HomeViewModel @Inject constructor(
         loadData()
         loadTrendData()
         loadBudgetData()
+        loadIncomeData()
         loadSmsBannerState()
         checkReviewPromptEligibility()
         checkStructuredFeedbackPromptEligibility()
@@ -194,7 +198,39 @@ class HomeViewModel @Inject constructor(
         }
         return result
     }
-    
+
+    /**
+     * Load detected income + savings rate for the current calendar month and
+     * keep them in sync as expenses change.
+     */
+    private fun loadIncomeData() {
+        viewModelScope.launch {
+            expenseRepository.getExpensesForCurrentMonth().collect {
+                try {
+                    val now = Calendar.getInstance()
+                    val year = now.get(Calendar.YEAR)
+                    val month = now.get(Calendar.MONTH) + 1
+                    val yearMonth = String.format(Locale.US, "%04d-%02d", year, month)
+                    val effective = incomeRepository.effectiveMonthlyIncome(yearMonth)
+                    val detected = effective.detectedAmount
+                    val spent = expenseRepository.getTotalForMonth(year, month)
+                    val rate: Double? = if (detected > 0) {
+                        (((detected - spent) / detected) * 100.0).coerceIn(-100.0, 100.0)
+                    } else null
+                    _uiState.update { state ->
+                        state.copy(
+                            receivedThisMonth = detected,
+                            effectiveIncomeSource = effective.source,
+                            savingsRatePct = rate
+                        )
+                    }
+                } catch (_: Exception) {
+                    // Non-critical
+                }
+            }
+        }
+    }
+
     private fun refreshExpensesWithCategories() {
         val currentExpenses = _uiState.value.recentExpenses
         val updated = currentExpenses.map { ewc ->

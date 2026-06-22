@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pesatrack.domain.insights.MonthlyReviewSnapshot
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.utils.formatAsCurrency
 import java.util.Locale
 import kotlin.math.abs
@@ -138,6 +139,11 @@ private fun MonthlyReviewContent(
         // Headroom
         if (snapshot.headroom != null) {
             item { HeadroomCard(snapshot) }
+        }
+
+        // Income source breakdown (Phase 3 — only when we have detected income)
+        if (snapshot.incomeBreakdown.isNotEmpty()) {
+            item { IncomeSourcesCard(snapshot) }
         }
 
         // Pace / projection
@@ -432,6 +438,68 @@ private fun InvestmentIllustrationCard(snapshot: MonthlyReviewSnapshot) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
             )
+        }
+    }
+}
+
+/**
+ * Where the month's income came from (Phase 3 — Monthly Review).
+ *
+ * Shows the per-source detected breakdown. Adds a chip describing how the
+ * income figure was reconciled with any manual override so the user can
+ * trust the numbers.
+ */
+@Composable
+private fun IncomeSourcesCard(snapshot: MonthlyReviewSnapshot) {
+    val total = snapshot.incomeBreakdown.sumOf { it.total }
+    if (total <= 0.0) return
+    val chipText = when (snapshot.effectiveIncomeSource) {
+        EffectiveIncomeSource.DETECTED -> "Using detected income"
+        EffectiveIncomeSource.MANUAL_OVERRIDE -> "Using your set income — no SMS income detected"
+        EffectiveIncomeSource.DETECTED_BELOW_OVERRIDE -> "Using your set income — higher than detected"
+        EffectiveIncomeSource.NONE, null -> null
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Where your income came from",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            snapshot.incomeBreakdown
+                .sortedByDescending { it.total }
+                .forEach { row ->
+                    val pct = (row.total / total) * 100.0
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = row.source.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = row.total.formatAsCurrency(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "  ${String.format(Locale.getDefault(), "%.0f", pct)}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            if (chipText != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = chipText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }

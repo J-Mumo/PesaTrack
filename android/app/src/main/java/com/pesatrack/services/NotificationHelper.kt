@@ -30,6 +30,11 @@ object NotificationHelper {
     private const val RECURRING_CHANNEL_NAME = "Recurring Reminders"
     private const val RECURRING_CHANNEL_DESCRIPTION = "Reminders for upcoming and overdue recurring expenses"
 
+    private const val INCOME_CHANNEL_ID = "pesatrack_income_received"
+    private const val INCOME_CHANNEL_NAME = "Income Received"
+    private const val INCOME_CHANNEL_DESCRIPTION =
+        "Low-priority prompt to categorize a newly detected income transaction."
+
     private const val WEEKLY_REVIEW_CHANNEL_ID = "pesatrack_weekly_review"
     private const val WEEKLY_REVIEW_CHANNEL_NAME = "Weekly Review"
     private const val WEEKLY_REVIEW_CHANNEL_DESCRIPTION =
@@ -217,6 +222,68 @@ object NotificationHelper {
         // Unique notification ID per budget per threshold level
         val notificationId = (budgetId * 10 + threshold).toInt()
         notificationManager.notify(notificationId, notification)
+    }
+
+    // ==================== Income Received (Phase 2) ====================
+
+    /**
+     * Create the income received notification channel. Low priority — we nudge
+     * the user to categorize, never nag.
+     */
+    fun createIncomeReceivedChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                INCOME_CHANNEL_ID,
+                INCOME_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = INCOME_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show a notification prompting the user to categorize a newly detected income.
+     */
+    fun showIncomeNotification(
+        context: Context,
+        incomeId: Long,
+        amount: Double,
+        sender: String
+    ) {
+        createIncomeReceivedChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "categorize_income")
+            putExtra("income_id", incomeId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            (incomeId + 700_000).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedAmount = String.format("KES %,.2f", amount)
+
+        val notification = NotificationCompat.Builder(context, INCOME_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Income received: $formattedAmount")
+            .setContentText("From $sender — Tap to categorize")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify((incomeId + 700_000).toInt(), notification)
     }
 
     // ==================== Recurring Reminders ====================

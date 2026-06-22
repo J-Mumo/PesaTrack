@@ -139,7 +139,15 @@ class InsightsRepository @Inject constructor(
             .atZone(ZoneId.systemDefault()).toLocalDate()
 
         val monthIncomeKey = monthYearKeyFor(prevMonthBounds.start)
-        val monthlyIncome = monthlyIncomeBudgetDao.getByYearMonth(monthIncomeKey)?.amount
+        // Use reconciled income (detected SMS or manual override) so the
+        // monthly review reflects the same figure the rest of the app shows
+        // (plan §6.5, §9.3). Surface the source on the snapshot for honesty.
+        val effective = incomeRepository.effectiveMonthlyIncome(monthIncomeKey)
+        val monthlyIncome = effective.value
+        val incomeBreakdown = incomeRepository.sourceBreakdown(
+            prevMonthBounds.start,
+            prevMonthBounds.endExclusive
+        )
 
         val investmentTotal = expenseDao.getInvestmentTotalInRange(prevMonthBounds.start, prevMonthBounds.endExclusive)
 
@@ -149,6 +157,8 @@ class InsightsRepository @Inject constructor(
             monthStart = monthStart,
             monthlyIncome = monthlyIncome,
             actualInvestmentAmount = investmentTotal,
+            incomeBreakdown = incomeBreakdown,
+            effectiveIncomeSource = effective.source,
             currentDate = monthStart.plusMonths(1) // month is complete
         )
 

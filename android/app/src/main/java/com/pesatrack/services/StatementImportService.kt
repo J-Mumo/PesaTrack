@@ -2,6 +2,7 @@ package com.pesatrack.services
 
 import android.util.Log
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.PaymentType
@@ -26,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class StatementImportService @Inject constructor(
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val recipientMappingRepository: RecipientMappingRepository,
     private val categorizationService: CategorizationService
 ) {
@@ -47,6 +49,10 @@ class StatementImportService @Inject constructor(
         val chargesImported: Int = 0,
         /** Rows skipped because they are income (received money, salary, etc.) */
         val skippedIncome: Int = 0,
+        /** New income transactions imported from the statement (Phase 2) */
+        val incomeImported: Int = 0,
+        /** Income rows skipped because transactionId already exists in DB (Phase 2) */
+        val incomeDuplicates: Int = 0,
         /** Rows skipped because they are reversals */
         val skippedReversal: Int = 0,
         /** Rows skipped because transactionId already exists in DB */
@@ -177,12 +183,34 @@ class StatementImportService @Inject constructor(
         Log.i(TAG, "Statement import complete: imported=$imported, autoCat=$autoCategorized, " +
                 "charges=$chargesImported, duplicates=$skippedDuplicate")
 
+        // Phase 4: Import income transactions
+        var incomeImported = 0
+        var incomeDuplicates = 0
+        for (income in parseResult.incomeTransactions) {
+            try {
+                val rowId = incomeRepository.insertIfNew(income.copy(rawSms = "PDF statement row"))
+                if (rowId != null) {
+                    incomeImported++
+                    Log.d(TAG, "Imported income: ${income.transactionId} | KES ${income.amount} | source=${income.source.name}")
+                } else {
+                    incomeDuplicates++
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save income ${income.transactionId}: ${e.message}", e)
+            }
+        }
+        if (parseResult.incomeTransactions.isNotEmpty()) {
+            Log.i(TAG, "Income import: imported=$incomeImported, duplicates=$incomeDuplicates")
+        }
+
         return StatementImportResult(
             totalRows = parseResult.totalRowsParsed,
             imported = imported,
             autoCategorized = autoCategorized,
             chargesImported = chargesImported,
             skippedIncome = parseResult.rowsSkippedIncome,
+            incomeImported = incomeImported,
+            incomeDuplicates = incomeDuplicates,
             skippedReversal = parseResult.rowsSkippedReversal,
             skippedDuplicate = skippedDuplicate,
             unparseable = parseResult.rowsUnparseable,

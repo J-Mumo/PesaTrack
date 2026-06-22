@@ -1,7 +1,9 @@
 package com.pesatrack.data.repository
 
+import com.pesatrack.data.local.database.dao.IncomeSenderRuleDao
 import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
+import com.pesatrack.data.local.database.entities.IncomeSenderRuleEntity
 import com.pesatrack.data.local.database.entities.IncomeTransactionEntity
 import com.pesatrack.domain.models.EffectiveIncome
 import com.pesatrack.domain.models.EffectiveIncomeSource
@@ -29,16 +31,51 @@ import javax.inject.Singleton
 class IncomeRepository @Inject constructor(
     private val incomeTransactionDao: IncomeTransactionDao,
     private val monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao,
+    private val incomeSenderRuleDao: IncomeSenderRuleDao,
 ) {
 
-    // ──────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
     //                            Transactions
-    // ──────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────
 
-    /** Insert if new (by `transactionId`). Returns the row id, or `null` on duplicate. */
+    /**
+     * Insert if new (by `transactionId`). Returns the row id, or `null` on duplicate.
+     *
+     * When the incoming row is [IncomeSource.UNCATEGORIZED] and the sender has a
+     * learned rule (see [learnSenderSource]), the rule is applied before insert
+     * so the saved row is already categorized.
+     */
     suspend fun insertIfNew(tx: IncomeTransaction): Long? {
-        val rowId = incomeTransactionDao.insertIgnoreOnConflict(tx.toEntity())
+        val resolved = applyLearnedRuleIfUncategorized(tx)
+        val rowId = incomeTransactionDao.insertIgnoreOnConflict(resolved.toEntity())
         return rowId.takeIf { it >= 0L }
+    }
+
+    private suspend fun applyLearnedRuleIfUncategorized(tx: IncomeTransaction): IncomeTransaction {
+        if (tx.source != IncomeSource.UNCATEGORIZED) return tx
+        val sender = tx.sender?.takeIf { it.isNotBlank() } ?: return tx
+        val rule = incomeSenderRuleDao.getBySender(sender) ?: return tx
+        val learned = IncomeSource.fromName(rule.source)
+        return if (learned == IncomeSource.UNCATEGORIZED) tx else tx.copy(
+            source = learned,
+            isCategorized = true,
+        )
+    }
+
+    /**
+     * Persist a learned sender → source rule so future income from the same
+     * sender is auto-classified. No-ops on blank sender or `UNCATEGORIZED`.
+     */
+    suspend fun learnSenderSource(sender: String?, source: IncomeSource) {
+        val trimmed = sender?.trim().orEmpty()
+        if (trimmed.isEmpty() || source == IncomeSource.UNCATEGORIZED) return
+        incomeSenderRuleDao.upsert(
+            IncomeSenderRuleEntity(
+                sender = trimmed,
+                source = source.name,
+                learnedAt = System.currentTimeMillis(),
+            )
+        )
     }
 
     suspend fun getById(id: Long): IncomeTransaction? =

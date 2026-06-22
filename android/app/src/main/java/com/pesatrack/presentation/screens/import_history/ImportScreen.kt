@@ -389,6 +389,13 @@ private fun ImportResultCard(result: SmsImportService.ImportResult) {
             ResultRow("Duplicates skipped", result.duplicatesSkipped.toString())
             ResultRow("Transaction costs saved", result.transactionCostsSaved.toString())
 
+            if (result.newIncomesImported > 0 || result.incomeDuplicatesSkipped > 0) {
+                ResultRow("Income transactions imported", result.newIncomesImported.toString())
+                if (result.incomeDuplicatesSkipped > 0) {
+                    ResultRow("Income already in database", result.incomeDuplicatesSkipped.toString())
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))

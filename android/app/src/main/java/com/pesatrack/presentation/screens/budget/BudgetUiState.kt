@@ -4,6 +4,7 @@ import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetRemaining
+import com.pesatrack.domain.models.EffectiveIncomeSource
 
 /**
  * UI State for the Budget screen (period-first flow).
@@ -38,6 +39,20 @@ data class BudgetUiState(
 
     /** User's income for the selected period (null = not set) */
     val monthlyIncome: Double? = null,
+
+    /**
+     * Detected income (SMS-sourced) for the selected period.
+     *
+     * Only populated for [BudgetPeriod.MONTHLY] — weekly / yearly / custom
+     * periods don't map cleanly onto monthly income detection.
+     */
+    val detectedIncome: Double = 0.0,
+
+    /**
+     * How [monthlyIncome] reconciles with [detectedIncome] for the active month.
+     * Only meaningful for monthly periods; null on other period types.
+     */
+    val effectiveIncomeSource: EffectiveIncomeSource? = null,
 
     /** Sum of active budget amounts for the selected period type */
     val totalBudgeted: Double = 0.0,

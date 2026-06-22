@@ -5,10 +5,13 @@ import android.net.Uri
 import android.util.Log
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Expense
+import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
+import com.pesatrack.utils.parsers.ParsedSms
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -34,6 +37,7 @@ import javax.inject.Singleton
 class SmsImportService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
     private val recipientMappingRepository: RecipientMappingRepository,
     private val appPreferences: AppPreferences
 ) {
@@ -71,6 +75,10 @@ class SmsImportService @Inject constructor(
         val needsManualCategorization: Int = 0,
         /** Transaction costs saved as separate expenses */
         val transactionCostsSaved: Int = 0,
+        /** New income transactions imported (Phase 2) */
+        val newIncomesImported: Int = 0,
+        /** Income SMS already in DB (skipped duplicates, Phase 2) */
+        val incomeDuplicatesSkipped: Int = 0,
         /** Number of sources that were imported from */
         val sourcesImported: Int = 0,
         /** Errors encountered during import */
@@ -116,6 +124,8 @@ class SmsImportService @Inject constructor(
         var autoCategorizedByMapping = 0
         var needsManualCategorization = 0
         var transactionCostsSaved = 0
+        var newIncomesImported = 0
+        var incomeDuplicatesSkipped = 0
         var errors = 0
 
         val expenseBatch = mutableListOf<Expense>()
@@ -127,7 +137,17 @@ class SmsImportService @Inject constructor(
 
                 // Parse SMS using the registry (dispatches to correct parser by sender)
                 // Pass sms.date so parsers use the actual SMS received date as timestamp
-                val parsed = SmsParserRegistry.parseTransaction(sms.sender, sms.body, sms.date) ?: continue
+                val parsed = SmsParserRegistry.parseSms(sms.sender, sms.body, sms.date)
+                when (parsed) {
+                    ParsedSms.NotARelevantMessage -> continue
+                    is ParsedSms.IncomeResult -> {
+                        val rowId = incomeRepository.insertIfNew(parsed.income.copy(rawSms = sms.body))
+                        if (rowId != null) newIncomesImported++ else incomeDuplicatesSkipped++
+                        totalParsed++
+                        continue
+                    }
+                    is ParsedSms.ExpenseResult -> Unit
+                }
                 totalParsed++
 
                 // Create main expense with rawSms
@@ -196,6 +216,8 @@ class SmsImportService @Inject constructor(
             autoCategorizedByMapping = autoCategorizedByMapping,
             needsManualCategorization = needsManualCategorization,
             transactionCostsSaved = transactionCostsSaved,
+            newIncomesImported = newIncomesImported,
+            incomeDuplicatesSkipped = incomeDuplicatesSkipped,
             sourcesImported = senderIds.size,
             errors = errors
         )

@@ -3,6 +3,7 @@ package com.pesatrack.presentation.screens.home
 import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.BudgetProgress
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 
@@ -14,6 +15,16 @@ data class HomeUiState(
     val totalThisMonth: Double = 0.0,
     /** Total invested this month (Investment & Savings group 18) */
     val investmentThisMonth: Double = 0.0,
+
+    // ==================== Income (Phase 3) ====================
+
+    /** Sum of detected inflow income for the current calendar month (excludes self-transfers). */
+    val receivedThisMonth: Double = 0.0,
+    /** Source of the income figure currently displayed — drives whether the received/saved line shows. */
+    val effectiveIncomeSource: EffectiveIncomeSource = EffectiveIncomeSource.NONE,
+    /** (received - spent) / received expressed as %. Null when received is 0 or income source is `NONE`/`MANUAL_OVERRIDE`. */
+    val savingsRatePct: Double? = null,
+
     val recentExpenses: List<ExpenseWithCategory> = emptyList(),
     /** Up to 5 categories with the most recent activity in the current month. */
     val recentCategoryBreakdown: List<CategoryTotal> = emptyList(),

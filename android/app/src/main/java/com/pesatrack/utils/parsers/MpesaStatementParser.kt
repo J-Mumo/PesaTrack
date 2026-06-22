@@ -3,6 +3,8 @@ package com.pesatrack.utils.parsers
 import android.util.Log
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
+import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
 import com.tom_roush.pdfbox.pdmodel.PDDocument
@@ -211,6 +213,8 @@ object MpesaStatementParser {
     data class StatementParseResult(
         val header: StatementHeader,
         val transactions: List<ParsedStatementTransaction>,
+        /** Income rows parsed into [IncomeTransaction]s (added in Phase 2). */
+        val incomeTransactions: List<IncomeTransaction>,
         val totalRowsParsed: Int,
         val rowsSkippedIncome: Int,
         val rowsSkippedReversal: Int,
@@ -275,15 +279,21 @@ object MpesaStatementParser {
         var skippedReversal = 0
         var unparseable = 0
         val transactions = mutableListOf<ParsedStatementTransaction>()
+        val incomeTransactions = mutableListOf<IncomeTransaction>()
 
         for (row in rows) {
-            // Skip income
-            if (row.amountPaidIn != null && row.amountPaidIn > 0 && (row.amountWithdrawn == null || row.amountWithdrawn == 0.0)) {
+            val isPaidInRow = row.amountPaidIn != null && row.amountPaidIn > 0 &&
+                    (row.amountWithdrawn == null || row.amountWithdrawn == 0.0)
+            val matchesIncomePattern = INCOME_PATTERNS.any { it.containsMatchIn(row.details) }
+
+            if (isPaidInRow || matchesIncomePattern) {
                 skippedIncome++
-                continue
-            }
-            if (INCOME_PATTERNS.any { it.containsMatchIn(row.details) }) {
-                skippedIncome++
+                val income = parseIncomeRow(row)
+                if (income != null) {
+                    incomeTransactions.add(income)
+                } else {
+                    Log.w(TAG, "Could not parse income row: ${row.receiptNo} | paidIn=${row.amountPaidIn} | ${row.details.take(100)}")
+                }
                 continue
             }
 
@@ -302,16 +312,60 @@ object MpesaStatementParser {
             }
         }
 
-        Log.d(TAG, "Parsed ${transactions.size} transactions (income=$skippedIncome, reversals=$skippedReversal, unparseable=$unparseable)")
+        Log.d(TAG, "Parsed ${transactions.size} expense transactions, ${incomeTransactions.size} income transactions (income-rows=$skippedIncome, reversals=$skippedReversal, unparseable=$unparseable)")
 
         return StatementParseResult(
             header = header,
             transactions = transactions,
+            incomeTransactions = incomeTransactions,
             totalRowsParsed = rows.size,
             rowsSkippedIncome = skippedIncome,
             rowsSkippedReversal = skippedReversal,
             rowsUnparseable = unparseable
         )
+    }
+
+    /**
+     * Parse a single statement row into an [IncomeTransaction]. Returns null when
+     * the row doesn't carry a positive paid-in amount or a parseable timestamp.
+     */
+    private fun parseIncomeRow(row: StatementRow): IncomeTransaction? {
+        val amount = row.amountPaidIn ?: return null
+        if (amount <= 0.0) return null
+
+        val (source, sender) = classifyIncomeRow(row.details)
+
+        return IncomeTransaction(
+            transactionId = row.receiptNo,
+            amount = amount,
+            timestamp = parseTimestamp(row.dateTime),
+            source = source,
+            sender = sender,
+            parserSource = "STATEMENT_IMPORT",
+            isCategorized = source != IncomeSource.UNCATEGORIZED
+        )
+    }
+
+    private fun classifyIncomeRow(details: String): Pair<IncomeSource, String?> {
+        val normalized = details.trim()
+        fun afterPrefix(prefix: String): String? {
+            val idx = normalized.indexOf(prefix, ignoreCase = true)
+            if (idx < 0) return null
+            return normalized.substring(idx + prefix.length).trim().takeIf { it.isNotBlank() }
+        }
+        return when {
+            normalized.contains("Salary Payment from", ignoreCase = true) ->
+                IncomeSource.SALARY to afterPrefix("Salary Payment from")
+            normalized.contains("Business Payment from", ignoreCase = true) ->
+                IncomeSource.BUSINESS to afterPrefix("Business Payment from")
+            normalized.contains("M-Shwari Withdraw", ignoreCase = true) ->
+                IncomeSource.TRANSFER_IN to "M-Shwari"
+            normalized.contains("Offnet B2C Transfer", ignoreCase = true) ->
+                IncomeSource.UNCATEGORIZED to afterPrefix("Offnet B2C Transfer")
+            normalized.contains("Funds received from", ignoreCase = true) ->
+                IncomeSource.UNCATEGORIZED to afterPrefix("Funds received from")
+            else -> IncomeSource.UNCATEGORIZED to null
+        }
     }
 
     /**

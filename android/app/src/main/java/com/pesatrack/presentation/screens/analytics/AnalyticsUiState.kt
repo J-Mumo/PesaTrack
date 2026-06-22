@@ -6,6 +6,7 @@ import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.domain.models.CategoryTrend
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.RecurringExpense
 import com.pesatrack.domain.models.YearComparison
@@ -51,6 +52,35 @@ data class QuietLeakData(
 )
 
 /**
+ * Data for the Savings Rate insight card (Income tracking Phase 4).
+ *
+ * Savings rate = (income - spend) / income. We only show this when we have
+ * income data we can trust (detected SMS or user override) — never assumed.
+ */
+data class SavingsRateData(
+    /** Current calendar-month savings rate as a percentage (-100..100). */
+    val currentMonthPct: Double,
+    /** Rolling average over the last three calendar months (inclusive of current). */
+    val rollingThreeMonthPct: Double,
+    /** Detected income used for the current month. */
+    val currentMonthIncome: Double,
+    /** Total spend used for the current month. */
+    val currentMonthSpend: Double,
+    /** Reconciliation source so the card can describe where income came from. */
+    val effectiveIncomeSource: EffectiveIncomeSource
+)
+
+/**
+ * One month of the Income vs Spend overlay chart (Phase 4).
+ * `monthKey` is `YYYY-MM`. `income` may be zero when no income was detected.
+ */
+data class IncomeSpendPoint(
+    val monthKey: String,
+    val income: Double,
+    val spend: Double
+)
+
+/**
  * UI State for the Analytics screen
  */
 data class AnalyticsUiState(
@@ -78,6 +108,12 @@ data class AnalyticsUiState(
     /** Whether to show the categorization nudge (>15%) */
     val showCategorizationNudge: Boolean = false,
 
+    // ── Savings Rate (Phase 4) ──
+    /** Savings rate card data. Null when we don't have trustworthy income. */
+    val savingsRate: SavingsRateData? = null,
+    /** Whether to show the savings rate insight card on the Insights feed. */
+    val showSavingsRateCard: Boolean = false,
+
     // ==================== Charts Sub-Tab ====================
 
     /** Selected charts sub-tab: Monthly or Yearly */
@@ -95,6 +131,12 @@ data class AnalyticsUiState(
     val categoryBreakdown: List<CategoryTotal> = emptyList(),
     val topSpenders: List<TopSpender> = emptyList(),
     val paymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
+
+    /**
+     * 12-month income-vs-spend overlay (Phase 4).
+     * Empty when there is no detected income across the period.
+     */
+    val incomeVsSpend: List<IncomeSpendPoint> = emptyList(),
 
     // Variable-spend category trends (CV-detected)
     val categoryTrends: List<CategoryTrend> = emptyList(),

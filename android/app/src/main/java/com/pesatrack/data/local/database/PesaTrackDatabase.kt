@@ -8,6 +8,7 @@ import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.IncomeSenderRuleDao
 import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
@@ -16,6 +17,7 @@ import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.CategoryEntity
 import com.pesatrack.data.local.database.entities.CategoryRuleEntity
 import com.pesatrack.data.local.database.entities.ExpenseEntity
+import com.pesatrack.data.local.database.entities.IncomeSenderRuleEntity
 import com.pesatrack.data.local.database.entities.IncomeTransactionEntity
 import com.pesatrack.data.local.database.entities.MonthlyIncomeBudgetEntity
 import com.pesatrack.data.local.database.entities.RecipientCategoryMappingEntity
@@ -54,6 +56,8 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
  * - v16→v17: Added income_transactions table for transaction-level income
  *            (SMS / statement / manual). The legacy `income` table is now the
  *            manual monthly override only — see plans/income-tracking-plan.md.
+ * - v17→v18: Added income_sender_rules table for learned sender → source
+ *            mappings (Income tracking Phase 2 — see plan §5.5).
  */
 @Database(
     entities = [
@@ -64,9 +68,10 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
         CategoryRuleEntity::class,
         MonthlyIncomeBudgetEntity::class,
         IncomeTransactionEntity::class,
+        IncomeSenderRuleEntity::class,
         ReportSnapshotEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
@@ -78,6 +83,7 @@ abstract class PesaTrackDatabase : RoomDatabase() {
     abstract fun categoryRuleDao(): CategoryRuleDao
     abstract fun monthlyIncomeBudgetDao(): MonthlyIncomeBudgetDao
     abstract fun incomeTransactionDao(): IncomeTransactionDao
+    abstract fun incomeSenderRuleDao(): IncomeSenderRuleDao
     abstract fun reportSnapshotDao(): ReportSnapshotDao
 
     companion object {
@@ -1048,6 +1054,26 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_income_transactions_source " +
                         "ON income_transactions(source)"
+                )
+            }
+        }
+
+        /**
+         * Migration from version 17 to 18:
+         * Create `income_sender_rules` table for learned sender → source
+         * mappings used by the income-categorization flow (Income tracking
+         * Phase 2 — see plans/income-tracking-plan.md §5.5).
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS income_sender_rules (
+                        sender TEXT NOT NULL PRIMARY KEY,
+                        source TEXT NOT NULL,
+                        learnedAt INTEGER NOT NULL
+                    )
+                    """
                 )
             }
         }

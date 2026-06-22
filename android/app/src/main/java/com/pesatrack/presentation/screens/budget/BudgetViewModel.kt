@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetRemaining
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
+    private val incomeRepository: IncomeRepository,
     private val appPreferences: AppPreferences
 ) : ViewModel() {
 
@@ -134,6 +136,10 @@ class BudgetViewModel @Inject constructor(
 
     /**
      * Load income for the selected period key.
+     *
+     * For monthly periods we also fetch detected SMS income and the
+     * reconciliation source so the IncomeAllocationCard can show a
+     * "Detected this month" line and a "Use detected" shortcut.
      */
     private fun loadIncome() {
         viewModelScope.launch {
@@ -141,11 +147,45 @@ class BudgetViewModel @Inject constructor(
                 val periodKey = _uiState.value.selectedPeriodKey
                 if (periodKey.isBlank()) return@launch
                 val income = budgetRepository.getMonthlyIncome(periodKey)
-                _uiState.update {
-                    it.copy(monthlyIncome = income)
+                val isMonthly = _uiState.value.selectedPeriodType == BudgetPeriod.MONTHLY
+                if (isMonthly) {
+                    val effective = incomeRepository.effectiveMonthlyIncome(periodKey)
+                    _uiState.update {
+                        it.copy(
+                            monthlyIncome = income,
+                            detectedIncome = effective.detectedAmount,
+                            effectiveIncomeSource = effective.source
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            monthlyIncome = income,
+                            detectedIncome = 0.0,
+                            effectiveIncomeSource = null
+                        )
+                    }
                 }
             } catch (_: Exception) {
                 // Non-critical
+            }
+        }
+    }
+
+    /**
+     * Apply the detected SMS income as the user's income override for the
+     * current monthly period. Phase 3 Budget shortcut.
+     */
+    fun useDetectedIncome() {
+        viewModelScope.launch {
+            try {
+                val periodKey = _uiState.value.selectedPeriodKey
+                val detected = _uiState.value.detectedIncome
+                if (periodKey.isBlank() || detected <= 0.0) return@launch
+                budgetRepository.setMonthlyIncome(periodKey, detected)
+                _uiState.update { it.copy(monthlyIncome = detected, error = null) }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(error = "Failed to apply detected income") }
             }
         }
     }

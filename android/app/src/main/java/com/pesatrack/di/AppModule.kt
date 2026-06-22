@@ -7,6 +7,7 @@ import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.IncomeSenderRuleDao
 import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
@@ -53,7 +54,8 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_13_14,
                 PesaTrackDatabase.MIGRATION_14_15,
                 PesaTrackDatabase.MIGRATION_15_16,
-                PesaTrackDatabase.MIGRATION_16_17
+                PesaTrackDatabase.MIGRATION_16_17,
+                PesaTrackDatabase.MIGRATION_17_18
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -99,6 +101,12 @@ object AppModule {
     @Singleton
     fun provideIncomeTransactionDao(database: PesaTrackDatabase): IncomeTransactionDao {
         return database.incomeTransactionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideIncomeSenderRuleDao(database: PesaTrackDatabase): IncomeSenderRuleDao {
+        return database.incomeSenderRuleDao()
     }
 
     @Provides

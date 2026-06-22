@@ -375,10 +375,16 @@ private fun CompletedContent(
             ResultRow("🏷️ Auto-categorized", result.autoCategorized.toString())
             ResultRow("💰 Transaction charges", result.chargesImported.toString())
 
+            if (result.incomeImported > 0) {
+                ResultRow("📥 Income imported", result.incomeImported.toString())
+            }
+            if (result.incomeDuplicates > 0) {
+                ResultRow("⏭️ Income already in database", result.incomeDuplicates.toString())
+            }
             if (result.skippedDuplicate > 0) {
                 ResultRow("⏭️ Already in database", result.skippedDuplicate.toString())
             }
-            if (result.skippedIncome > 0) {
+            if (result.skippedIncome > 0 && result.incomeImported == 0 && result.incomeDuplicates == 0) {
                 ResultRow("📥 Income (skipped)", result.skippedIncome.toString())
             }
             if (result.skippedReversal > 0) {

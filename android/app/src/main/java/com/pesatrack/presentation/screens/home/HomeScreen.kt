@@ -68,6 +68,7 @@ fun HomeScreen(
     onNavigateToAnalytics: () -> Unit = {},
     onNavigateToAnalyticsByCategory: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
+    onNavigateToIncome: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -211,7 +212,11 @@ fun HomeScreen(
         item {
             MonthlySummaryCard(
                 total = uiState.totalThisMonth,
-                investmentTotal = uiState.investmentThisMonth
+                investmentTotal = uiState.investmentThisMonth,
+                received = uiState.receivedThisMonth,
+                savingsRatePct = uiState.savingsRatePct,
+                effectiveIncomeSource = uiState.effectiveIncomeSource,
+                onTapIncome = onNavigateToIncome
             )
         }
 
@@ -577,7 +582,11 @@ private fun LowEngagementFeedbackDialog(
 @Composable
 fun MonthlySummaryCard(
     total: Double,
-    investmentTotal: Double = 0.0
+    investmentTotal: Double = 0.0,
+    received: Double = 0.0,
+    savingsRatePct: Double? = null,
+    effectiveIncomeSource: com.pesatrack.domain.models.EffectiveIncomeSource = com.pesatrack.domain.models.EffectiveIncomeSource.NONE,
+    onTapIncome: () -> Unit = {}
 ) {
     val currentMonth = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
     val investmentPct = if (total > 0) (investmentTotal / total) * 100.0 else 0.0
@@ -608,6 +617,25 @@ fun MonthlySummaryCard(
                 text = "Total expenses this month",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            val incomeLine = if (received > 0) {
+                val savedPctText = savingsRatePct?.let { rate ->
+                    " · ${String.format("%.0f", rate)}% saved"
+                } ?: ""
+                "${received.formatAsCurrency()} received$savedPctText"
+            } else {
+                "No income detected yet · Add income →"
+            }
+            Text(
+                text = incomeLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onTapIncome() }
+                    .padding(vertical = 4.dp)
             )
 
             // Investment breakdown

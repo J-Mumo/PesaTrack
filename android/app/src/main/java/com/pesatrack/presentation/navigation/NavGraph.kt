@@ -71,6 +71,9 @@ fun NavGraph(
                 },
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
+                },
+                onNavigateToIncome = {
+                    navController.navigate(Screen.Income.route)
                 }
             )
         }
@@ -142,6 +145,32 @@ fun NavGraph(
                 expenseId = expenseId,
                 onNavigateBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // Categorize Income Screen (Income tracking Phase 2)
+        composable(
+            route = Screen.CategorizeIncome.route,
+            arguments = listOf(
+                navArgument("incomeId") {
+                    type = NavType.LongType
+                }
+            )
+        ) { backStackEntry ->
+            val incomeId = backStackEntry.arguments?.getLong("incomeId") ?: 0L
+            com.pesatrack.presentation.screens.categorize_income.CategorizeIncomeScreen(
+                incomeId = incomeId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // Income List Screen (Income tracking Phase 3)
+        composable(route = Screen.Income.route) {
+            com.pesatrack.presentation.screens.income.IncomeScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCategorizeIncome = { incomeId ->
+                    navController.navigate(Screen.CategorizeIncome.createRoute(incomeId))
                 }
             )
         }

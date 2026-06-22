@@ -26,6 +26,26 @@ sealed class Screen(val route: String) {
     object Categorize : Screen("categorize/{expenseId}") {
         fun createRoute(expenseId: Long) = "categorize/$expenseId"
     }
+
+    /**
+     * Income categorization screen (Income tracking Phase 2).
+     *
+     * Lets the user pick an [com.pesatrack.domain.models.IncomeSource] for a
+     * newly detected income transaction, mark it as excluded from analytics,
+     * or add a note. Reached from the income notification or the income list.
+     */
+    object CategorizeIncome : Screen("categorize_income/{incomeId}") {
+        fun createRoute(incomeId: Long) = "categorize_income/$incomeId"
+    }
+
+    /**
+     * Income list screen (Income tracking Phase 3).
+     *
+     * Shows month-to-date detected income, per-source breakdown, and a list
+     * of individual income transactions. Reached from Home's "received"
+     * secondary line and Budget's detected-income card.
+     */
+    object Income : Screen("income")
     object ImportHistory : Screen("import_history")
     object ExcelImport : Screen("excel_import")
     object StatementImport : Screen("statement_import")

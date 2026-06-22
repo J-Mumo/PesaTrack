@@ -3,6 +3,8 @@ package com.pesatrack.utils.parsers
 import android.util.Log
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
+import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
 import java.text.SimpleDateFormat
@@ -52,9 +54,40 @@ class MpesaSmsParser : SmsParserStrategy {
     // Date/Time: "on 15/1/24 at 12:34 PM" or "on 11/3/26 at 10:31 AM"
     private val datePattern = Pattern.compile("on (\\d{1,2}/\\d{1,2}/\\d{2,4}) at (\\d{1,2}:\\d{2} [AP]M)")
 
-    // --- Non-expense patterns (detect & skip) ---
-    private val receivePattern = Pattern.compile("You have received", Pattern.CASE_INSENSITIVE)
-    private val depositPattern = Pattern.compile("You have deposited", Pattern.CASE_INSENSITIVE)
+    // --- Income patterns (detect & emit as IncomeResult) ---
+    // Tightest patterns first so e.g. "Salary Payment from" wins over the generic "You have received".
+    private val salaryPattern = Pattern.compile(
+        "Salary Payment from\\s+(.+?)\\s+(?:on|via|\\.|New)", Pattern.CASE_INSENSITIVE
+    )
+    private val businessIncomePattern = Pattern.compile(
+        "Business Payment from\\s+(.+?)\\s+(?:on|via|\\.|New)", Pattern.CASE_INSENSITIVE
+    )
+    private val fundsReceivedPattern = Pattern.compile(
+        "Funds received from\\s+(.+?)\\s+(?:on|via|\\.|New)", Pattern.CASE_INSENSITIVE
+    )
+    // Peer receive: "You have received Ksh1,000.00 from JOHN DOE 254712345678 on ..."
+    private val receiveFromPersonPattern = Pattern.compile(
+        "You have received Ksh[\\d,]+(?:\\.\\d{2})?\\s+from\\s+(.+?)(?:\\s+(\\d{10,12}))?\\s+on",
+        Pattern.CASE_INSENSITIVE
+    )
+    private val receiveGenericPattern = Pattern.compile("You have received", Pattern.CASE_INSENSITIVE)
+    // M-Shwari -> M-PESA self transfer
+    private val mshwariWithdrawPattern = Pattern.compile(
+        "(?:M-?Shwari\\s+Withdraw|transferred from M-?Shwari to M-?PESA)", Pattern.CASE_INSENSITIVE
+    )
+    // Agent deposit (self top-up)
+    private val depositPattern = Pattern.compile(
+        "You have deposited Ksh[\\d,]+(?:\\.\\d{2})?(?:\\s+to your M-?PESA account)?(?:\\s+at\\s+(\\d+)\\s*-?\\s*(.+?))?\\s+on",
+        Pattern.CASE_INSENSITIVE
+    )
+    // Offnet B2C — often a payroll from a non-M-PESA source
+    private val offnetB2cPattern = Pattern.compile(
+        "Offnet B2C Transfer", Pattern.CASE_INSENSITIVE
+    )
+
+    // Reversals — still skipped at the parser level (see plan §5.2). The
+    // "reversal-as-exclude" rule belongs to the receiver and needs the
+    // original txn id, which the SMS doesn't always carry.
     private val reversalPattern = Pattern.compile("has been reversed", Pattern.CASE_INSENSITIVE)
 
     // --- Expense transaction patterns (ordered most specific → least specific) ---
@@ -96,34 +129,42 @@ class MpesaSmsParser : SmsParserStrategy {
         if (!body.contains("Confirmed", ignoreCase = true)) return false
         if (!body.contains("Ksh", ignoreCase = true)) return false
 
-        // Match any transaction keyword
+        // Match any expense OR income keyword
         return body.contains("sent to", ignoreCase = true) ||
                 body.contains("paid to", ignoreCase = true) ||
                 body.contains("withdrawn", ignoreCase = true) ||
                 body.contains("of airtime", ignoreCase = true) ||
                 body.contains("Fuliza", ignoreCase = true) ||
-                body.contains("bought", ignoreCase = true)
+                body.contains("bought", ignoreCase = true) ||
+                body.contains("You have received", ignoreCase = true) ||
+                body.contains("You have deposited", ignoreCase = true) ||
+                body.contains("Salary Payment from", ignoreCase = true) ||
+                body.contains("Business Payment from", ignoreCase = true) ||
+                body.contains("Funds received from", ignoreCase = true) ||
+                body.contains("M-Shwari", ignoreCase = true) ||
+                body.contains("Offnet B2C", ignoreCase = true)
     }
 
-    override fun parse(body: String, smsDate: Long): SmsParser.ParsedTransaction? {
+    override fun parseSms(body: String, smsDate: Long): ParsedSms {
         // Quick pre-check
         if (!body.contains("Confirmed", ignoreCase = true)) {
-            return null
+            return ParsedSms.NotARelevantMessage
         }
 
-        // Skip non-expense transactions
-        if (receivePattern.matcher(body).find()) {
-            Log.d(TAG, "Skipping receive money SMS (not an expense)")
-            return null
-        }
-        if (depositPattern.matcher(body).find()) {
-            Log.d(TAG, "Skipping deposit SMS (not an expense)")
-            return null
-        }
+        // Reversals — defer to follow-on (need original tx id for exclude-not-income rule).
         if (reversalPattern.matcher(body).find()) {
-            Log.d(TAG, "Skipping reversal SMS (not an expense)")
-            return null
+            Log.d(TAG, "Skipping reversal SMS (not yet handled)")
+            return ParsedSms.NotARelevantMessage
         }
+
+        // Income detection runs before expense classification.
+        val income = tryParseIncome(body, smsDate)
+        if (income != null) return ParsedSms.IncomeResult(income)
+
+        return tryParseExpense(body, smsDate) ?: ParsedSms.NotARelevantMessage
+    }
+
+    private fun tryParseExpense(body: String, smsDate: Long): ParsedSms.ExpenseResult? {
 
         try {
             // Extract transaction ID
@@ -179,7 +220,7 @@ class MpesaSmsParser : SmsParserStrategy {
                 } else null
             }
 
-            return SmsParser.ParsedTransaction(
+            return ParsedSms.ExpenseResult(
                 expense = mainExpense,
                 transactionCost = transactionCostExpense
             )
@@ -187,6 +228,82 @@ class MpesaSmsParser : SmsParserStrategy {
             Log.e(TAG, "Error parsing SMS: ${e.message}", e)
             return null
         }
+    }
+
+    // ==================== Income Detection ====================
+
+    /**
+     * Try to parse [body] as an income (incoming-money) SMS. Returns null when
+     * the body is not income-shaped — caller then attempts expense parsing.
+     */
+    private fun tryParseIncome(body: String, smsDate: Long): IncomeTransaction? {
+        val source: IncomeSource
+        val sender: String?
+
+        val salaryMatcher = salaryPattern.matcher(body)
+        val businessMatcher = businessIncomePattern.matcher(body)
+        val fundsMatcher = fundsReceivedPattern.matcher(body)
+        val depositMatcher = depositPattern.matcher(body)
+        val personMatcher = receiveFromPersonPattern.matcher(body)
+
+        when {
+            salaryMatcher.find() -> {
+                source = IncomeSource.SALARY
+                sender = salaryMatcher.group(1)?.trim()
+            }
+            businessMatcher.find() -> {
+                source = IncomeSource.BUSINESS
+                sender = businessMatcher.group(1)?.trim()
+            }
+            mshwariWithdrawPattern.matcher(body).find() -> {
+                source = IncomeSource.TRANSFER_IN
+                sender = "M-Shwari"
+            }
+            depositMatcher.find() -> {
+                source = IncomeSource.TRANSFER_IN
+                sender = depositMatcher.group(2)?.trim() ?: "Agent deposit"
+            }
+            fundsMatcher.find() -> {
+                source = IncomeSource.UNCATEGORIZED
+                sender = fundsMatcher.group(1)?.trim()
+            }
+            offnetB2cPattern.matcher(body).find() -> {
+                source = IncomeSource.UNCATEGORIZED
+                sender = null
+            }
+            personMatcher.find() -> {
+                source = IncomeSource.UNCATEGORIZED
+                val name = personMatcher.group(1)?.trim()
+                val phone = personMatcher.group(2)?.trim()
+                sender = listOfNotNull(name, phone)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .takeIf { it.isNotBlank() }
+            }
+            receiveGenericPattern.matcher(body).find() -> {
+                source = IncomeSource.UNCATEGORIZED
+                sender = null
+            }
+            else -> return null
+        }
+
+        val transactionId = extractTransactionId(body) ?: return null
+        val amount = extractAmount(body) ?: return null
+        val timestamp = extractTimestamp(body) ?: smsDate
+
+        Log.d(
+            TAG,
+            "Parsed income: Ksh$amount source=${source.name} sender=$sender txid=$transactionId"
+        )
+        return IncomeTransaction(
+            transactionId = transactionId,
+            amount = amount,
+            timestamp = timestamp,
+            source = source,
+            sender = sender,
+            parserSource = "MPESA",
+            isCategorized = source != IncomeSource.UNCATEGORIZED
+        )
     }
 
     // ==================== Extraction Helpers ====================

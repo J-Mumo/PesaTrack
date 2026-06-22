@@ -8,9 +8,11 @@ import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.DEFAULT_VARIABLE_SPEND_CATEGORIES
+import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.services.RecurringExpenseService
@@ -32,6 +34,7 @@ import kotlin.math.sqrt
 class AnalyticsViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val budgetRepository: BudgetRepository,
+    private val incomeRepository: IncomeRepository,
     private val recurringExpenseService: RecurringExpenseService,
     private val appPreferences: AppPreferences
 ) : ViewModel() {
@@ -91,13 +94,16 @@ class AnalyticsViewModel @Inject constructor(
     // ==================== Insight Cards ====================
 
     /**
-     * Load all insight card data: pace, quiet leaks, uncategorized percentage.
+     * Load all insight card data: pace, quiet leaks, uncategorized percentage,
+     * savings rate (Phase 4).
      */
     private fun loadInsightCards() {
         viewModelScope.launch {
             loadPaceCard()
             loadQuietLeaks()
             loadUncategorizedPercentage()
+            loadSavingsRateCard()
+            loadIncomeVsSpendChart()
         }
     }
 
@@ -227,6 +233,95 @@ class AnalyticsViewModel @Inject constructor(
         } catch (_: Exception) {
             _uiState.update { it.copy(uncategorizedPercentage = 0.0, showCategorizationNudge = false) }
         }
+    }
+
+    /**
+     * Savings rate card (Phase 4): shows current month + 3-month rolling
+     * average. Only surfaced when we have honest income data (detected or
+     * user-set), never inferred.
+     */
+    private suspend fun loadSavingsRateCard() {
+        try {
+            val now = Calendar.getInstance()
+            val ratesByMonth = (0..2).map { offset ->
+                val cal = (now.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                computeSavingsRate(cal)
+            }
+            val current = ratesByMonth.first()
+            if (current == null) {
+                _uiState.update { it.copy(savingsRate = null, showSavingsRateCard = false) }
+                return
+            }
+            val validRates = ratesByMonth.mapNotNull { it?.ratePct }
+            val rolling = if (validRates.isNotEmpty()) validRates.average() else current.ratePct
+            val data = SavingsRateData(
+                currentMonthPct = current.ratePct,
+                rollingThreeMonthPct = rolling,
+                currentMonthIncome = current.income,
+                currentMonthSpend = current.spend,
+                effectiveIncomeSource = current.source
+            )
+            _uiState.update { it.copy(savingsRate = data, showSavingsRateCard = true) }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(savingsRate = null, showSavingsRateCard = false) }
+        }
+    }
+
+    private data class SavingsRateRow(
+        val ratePct: Double,
+        val income: Double,
+        val spend: Double,
+        val source: EffectiveIncomeSource,
+    )
+
+    private suspend fun computeSavingsRate(cal: Calendar): SavingsRateRow? {
+        val year = cal.get(Calendar.YEAR)
+        val month = cal.get(Calendar.MONTH) + 1
+        val key = String.format(Locale.US, "%04d-%02d", year, month)
+        val effective = incomeRepository.effectiveMonthlyIncome(key)
+        val income = effective.value ?: return null
+        if (income <= 0.0) return null
+        val spend = expenseRepository.getTotalForMonth(year, month)
+        val rate = (((income - spend) / income) * 100.0).coerceIn(-100.0, 100.0)
+        return SavingsRateRow(rate, income, spend, effective.source)
+    }
+
+    /**
+     * 12-month income-vs-spend overlay chart (Phase 4).
+     * Only published when at least one month has detected income — otherwise
+     * the chart would just be a duplicate of the existing monthly spend trend.
+     */
+    private suspend fun loadIncomeVsSpendChart() {
+        try {
+            val now = Calendar.getInstance()
+            val points = (0..11).reversed().map { offset ->
+                val cal = (now.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                val year = cal.get(Calendar.YEAR)
+                val month = cal.get(Calendar.MONTH) + 1
+                val key = String.format(Locale.US, "%04d-%02d", year, month)
+                val (startMs, endMs) = monthBounds(cal)
+                val income = incomeRepository.sumForRange(startMs, endMs, includeTransfers = false)
+                val spend = expenseRepository.getTotalForMonth(year, month)
+                IncomeSpendPoint(monthKey = key, income = income, spend = spend)
+            }
+            val anyIncome = points.any { it.income > 0.0 }
+            _uiState.update {
+                it.copy(incomeVsSpend = if (anyIncome) points else emptyList())
+            }
+        } catch (_: Exception) {
+            _uiState.update { it.copy(incomeVsSpend = emptyList()) }
+        }
+    }
+
+    /** Inclusive-exclusive epoch bounds for the calendar's month. */
+    private fun monthBounds(cal: Calendar): Pair<Long, Long> {
+        val start = (cal.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val end = (start.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+        return start.timeInMillis to end.timeInMillis
     }
 
     // ==================== Monthly Navigation ====================
