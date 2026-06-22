@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.3.2** | 9 | 2026-06-02 | Production | 🟡 Pending upload |
+| **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.3.2** | 9 | 2026-06-02 | Production | ✅ Published |
 | **1.3.1** | 8 | 2026-05-29 | Production | 🟡 Pending upload |
 | **1.3.0** | 7 | 2026-05-20 | Production | 🟡 Pending upload |
 | **1.2.1** | 6 | 2026-05-01 | Production | 🟡 Pending upload |
@@ -17,6 +18,66 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.4.0 (versionCode 10) — 2026-06-22
+
+**Focus:** Income tracking — passively detect and categorize money coming in, surface it across Home / Budget / Analytics, and give users a way to exclude one-off transfers from totals.
+
+### ✨ New Features
+
+- **Income tracking — full pipeline (DB v16 → v18)** — M-PESA and bank SMS now produce income transactions in addition to expenses, end-to-end:
+  - New `income_transactions` table + `IncomeTransaction` domain model + `IncomeRepository` (`insertIfNew` with dedupe, `sourceBreakdown`, `effectiveMonthlyIncome(yearMonth)` reconciliation against the manual override).
+  - **Parsers** — `MpesaSmsParser` detects salary / business / funds-received / peer receive / M-Shwari → M-PESA / agent deposit / Offnet B2C; `NcbaBankParser` detects bank credits. `MpesaStatementParser` emits income rows during PDF imports. New sealed `ParsedSms` result type (`ExpenseResult` / `IncomeResult` / `NotARelevantMessage`).
+  - **CategorizeIncomeScreen** — pick a source (Salary / Business / Refund / Interest / Family / Transfer in / Other), optionally mark as "Not income", and optionally remember the sender → source mapping (`income_sender_rules` table) so future income from the same sender auto-categorizes.
+  - **Income screen** — Month / Quarter / Year segmented period picker, header card (total + reconciliation chip + weighted source breakdown bar + legend), tappable rows, manual income entry via Extended FAB.
+  - **Home secondary income line** on the monthly summary card — "KES X received · Y% saved" — tap to open the Income screen.
+  - **Budget allocation** — new "Detected this month: KES X" sub-line + "Use detected" button on the income allocation card, reconciliation chip footer ("Using detected income / your override / override — KES X higher than detected").
+  - **Monthly Review** — new "Where your income came from" card between Headroom and Pace; investment-illustration disclaimer now cites the income source ("Based on detected income of KES X" / "Based on the income you set").
+  - **Analytics** — new Savings Rate insight card on the Insights tab (this-month rate, 3-month rolling rate, expandable "Assumptions" block) and a 12-month Income vs Spend overlay line chart on the Monthly Charts tab.
+
+- **"Not income" affordance** — Long-press any income row to mark it as excluded (or restore it); excluded rows render dimmed with strike-through on the amount and "Not income · sender" subtitle. Same toggle available as a "Not income" `FilterChip` on `CategorizeIncomeScreen`. Excluded rows are filtered out of every total, source breakdown, savings rate, and analytics surface — useful for one-off transfers, refunds you already counted, or rounding noise.
+
+- **Create categories from the picker** — A "+ Add new category" entry inside the category picker on the categorize / batch-categorize / manual-entry / excel-import flows now opens a small dialog (name + emoji) so you don't have to bounce out to Category Management mid-flow.
+
+- **By Category card on Home** — Compact "spending by category this month" card that links straight to the Analytics → Categories tab.
+
+- **Income received notification (low priority)** — A new `pesatrack_income_received` channel posts a single low-importance notification when an `UNCATEGORIZED` income arrives, deep-linking to `CategorizeIncomeScreen`. Respects the "nudge, don't nag" principle — known sources never notify.
+
+- **Notification deep links** — Tapping a Monthly / Quarterly / Year-in-Review notification now opens the corresponding review screen directly instead of dropping you on Home.
+
+### 🐛 Bug Fixes
+
+- **Live income SMS now triggers the "Income received" notification** — `SmsReceiver` was gating the M-PESA branch on the legacy `SmsParser.isTransactionSms`, whose keyword list (`sent to` / `paid to` / `withdrawn` / `of airtime` / `Fuliza` / `bought`) only matched expense SMS. Every live income SMS was silently dropped before the parser ran, so no row was saved and the notification never fired. Replaced with `body.contains("Confirmed")` — the universal M-PESA transaction marker the parser already uses — and the parser strategy now decides expense vs income vs irrelevant.
+
+- **Feedback email body now pre-populates in Gmail** — The structured Stage 1D/1E feedback drafts were opening with an empty body/subject because Gmail (and several other Android mail clients) ignore `EXTRA_SUBJECT` / `EXTRA_TEXT` when the `mailto:` URI has no query string. Built the URI with `?subject=…&body=…` query params and kept the extras as a fallback.
+
+- **Home "By Category" tap target** — Tapping the card now reliably navigates to Analytics → Categories (previously the click was being swallowed by the chart container).
+
+- **ImportScreen income counts** — Bulk SMS + statement imports now show `newIncomesImported` and `incomeDuplicatesSkipped` alongside the expense counters on the import-result screen.
+
+### 📦 Technical
+
+- **DB v16 → v17** — Added `income_transactions` table (unique `transactionId`, source enum, `parserSource`, `isExcluded` column, indexed by `(sender, source)`).
+- **DB v17 → v18** — Added `income_sender_rules` table (sender PK, source enum name, learnedAt). Both migrations are non-destructive.
+- New screens / routes: `Income`, `CategorizeIncome`.
+- About + privacy policy copy updated to reflect that both incoming and outgoing SMS are read (the policy still says nothing leaves the device).
+- New unit tests: `MpesaSmsParserIncomeTest` (8 cases), `NcbaBankParserIncomeTest` (4 cases).
+- Removed unused `Switch` / `HorizontalDivider` / `wrapContentWidth` imports + private `Row` wrapper from `CategorizeIncomeScreen` after the chip refactor.
+
+### 🏪 Play Store Release Notes
+
+```
+What's New:
+• Income tracking — your salary, business payments, refunds, and other income are now detected from SMS automatically and shown on a new Income screen
+• Savings Rate insight on the Analytics tab and an Income vs Spend overlay chart
+• Long-press any income to mark it "Not income" (useful for one-off transfers or refunds you already counted) — it's excluded from totals
+• Add new categories without leaving the categorize / manual-entry flow
+• "By Category" card on Home
+• Low-priority notification when new income arrives, so you can tag the source
+• Fixes: feedback emails now pre-fill in Gmail, "By Category" tap target on Home, import-result counts include income
+```
 
 ---
 
