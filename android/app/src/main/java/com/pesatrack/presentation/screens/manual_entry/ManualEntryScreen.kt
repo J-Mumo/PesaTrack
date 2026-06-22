@@ -303,7 +303,8 @@ fun ManualEntryScreen(
                 viewModel.selectCategory(category)
                 showCategoryPicker = false
             },
-            onDismiss = { showCategoryPicker = false }
+            onDismiss = { showCategoryPicker = false },
+            onCreateCategory = viewModel::createCategory
         )
     }
 }

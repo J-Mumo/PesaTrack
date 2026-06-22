@@ -59,6 +59,39 @@ class CategorizeViewModel @Inject constructor(
     fun selectCategory(category: Category) {
         _uiState.update { it.copy(selectedCategory = category) }
     }
+
+    /**
+     * Create a custom category inline from the picker.
+     * `parentId == null` creates a top-level group; otherwise a sub-category under that group.
+     * `onCreated` is invoked with the new domain [Category] once the insert completes so the
+     * picker can auto-select sub-categories or auto-expand newly created groups.
+     */
+    fun createCategory(
+        name: String,
+        icon: String,
+        color: String,
+        parentId: Long?,
+        onCreated: (Category) -> Unit
+    ) {
+        viewModelScope.launch {
+            val id = if (parentId == null) {
+                categoryRepository.addCategoryGroup(name, icon, color)
+            } else {
+                categoryRepository.addCategory(name, icon, color, parentId)
+            }
+            onCreated(
+                Category(
+                    id = id,
+                    name = name,
+                    icon = icon,
+                    color = color,
+                    parentId = parentId,
+                    isGroup = parentId == null,
+                    isDefault = false
+                )
+            )
+        }
+    }
     
     fun saveCategory() {
         val category = _uiState.value.selectedCategory ?: return

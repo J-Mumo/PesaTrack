@@ -211,7 +211,8 @@ fun BatchCategorizeScreen(
                 onCategorySelected = { category ->
                     viewModel.applyCategory(category)
                 },
-                onDismiss = { viewModel.dismissCategoryPicker() }
+                onDismiss = { viewModel.dismissCategoryPicker() },
+                onCreateCategory = viewModel::createCategory
             )
         }
 
@@ -223,7 +224,8 @@ fun BatchCategorizeScreen(
                 onCategorySelected = { category ->
                     viewModel.applyCategoryToExpense(uiState.selectedExpenseId!!, category)
                 },
-                onDismiss = { viewModel.dismissIndividualCategoryPicker() }
+                onDismiss = { viewModel.dismissIndividualCategoryPicker() },
+                onCreateCategory = viewModel::createCategory
             )
         }
 
@@ -235,7 +237,8 @@ fun BatchCategorizeScreen(
                 onCategorySelected = { category ->
                     viewModel.applyBulkCategory(category)
                 },
-                onDismiss = { viewModel.dismissBulkCategoryPicker() }
+                onDismiss = { viewModel.dismissBulkCategoryPicker() },
+                onCreateCategory = viewModel::createCategory
             )
         }
 

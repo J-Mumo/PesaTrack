@@ -104,6 +104,37 @@ class BatchCategorizeViewModel @Inject constructor(
     }
 
     /**
+     * Create a custom category inline from any of the pickers on this screen.
+     * `parentId == null` creates a top-level group; otherwise a sub-category under that group.
+     */
+    fun createCategory(
+        name: String,
+        icon: String,
+        color: String,
+        parentId: Long?,
+        onCreated: (Category) -> Unit
+    ) {
+        viewModelScope.launch {
+            val id = if (parentId == null) {
+                categoryRepository.addCategoryGroup(name, icon, color)
+            } else {
+                categoryRepository.addCategory(name, icon, color, parentId)
+            }
+            onCreated(
+                Category(
+                    id = id,
+                    name = name,
+                    icon = icon,
+                    color = color,
+                    parentId = parentId,
+                    isGroup = parentId == null,
+                    isDefault = false
+                )
+            )
+        }
+    }
+
+    /**
      * Apply a category to ALL expenses from the selected recipient (quick mode).
      * Saves multiple categories per recipient in the mapping table.
      */

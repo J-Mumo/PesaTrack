@@ -30,7 +30,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Grouped category picker dialog
- * Shows categories organized in expandable groups
+ * Shows categories organized in expandable groups.
+ *
+ * When [onCreateCategory] is provided, the picker also shows an inline
+ * "Add sub-category" entry at the bottom of every expanded group and an
+ * "Add new category group" entry at the very end of the list. Newly-created
+ * sub-categories are auto-selected; newly-created groups are auto-expanded so
+ * the user can immediately add a sub-category to them.
+ *
+ * Signature of [onCreateCategory]: `(name, icon, color, parentId, onCreated)`.
+ * Pass `parentId = null` for a top-level group; otherwise the new category is
+ * created under that parent. The implementation must invoke `onCreated` with
+ * the resulting [Category] once the insert completes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,11 +50,15 @@ fun GroupedCategoryPicker(
     selectedCategoryId: Long?,
     onCategorySelected: (Category) -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onCreateCategory: ((name: String, icon: String, color: String, parentId: Long?, onCreated: (Category) -> Unit) -> Unit)? = null
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var expandedGroups by remember { mutableStateOf(setOf<Long>()) }
-    
+    // null = no form; (parent, label) = form for sub-category under parent;
+    //  Pair(null, "") = form for new top-level group.
+    var pendingCreate by remember { mutableStateOf<CreateTarget?>(null) }
+
     // Find currently selected category's parent to auto-expand
     LaunchedEffect(selectedCategoryId) {
         selectedCategoryId?.let { selectedId ->
@@ -145,12 +160,105 @@ fun GroupedCategoryPicker(
                                             onClick = { onCategorySelected(category) }
                                         )
                                     }
+                                    // Inline "Add sub-category" entry under each expanded group.
+                                    // Hidden while searching to keep results focused.
+                                    if (onCreateCategory != null && searchQuery.isBlank()) {
+                                        AddCategoryRow(
+                                            label = "Add sub-category to ${group.parent.name}",
+                                            indented = true,
+                                            onClick = {
+                                                pendingCreate = CreateTarget(
+                                                    parentId = group.parent.id,
+                                                    parentName = group.parent.name
+                                                )
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+
+                    // Inline "Add new category group" at the very end of the list.
+                    if (onCreateCategory != null && searchQuery.isBlank()) {
+                        item(key = "add_group") {
+                            AddCategoryRow(
+                                label = "Add new category group",
+                                indented = false,
+                                onClick = { pendingCreate = CreateTarget(parentId = null, parentName = null) }
+                            )
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    pendingCreate?.let { target ->
+        CategoryFormDialog(
+            title = if (target.parentId == null) "Add Category Group" else "Add Sub-Category",
+            subtitle = if (target.parentName != null) "Under ${target.parentName}" else "New top-level group",
+            onDismiss = { pendingCreate = null },
+            onConfirm = { name, icon, color ->
+                val cb = onCreateCategory ?: return@CategoryFormDialog
+                pendingCreate = null
+                cb(name, icon, color, target.parentId) { created ->
+                    if (created.parentId != null) {
+                        // Auto-select newly created sub-category and dismiss the picker.
+                        onCategorySelected(created)
+                    } else {
+                        // Newly created group: expand it so the user can add sub-categories.
+                        expandedGroups = expandedGroups + created.id
+                    }
+                }
+            }
+        )
+    }
+}
+
+private data class CreateTarget(val parentId: Long?, val parentName: String?)
+
+@Composable
+private fun AddCategoryRow(
+    label: String,
+    indented: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = if (indented) 24.dp else 0.dp,
+                top = 2.dp,
+                bottom = 2.dp,
+                end = 4.dp
+            )
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() },
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

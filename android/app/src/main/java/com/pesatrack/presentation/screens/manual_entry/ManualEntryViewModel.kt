@@ -97,6 +97,37 @@ class ManualEntryViewModel @Inject constructor(
         _uiState.update { it.copy(selectedCategory = category) }
     }
 
+    /**
+     * Create a custom category inline from the picker.
+     * `parentId == null` creates a top-level group; otherwise a sub-category under that group.
+     */
+    fun createCategory(
+        name: String,
+        icon: String,
+        color: String,
+        parentId: Long?,
+        onCreated: (Category) -> Unit
+    ) {
+        viewModelScope.launch {
+            val id = if (parentId == null) {
+                categoryRepository.addCategoryGroup(name, icon, color)
+            } else {
+                categoryRepository.addCategory(name, icon, color, parentId)
+            }
+            onCreated(
+                Category(
+                    id = id,
+                    name = name,
+                    icon = icon,
+                    color = color,
+                    parentId = parentId,
+                    isGroup = parentId == null,
+                    isDefault = false
+                )
+            )
+        }
+    }
+
     // ==================== Validation ====================
 
     private fun validate(): Boolean {
