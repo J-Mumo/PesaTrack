@@ -85,6 +85,19 @@ class MpesaSmsParser : SmsParserStrategy {
         "Offnet B2C Transfer", Pattern.CASE_INSENSITIVE
     )
 
+    // Bank → M-PESA self-transfer markers. When an income SMS resolves the
+    // sender to one of these strings (e.g. "NCBA BANK" in
+    // "You have received Ksh30,000.00 from NCBA BANK on …"), the row is the
+    // M-PESA side of a bank-to-wallet self-transfer — the user is just moving
+    // their own money. We persist it as TRANSFER_IN + isExcluded = true so it
+    // stays auditable on the Income screen (dimmed + strike-through, restorable
+    // via long-press) but never counts toward income totals, savings rate, or
+    // analytics. Extend this list as new banks appear in SMS.
+    private val bankSelfTransferSenders: List<String> = listOf(
+        "NCBA BANK",
+        "NCBA",
+    )
+
     // Reversals — still skipped at the parser level (see plan §5.2). The
     // "reversal-as-exclude" rule belongs to the receiver and needs the
     // original txn id, which the SMS doesn't always carry.
@@ -291,18 +304,30 @@ class MpesaSmsParser : SmsParserStrategy {
         val amount = extractAmount(body) ?: return null
         val timestamp = extractTimestamp(body) ?: smsDate
 
+        // Bank → M-PESA self-transfer: when the sender resolves to a known bank
+        // name, rewrite the row as an excluded TRANSFER_IN. Keeps the entry
+        // visible (so the user can audit / undo via long-press) but it never
+        // counts as income and never fires the categorize notification.
+        val isBankSelfTransfer = sender != null && bankSelfTransferSenders.any { marker ->
+            sender.equals(marker, ignoreCase = true) ||
+                    sender.contains(marker, ignoreCase = true)
+        }
+        val finalSource = if (isBankSelfTransfer) IncomeSource.TRANSFER_IN else source
+        val finalExcluded = isBankSelfTransfer
+
         Log.d(
             TAG,
-            "Parsed income: Ksh$amount source=${source.name} sender=$sender txid=$transactionId"
+            "Parsed income: Ksh$amount source=${finalSource.name} sender=$sender txid=$transactionId excluded=$finalExcluded"
         )
         return IncomeTransaction(
             transactionId = transactionId,
             amount = amount,
             timestamp = timestamp,
-            source = source,
+            source = finalSource,
             sender = sender,
             parserSource = "MPESA",
-            isCategorized = source != IncomeSource.UNCATEGORIZED
+            isExcluded = finalExcluded,
+            isCategorized = finalSource != IncomeSource.UNCATEGORIZED
         )
     }
 

@@ -108,4 +108,24 @@ class MpesaSmsParserIncomeTest {
         assertNotNull(result.transactionCost)
         assertEquals(23.0, result.transactionCost!!.amount, 0.001)
     }
+
+    @Test
+    fun `NCBA bank to MPESA self-transfer is excluded TRANSFER_IN`() {
+        // Real-world SMS that pairs with an NCBA "MPESA transfer of KES ... has
+        // been processed" SMS for a bank -> wallet self-transfer.
+        val body =
+            "UF20466JQT Confirmed. You have received Ksh30,000.00 from NCBA BANK on " +
+                "2/6/26 at 8:29 PM. New M-PESA balance is Ksh30,007.44."
+        val result = parser.parseSms(body, smsTimestamp)
+        assertTrue("Expected IncomeResult, got $result", result is ParsedSms.IncomeResult)
+        val income = (result as ParsedSms.IncomeResult).income
+        assertEquals(IncomeSource.TRANSFER_IN, income.source)
+        assertEquals(30_000.0, income.amount, 0.001)
+        assertEquals("UF20466JQT", income.transactionId)
+        assertEquals("NCBA BANK", income.sender)
+        assertTrue("Bank self-transfer must be excluded", income.isExcluded)
+        // Categorized = true so SmsReceiver doesn't fire the "Income received"
+        // notification (notification is gated on source == UNCATEGORIZED).
+        assertTrue(income.isCategorized)
+    }
 }

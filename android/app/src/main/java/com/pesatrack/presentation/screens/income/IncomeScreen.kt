@@ -111,7 +111,13 @@ fun IncomeScreen(
             )
         }
     ) { padding ->
-        if (uiState.isLoading) {
+        // Only show the spinner on the very first load. Subsequent refreshes
+        // (period change, ON_RESUME return from CategorizeIncomeScreen, etc.)
+        // keep the list mounted so LazyColumn scroll position is preserved
+        // instead of jumping back to the top.
+        val isInitialLoad = uiState.isLoading && uiState.transactions.isEmpty() &&
+                uiState.totalInflow == 0.0
+        if (isInitialLoad) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
