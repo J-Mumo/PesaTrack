@@ -183,7 +183,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Export all expenses to a CSV file.
+     * Export all expenses and income transactions to a single CSV file.
      *
      * @param context Needed for cache directory access
      */
@@ -201,7 +201,7 @@ class SettingsViewModel @Inject constructor(
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isExporting = false,
-                        dataManagementMessage = "No expenses to export"
+                        dataManagementMessage = "No transactions to export"
                     )
                     delay(3000)
                     _uiState.value = _uiState.value.copy(dataManagementMessage = null)

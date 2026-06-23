@@ -49,6 +49,12 @@
 
 ### 🐛 Bug Fixes
 
+- **Analytics Monthly charts now respect your "month starts on" setting** — The Charts → Monthly tab was still using calendar months while Budgets, Income, Home, and the savings-rate card had already moved to your `monthStartDay` preference. A salary-on-the-25th user would see "May 2026" data on the Analytics tab even though the active budget period was "Apr 25 – May 24". The period selector label (`"Mar 25 – Apr 24, 2026"` when offset), arrow navigation, totals, previous-period comparison, By Category / Top Spenders / Payment Type breakdowns, recipient search, the 6-period trend chart, the 6-period category trends, and the days-for-average computation now all use the same offset-aware period as Budgets.
+
+- **CSV export now includes income** — Settings → Export Data emitted only expenses; income transactions were nowhere in the file. The export now bundles both into a single CSV ordered by date, with a new leading `Type` column (`Expense` / `Income`) so you can filter or pivot. The empty-state toast and Settings row subtitle were updated accordingly.
+
+- **Income / savings rate now respect your "month starts on" setting** — Previously the Income screen, Home "received this month" line, and Analytics savings-rate card all hard-coded a calendar month (1st to last day) while the Budget screen used your `monthStartDay` preference. A salary-on-the-25th user would see their budget period as Mar 25 – Apr 24 but their income shown for Mar 1 – Mar 31, making the savings rate compare numbers from different periods. Aligned all three surfaces (`HomeViewModel.loadIncomeData`, `AnalyticsViewModel.loadSavingsRateCard` + `loadIncomeVsSpendChart`, `IncomeViewModel` MONTH tab) on the same offset-aware period via a new shared `MonthPeriod` helper that mirrors `BudgetRepository`'s existing convention (period named after its start year/month, key `"yyyy-MM"` when offset is 1 else `"yyyy-MM-dd"`). Also fixed a latent crash-then-swallow bug where `IncomeRepository.monthBoundsFor` threw `IllegalArgumentException` whenever `BudgetViewModel` passed an offset key like `"2026-03-25"` — the surrounding `try/catch` was silently hiding the user's manual income override from the budget income card.
+
 - **Live income SMS now triggers the "Income received" notification** — `SmsReceiver` was gating the M-PESA branch on the legacy `SmsParser.isTransactionSms`, whose keyword list (`sent to` / `paid to` / `withdrawn` / `of airtime` / `Fuliza` / `bought`) only matched expense SMS. Every live income SMS was silently dropped before the parser ran, so no row was saved and the notification never fired. Replaced with `body.contains("Confirmed")` — the universal M-PESA transaction marker the parser already uses — and the parser strategy now decides expense vs income vs irrelevant.
 
 - **Feedback email body now pre-populates in Gmail** — The structured Stage 1D/1E feedback drafts were opening with an empty body/subject because Gmail (and several other Android mail clients) ignore `EXTRA_SUBJECT` / `EXTRA_TEXT` when the `mailto:` URI has no query string. Built the URI with `?subject=…&body=…` query params and kept the extras as a fallback.
@@ -76,6 +82,9 @@ What's New:
 • Add new categories without leaving the categorize / manual-entry flow
 • "By Category" card on Home
 • Low-priority notification when new income arrives, so you can tag the source
+• Income and Savings Rate now follow the same "month starts on" day as your budget — salary-cycle users get a coherent picture
+• Analytics → Charts → Monthly tab also follows your "month starts on" day, so the period selector and all monthly charts match your budget cycle
+• CSV export (Settings → Export Data) now includes income transactions alongside expenses, with a new "Type" column
 • Fixes: feedback emails now pre-fill in Gmail, "By Category" tap target on Home, import-result counts include income
 ```
 

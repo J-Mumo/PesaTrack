@@ -16,6 +16,7 @@ import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.services.RecurringExpenseService
+import com.pesatrack.utils.MonthPeriod
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,28 +43,33 @@ class AnalyticsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AnalyticsUiState())
     val uiState: StateFlow<AnalyticsUiState> = _uiState.asStateFlow()
 
-    private val calendar = Calendar.getInstance()
-
     init {
-        // Start with current month/year
-        val currentYear = calendar.get(Calendar.YEAR)
-        val currentMonth = calendar.get(Calendar.MONTH) + 1 // 1-based
-        _uiState.update {
-            it.copy(
-                selectedYear = currentYear,
-                selectedMonth = currentMonth,
-                selectedYearForYearly = currentYear
-            )
-        }
-        loadAllData()
-        loadBudgetStatus()
-        loadRecurringBreakdown()
-        loadWeeklySnapshot()
-        loadInsightCards()
-        loadBudgetBurnDown()
-
-        // Track analytics viewed milestone and counter (fire-and-forget)
         viewModelScope.launch {
+            // Load monthStartDay first so "Monthly" tab buckets align with the
+            // user's budget cycle (e.g. salary on the 25th) instead of the
+            // calendar 1st-to-last.
+            incomeRepository.refreshMonthStartDay()
+
+            val (currentStart, _) = MonthPeriod.currentRange(incomeRepository.monthStartDay)
+            val anchor = Calendar.getInstance().apply { timeInMillis = currentStart }
+            val currentYear = anchor.get(Calendar.YEAR)
+            val currentMonth = anchor.get(Calendar.MONTH) + 1 // period named after its start
+            val yearForYearly = Calendar.getInstance().get(Calendar.YEAR)
+            _uiState.update {
+                it.copy(
+                    selectedYear = currentYear,
+                    selectedMonth = currentMonth,
+                    selectedYearForYearly = yearForYearly
+                )
+            }
+            loadAllData()
+            loadBudgetStatus()
+            loadRecurringBreakdown()
+            loadWeeklySnapshot()
+            loadInsightCards()
+            loadBudgetBurnDown()
+
+            // Track analytics viewed milestone and counter
             appPreferences.recordFirstAnalyticsViewed()
             appPreferences.incrementAnalyticsViewsCount()
         }
@@ -239,13 +245,18 @@ class AnalyticsViewModel @Inject constructor(
      * Savings rate card (Phase 4): shows current month + 3-month rolling
      * average. Only surfaced when we have honest income data (detected or
      * user-set), never inferred.
+     *
+     * Iterates by **budget period** (honouring `monthStartDay`) so the rate
+     * matches what the user sees on the Budget and Income screens.
      */
     private suspend fun loadSavingsRateCard() {
         try {
-            val now = Calendar.getInstance()
+            incomeRepository.refreshMonthStartDay()
+            val (currentStart, _) = incomeRepository.currentMonthBounds()
+            val anchor = Calendar.getInstance().apply { timeInMillis = currentStart }
             val ratesByMonth = (0..2).map { offset ->
-                val cal = (now.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
-                computeSavingsRate(cal)
+                val cal = (anchor.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                computeSavingsRate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1)
             }
             val current = ratesByMonth.first()
             if (current == null) {
@@ -274,14 +285,14 @@ class AnalyticsViewModel @Inject constructor(
         val source: EffectiveIncomeSource,
     )
 
-    private suspend fun computeSavingsRate(cal: Calendar): SavingsRateRow? {
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val key = String.format(Locale.US, "%04d-%02d", year, month)
-        val effective = incomeRepository.effectiveMonthlyIncome(key)
+    private suspend fun computeSavingsRate(year: Int, month1Based: Int): SavingsRateRow? {
+        val effective = incomeRepository.effectiveIncomeForMonth(year, month1Based)
         val income = effective.value ?: return null
         if (income <= 0.0) return null
-        val spend = expenseRepository.getTotalForMonth(year, month)
+        val (start, end) = com.pesatrack.utils.MonthPeriod.rangeForPeriodStart(
+            year, month1Based, incomeRepository.monthStartDay
+        )
+        val spend = expenseRepository.getSpendingInRange(start, end)
         val rate = (((income - spend) / income) * 100.0).coerceIn(-100.0, 100.0)
         return SavingsRateRow(rate, income, spend, effective.source)
     }
@@ -290,18 +301,25 @@ class AnalyticsViewModel @Inject constructor(
      * 12-month income-vs-spend overlay chart (Phase 4).
      * Only published when at least one month has detected income — otherwise
      * the chart would just be a duplicate of the existing monthly spend trend.
+     *
+     * Buckets follow the user's `monthStartDay` so they line up with the
+     * savings-rate card and the Income / Budget screens.
      */
     private suspend fun loadIncomeVsSpendChart() {
         try {
-            val now = Calendar.getInstance()
+            incomeRepository.refreshMonthStartDay()
+            val (currentStart, _) = incomeRepository.currentMonthBounds()
+            val anchor = Calendar.getInstance().apply { timeInMillis = currentStart }
             val points = (0..11).reversed().map { offset ->
-                val cal = (now.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                val cal = (anchor.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
                 val year = cal.get(Calendar.YEAR)
                 val month = cal.get(Calendar.MONTH) + 1
                 val key = String.format(Locale.US, "%04d-%02d", year, month)
-                val (startMs, endMs) = monthBounds(cal)
+                val (startMs, endMs) = com.pesatrack.utils.MonthPeriod.rangeForPeriodStart(
+                    year, month, incomeRepository.monthStartDay
+                )
                 val income = incomeRepository.sumForRange(startMs, endMs, includeTransfers = false)
-                val spend = expenseRepository.getTotalForMonth(year, month)
+                val spend = expenseRepository.getSpendingInRange(startMs, endMs)
                 IncomeSpendPoint(monthKey = key, income = income, spend = spend)
             }
             val anyIncome = points.any { it.income > 0.0 }
@@ -313,21 +331,14 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /** Inclusive-exclusive epoch bounds for the calendar's month. */
-    private fun monthBounds(cal: Calendar): Pair<Long, Long> {
-        val start = (cal.clone() as Calendar).apply {
-            set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-        val end = (start.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
-        return start.timeInMillis to end.timeInMillis
-    }
-
     // ==================== Monthly Navigation ====================
 
     /**
-     * Navigate to the previous month
+     * Navigate to the previous budget-month period.
+     *
+     * Periods are named after their start year/month, so stepping back one
+     * calendar month always lands on the prior period — e.g. with
+     * `monthStartDay = 25`, "Mar 25 – Apr 24" → "Feb 25 – Mar 24".
      */
     fun previousMonth() {
         _uiState.update { state ->
@@ -350,20 +361,21 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Navigate to the next month (capped at current month)
+     * Navigate to the next budget-month period (capped at the period containing "now").
      */
     fun nextMonth() {
-        val now = Calendar.getInstance()
+        val (currentStart, _) = MonthPeriod.currentRange(incomeRepository.monthStartDay)
+        val curCal = Calendar.getInstance().apply { timeInMillis = currentStart }
         val state = _uiState.value
         val cal = Calendar.getInstance().apply {
             set(Calendar.YEAR, state.selectedYear)
             set(Calendar.MONTH, state.selectedMonth - 1)
             add(Calendar.MONTH, 1)
         }
-        // Don't go past current month
-        if (cal.get(Calendar.YEAR) > now.get(Calendar.YEAR) ||
-            (cal.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
-                    cal.get(Calendar.MONTH) > now.get(Calendar.MONTH))
+        // Don't go past the current period
+        if (cal.get(Calendar.YEAR) > curCal.get(Calendar.YEAR) ||
+            (cal.get(Calendar.YEAR) == curCal.get(Calendar.YEAR) &&
+                    cal.get(Calendar.MONTH) > curCal.get(Calendar.MONTH))
         ) {
             return
         }
@@ -382,13 +394,14 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Check if we can navigate to next month (not past current month)
+     * Check if we can navigate to the next period (not past the current one).
      */
     fun canGoNext(): Boolean {
-        val now = Calendar.getInstance()
+        val (currentStart, _) = MonthPeriod.currentRange(incomeRepository.monthStartDay)
+        val cur = Calendar.getInstance().apply { timeInMillis = currentStart }
         val state = _uiState.value
-        return !(state.selectedYear == now.get(Calendar.YEAR) &&
-                state.selectedMonth == now.get(Calendar.MONTH) + 1)
+        return !(state.selectedYear == cur.get(Calendar.YEAR) &&
+                state.selectedMonth == cur.get(Calendar.MONTH) + 1)
     }
 
     // ==================== Yearly Navigation ====================
@@ -499,15 +512,28 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Load the 6-month trend (doesn't change with month selection)
+     * Load the 6-month trend.
+     *
+     * Buckets follow the user's `monthStartDay` so each point lines up with
+     * the corresponding Budget / Income period rather than a calendar month.
+     * Period keys remain `"yyyy-MM"` (named after the period's start year/month)
+     * so the chart's X-axis label code is unchanged.
      */
     private fun loadMonthlyTrend() {
         viewModelScope.launch {
             try {
-                val trend = expenseRepository.getMonthlyTotals(6)
-                // Fill in missing months with zero values
-                val filledTrend = fillMissingMonths(trend, 6)
-                _uiState.update { it.copy(monthlyTrend = filledTrend) }
+                val msd = incomeRepository.monthStartDay
+                val (currentStart, _) = MonthPeriod.currentRange(msd)
+                val anchor = Calendar.getInstance().apply { timeInMillis = currentStart }
+                val trend = (5 downTo 0).map { offset ->
+                    val cal = (anchor.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                    val year = cal.get(Calendar.YEAR)
+                    val month = cal.get(Calendar.MONTH) + 1
+                    val key = String.format(Locale.US, "%04d-%02d", year, month)
+                    val (s, e) = MonthPeriod.rangeForPeriodStart(year, month, msd)
+                    MonthlyTotal(monthKey = key, total = expenseRepository.getSpendingInRange(s, e))
+                }
+                _uiState.update { it.copy(monthlyTrend = trend) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to load trend: ${e.message}") }
             }
@@ -515,25 +541,27 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Load data specific to the selected month
+     * Load data specific to the selected period (uses `monthStartDay`-aware bounds).
      */
     private fun loadMonthData() {
         val state = _uiState.value
         val year = state.selectedYear
         val month = state.selectedMonth
-        val monthLabel = formatMonthLabel(year, month)
+        val msd = incomeRepository.monthStartDay
+        val (start, end) = MonthPeriod.rangeForPeriodStart(year, month, msd)
+        val monthLabel = MonthPeriod.labelForRange(start, end, msd)
 
         _uiState.update { it.copy(selectedMonthLabel = monthLabel) }
 
         viewModelScope.launch {
             try {
-                // Load all month data in parallel
-                val categoryTotals = expenseRepository.getCategoryTotalsForMonth(year, month)
-                val topSpenders = expenseRepository.getTopSpendersForMonth(year, month, 10)
-                val paymentTypes = expenseRepository.getPaymentTypeBreakdownForMonth(year, month)
-                val totalForMonth = expenseRepository.getTotalForMonth(year, month)
+                // Load all period data in parallel-ish (sequential calls — each is fast)
+                val categoryTotals = expenseRepository.getCategoryTotalsInRange(start, end)
+                val topSpenders = expenseRepository.getTopSpendersInRange(start, end, 10)
+                val paymentTypes = expenseRepository.getPaymentTypeBreakdownInRange(start, end)
+                val totalForMonth = expenseRepository.getSpendingInRange(start, end)
 
-                // Compute month-over-month comparison
+                // Previous period (period named after start year/month — step back 1 calendar month)
                 val prevCal = Calendar.getInstance().apply {
                     set(Calendar.YEAR, year)
                     set(Calendar.MONTH, month - 1) // 0-based
@@ -541,7 +569,9 @@ class AnalyticsViewModel @Inject constructor(
                 }
                 val prevYear = prevCal.get(Calendar.YEAR)
                 val prevMonth = prevCal.get(Calendar.MONTH) + 1
-                val prevTotal = expenseRepository.getTotalForMonth(prevYear, prevMonth)
+                val (prevStart, prevEnd) = MonthPeriod.rangeForPeriodStart(prevYear, prevMonth, msd)
+                val prevTotal = expenseRepository.getSpendingInRange(prevStart, prevEnd)
+                val prevLabel = MonthPeriod.labelForRange(prevStart, prevEnd, msd)
 
                 val percentChange = if (prevTotal > 0) {
                     ((totalForMonth - prevTotal) / prevTotal) * 100.0
@@ -556,29 +586,22 @@ class AnalyticsViewModel @Inject constructor(
                     previousMonthTotal = prevTotal,
                     percentageChange = percentChange,
                     currentMonthLabel = monthLabel,
-                    previousMonthLabel = formatMonthLabel(prevYear, prevMonth)
+                    previousMonthLabel = prevLabel
                 )
 
                 // Transaction count = sum of all category transaction counts
                 val txCount = categoryTotals.sumOf { it.transactionCount }
 
-                // Days in month for average
-                val daysInMonth = Calendar.getInstance().apply {
-                    set(Calendar.YEAR, year)
-                    set(Calendar.MONTH, month - 1)
-                }.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-                // If current month and not complete, use days elapsed
-                val now = Calendar.getInstance()
-                val daysForAvg = if (year == now.get(Calendar.YEAR) &&
-                    month == now.get(Calendar.MONTH) + 1
-                ) {
-                    now.get(Calendar.DAY_OF_MONTH).coerceAtLeast(1)
+                // Days in / days elapsed for the average — anchored on period bounds.
+                val dayMs = 24L * 60 * 60 * 1000
+                val totalDaysInPeriod = ((end - start) / dayMs).toInt().coerceAtLeast(1)
+                val nowMs = System.currentTimeMillis()
+                val daysForAvg = if (nowMs in start until end) {
+                    (((nowMs - start) / dayMs).toInt() + 1).coerceAtLeast(1)
                 } else {
-                    daysInMonth
+                    totalDaysInPeriod
                 }
-
-                val avgDaily = if (daysForAvg > 0) totalForMonth / daysForAvg else 0.0
+                val avgDaily = totalForMonth / daysForAvg
 
                 _uiState.update {
                     it.copy(
@@ -605,38 +628,62 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Load per-category monthly trends, compute CV, and filter to volatile categories.
-     * Uses data-driven CV detection with a fallback to DEFAULT_VARIABLE_SPEND_CATEGORIES.
+     * Load per-category period trends, compute CV, and filter to volatile categories.
+     *
+     * Iterates the last 6 budget-month periods so the bucket boundaries match
+     * the Monthly tab's selector and trend chart instead of running on calendar
+     * months.
      */
     private fun loadCategoryTrends() {
         viewModelScope.launch {
             try {
+                val msd = incomeRepository.monthStartDay
                 val monthsBack = 6
-                val rawData = expenseRepository.getCategoryMonthlyTrend(monthsBack)
+                val (currentStart, _) = MonthPeriod.currentRange(msd)
+                val anchor = Calendar.getInstance().apply { timeInMillis = currentStart }
 
-                // Group by categoryId
+                // Build (key, start, end) for each of the last N periods, oldest first.
+                val periods = (monthsBack - 1 downTo 0).map { offset ->
+                    val cal = (anchor.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                    val year = cal.get(Calendar.YEAR)
+                    val month = cal.get(Calendar.MONTH) + 1
+                    val key = String.format(Locale.US, "%04d-%02d", year, month)
+                    val (s, e) = MonthPeriod.rangeForPeriodStart(year, month, msd)
+                    Triple(key, s, e)
+                }
+                val allMonthKeys = periods.map { it.first }
+
+                // Flatten into per-(category, period) totals; mirrors the shape the
+                // old SQL `GROUP BY categoryId, monthKey` query returned.
+                val rawData = mutableListOf<com.pesatrack.data.local.database.dao.CategoryMonthlyTotal>()
+                for ((key, s, e) in periods) {
+                    val cats = expenseRepository.getCategoryTotalsInRange(s, e)
+                    for (c in cats) {
+                        val catId = c.categoryId ?: continue
+                        rawData.add(
+                            com.pesatrack.data.local.database.dao.CategoryMonthlyTotal(
+                                categoryId = catId,
+                                categoryName = c.categoryName,
+                                categoryColor = c.categoryColor,
+                                monthKey = key,
+                                total = c.total
+                            )
+                        )
+                    }
+                }
+
                 val grouped = rawData.groupBy { it.categoryId }
-
-                // Build month keys for all N months (for gap-filling)
-                val allMonthKeys = buildMonthKeys(monthsBack)
 
                 val trends = grouped.mapNotNull { (categoryId, entries) ->
                     val name = entries.first().categoryName
                     val color = entries.first().categoryColor
 
-                    // Build a map of monthKey -> total for this category
                     val monthMap = entries.associate { it.monthKey to it.total }
-
-                    // Fill missing months with 0
                     val filledData = allMonthKeys.map { key ->
                         MonthlyTotal(monthKey = key, total = monthMap[key] ?: 0.0)
                     }
 
-                    // Count months with actual data (non-zero)
                     val activeMonths = filledData.count { it.total > 0 }
-
-                    // Need at least 3 months with data for meaningful analysis.
-                    // One-off or rare expenses (1-2 months) are NOT volatile — they're just sparse.
                     if (activeMonths < 3) {
                         null
                     } else {
@@ -650,7 +697,7 @@ class AnalyticsViewModel @Inject constructor(
                     .take(8)
 
                 _uiState.update { it.copy(categoryTrends = topTrends) }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Don't fail the whole screen for this optional section
                 _uiState.update { it.copy(categoryTrends = emptyList()) }
             }
@@ -761,8 +808,12 @@ class AnalyticsViewModel @Inject constructor(
                 // Search for the active tab
                 when (state.selectedTab) {
                     AnalyticsTab.MONTHLY -> {
-                        val results = expenseRepository.searchRecipientSpendingForMonth(
-                            query, state.selectedYear, state.selectedMonth
+                        val msd = incomeRepository.monthStartDay
+                        val (start, end) = MonthPeriod.rangeForPeriodStart(
+                            state.selectedYear, state.selectedMonth, msd
+                        )
+                        val results = expenseRepository.searchRecipientSpendingInRange(
+                            query, start, end
                         )
                         val total = results.sumOf { it.total }
                         _uiState.update {
@@ -1023,56 +1074,11 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     /**
-     * Build a list of month keys (e.g. "2025-10", "2025-11", ...) for the last N months.
-     */
-    private fun buildMonthKeys(count: Int): List<String> {
-        val keys = mutableListOf<String>()
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.MONTH, -(count - 1))
-        val fmt = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-        repeat(count) {
-            keys.add(fmt.format(cal.time))
-            cal.add(Calendar.MONTH, 1)
-        }
-        return keys
-    }
-
-    /**
-     * Fill missing months with zero values so the chart has continuous data points.
-     */
-    private fun fillMissingMonths(data: List<MonthlyTotal>, count: Int): List<MonthlyTotal> {
-        val result = mutableListOf<MonthlyTotal>()
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.MONTH, -(count - 1))
-        val existing = data.associateBy { it.monthKey }
-        val fmt = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-
-        repeat(count) {
-            val key = fmt.format(cal.time)
-            result.add(existing[key] ?: MonthlyTotal(monthKey = key, total = 0.0))
-            cal.add(Calendar.MONTH, 1)
-        }
-        return result
-    }
-
-    /**
      * Ensure all 12 months (1-12) are represented for yearly chart.
      * Gap-fills missing months with 0.
      */
     private fun fillYearMonths(data: List<YearMonthTotal>): List<YearMonthTotal> {
         val map = data.associateBy { it.monthNumber }
         return (1..12).map { m -> map[m] ?: YearMonthTotal(monthNumber = m, total = 0.0) }
-    }
-
-    /**
-     * Format a year/month pair as a human-readable label.
-     * e.g. (2026, 3) -> "March 2026"
-     */
-    private fun formatMonthLabel(year: Int, month: Int): String {
-        val cal = Calendar.getInstance().apply {
-            set(Calendar.YEAR, year)
-            set(Calendar.MONTH, month - 1)
-        }
-        return SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(cal.time)
     }
 }

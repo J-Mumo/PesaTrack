@@ -5,11 +5,13 @@ import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.entities.IncomeSenderRuleEntity
 import com.pesatrack.data.local.database.entities.IncomeTransactionEntity
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.domain.models.EffectiveIncome
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.IncomeSource
 import com.pesatrack.domain.models.IncomeSourceTotal
 import com.pesatrack.domain.models.IncomeTransaction
+import com.pesatrack.utils.MonthPeriod
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.Calendar
@@ -32,7 +34,21 @@ class IncomeRepository @Inject constructor(
     private val incomeTransactionDao: IncomeTransactionDao,
     private val monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao,
     private val incomeSenderRuleDao: IncomeSenderRuleDao,
+    private val appPreferences: AppPreferences,
 ) {
+
+    /**
+     * Cached month start day, mirroring [com.pesatrack.data.repository.BudgetRepository].
+     * Default 1 = standard calendar month. Call [refreshMonthStartDay] from a
+     * coroutine on app/screen entry to pick up the user's preference.
+     */
+    @Volatile
+    private var _monthStartDay: Int = 1
+    val monthStartDay: Int get() = _monthStartDay
+
+    suspend fun refreshMonthStartDay() {
+        _monthStartDay = appPreferences.getMonthStartDay()
+    }
 
     // ─────────────────────────────────────────────────────────────────
     //                            Transactions
@@ -151,11 +167,53 @@ class IncomeRepository @Inject constructor(
     /**
      * The income value analytics should use for [yearMonth], plus a label
      * describing where it came from. See plan §6.4 for the rules table.
+     *
+     * NOTE: This overload preserves the legacy calendar-month interpretation
+     * (string is `"yyyy-MM"`). Prefer [effectiveIncomeForCurrentMonth] /
+     * [effectiveIncomeForMonth] for new code so the user's `monthStartDay`
+     * preference is honoured.
      */
     suspend fun effectiveMonthlyIncome(yearMonth: String): EffectiveIncome {
         val bounds = monthBoundsFor(yearMonth)
         val detected = sumForRange(bounds.startMs, bounds.endMs, includeTransfers = false)
         val manual = getManualOverride(yearMonth)
+        return reconcile(detected = detected, manual = manual)
+    }
+
+    /**
+     * Bounds (startMs inclusive, endMs exclusive) for the period the user is
+     * currently in, honouring their `monthStartDay` preference.
+     */
+    fun currentMonthBounds(nowMs: Long = System.currentTimeMillis()): Pair<Long, Long> =
+        MonthPeriod.currentRange(_monthStartDay, nowMs)
+
+    /** Override lookup key for the period containing "now". */
+    fun currentMonthKey(nowMs: Long = System.currentTimeMillis()): String =
+        MonthPeriod.currentKey(_monthStartDay, nowMs)
+
+    /**
+     * [EffectiveIncome] for the period the user is currently in.
+     * Same shape as [effectiveMonthlyIncome] but offset-aware.
+     */
+    suspend fun effectiveIncomeForCurrentMonth(
+        nowMs: Long = System.currentTimeMillis()
+    ): EffectiveIncome {
+        val (start, end) = currentMonthBounds(nowMs)
+        val detected = sumForRange(start, end, includeTransfers = false)
+        val manual = getManualOverride(currentMonthKey(nowMs))
+        return reconcile(detected = detected, manual = manual)
+    }
+
+    /**
+     * [EffectiveIncome] for the period whose start date is in [year]/[month1Based].
+     * Used by analytics surfaces that iterate backwards by period.
+     */
+    suspend fun effectiveIncomeForMonth(year: Int, month1Based: Int): EffectiveIncome {
+        val (start, end) = MonthPeriod.rangeForPeriodStart(year, month1Based, _monthStartDay)
+        val detected = sumForRange(start, end, includeTransfers = false)
+        val manual = getManualOverride(
+            MonthPeriod.keyForPeriodStart(year, month1Based, _monthStartDay)
+        )
         return reconcile(detected = detected, manual = manual)
     }
 
@@ -197,14 +255,17 @@ class IncomeRepository @Inject constructor(
 
     private fun monthBoundsFor(yearMonth: String): MonthBounds {
         val parts = yearMonth.split('-')
-        require(parts.size == 2) { "yearMonth must be in 'yyyy-MM' format, got: $yearMonth" }
+        require(parts.size == 2 || parts.size == 3) {
+            "yearMonth must be 'yyyy-MM' or 'yyyy-MM-dd', got: $yearMonth"
+        }
         val year = parts[0].toInt()
         val month = parts[1].toInt() // 1-based
+        val day = if (parts.size == 3) parts[2].toInt() else 1
         val cal = Calendar.getInstance().apply {
             clear()
             set(Calendar.YEAR, year)
             set(Calendar.MONTH, month - 1)
-            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.DAY_OF_MONTH, day)
         }
         val start = cal.timeInMillis
         cal.add(Calendar.MONTH, 1)

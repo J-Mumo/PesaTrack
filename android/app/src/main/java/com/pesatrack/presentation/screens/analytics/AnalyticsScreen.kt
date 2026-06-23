@@ -1912,6 +1912,40 @@ fun CategoryBreakdownChart(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
+
+            // Total footer row
+            val visibleTotal = data.sumOf { it.total }
+            val totalPct = if (totalForMonth > 0) (visibleTotal / totalForMonth) * 100.0 else 0.0
+            HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Total",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = visibleTotal.formatAsCurrency(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(96.dp)
+                )
+                Text(
+                    text = String.format("%.0f%%", totalPct),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(48.dp)
+                )
+            }
         }
     }
 }

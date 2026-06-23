@@ -6,18 +6,16 @@ import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.IncomeSource
 import com.pesatrack.domain.models.IncomeTransaction
+import com.pesatrack.utils.MonthPeriod
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.abs
-
 @HiltViewModel
 class IncomeViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
@@ -27,6 +25,7 @@ class IncomeViewModel @Inject constructor(
     val uiState: StateFlow<IncomeUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch { incomeRepository.refreshMonthStartDay() }
         reload()
     }
 
@@ -42,6 +41,7 @@ class IncomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
+                incomeRepository.refreshMonthStartDay()
                 val (start, end, label) = boundsForPeriod(_uiState.value.period)
                 val txs = incomeRepository.getForRange(start, end)
                 val breakdown = incomeRepository.sourceBreakdown(start, end)
@@ -49,14 +49,7 @@ class IncomeViewModel @Inject constructor(
                     .filter { !it.isExcluded && it.source.isInflow }
                     .sumOf { it.amount }
                 val effective = if (_uiState.value.period == IncomePeriod.MONTH) {
-                    val cal = Calendar.getInstance().apply { timeInMillis = start }
-                    val key = String.format(
-                        Locale.US,
-                        "%04d-%02d",
-                        cal.get(Calendar.YEAR),
-                        cal.get(Calendar.MONTH) + 1
-                    )
-                    incomeRepository.effectiveMonthlyIncome(key).source
+                    incomeRepository.effectiveIncomeForCurrentMonth().source
                 } else EffectiveIncomeSource.NONE
                 _uiState.update {
                     it.copy(
@@ -190,13 +183,8 @@ class IncomeViewModel @Inject constructor(
         val cal = Calendar.getInstance()
         return when (period) {
             IncomePeriod.MONTH -> {
-                val start = atStartOfMonth(cal)
-                val end = cal.apply {
-                    timeInMillis = start
-                    add(Calendar.MONTH, 1)
-                }.timeInMillis
-                val label = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-                    .format(java.util.Date(start))
+                val (start, end) = incomeRepository.currentMonthBounds()
+                val label = MonthPeriod.labelForRange(start, end, incomeRepository.monthStartDay)
                 Triple(start, end, label)
             }
 
@@ -228,15 +216,5 @@ class IncomeViewModel @Inject constructor(
                 Triple(start, end, year.toString())
             }
         }
-    }
-
-    private fun atStartOfMonth(cal: Calendar): Long {
-        val c = Calendar.getInstance().apply {
-            clear()
-            set(Calendar.YEAR, cal.get(Calendar.YEAR))
-            set(Calendar.MONTH, cal.get(Calendar.MONTH))
-            set(Calendar.DAY_OF_MONTH, 1)
-        }
-        return c.timeInMillis
     }
 }

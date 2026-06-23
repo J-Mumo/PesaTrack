@@ -339,6 +339,41 @@ class ExpenseRepository @Inject constructor(
         return getCategoryTotalsForMonth(year, month).sumOf { it.total }
     }
 
+    /**
+     * Total spending in an arbitrary date range. Used by savings-rate and
+     * income surfaces that operate on offset "budget month" bounds rather
+     * than calendar months.
+     */
+    suspend fun getSpendingInRange(startMs: Long, endMs: Long): Double =
+        expenseDao.getTotalSpendingInRange(startMs, endMs)
+
+    /**
+     * Period-aware variants of the `*ForMonth` queries above.
+     *
+     * The Analytics Monthly tab uses these so its month bucket aligns with
+     * the user's `monthStartDay` budget cycle (e.g. salary on the 25th)
+     * instead of always running 1st-to-last-of-the-calendar-month.
+     */
+    suspend fun getCategoryTotalsInRange(startMs: Long, endMs: Long): List<CategoryTotal> =
+        expenseDao.getCategoryTotalsForMonth(startMs, endMs)
+
+    suspend fun getTopSpendersInRange(
+        startMs: Long,
+        endMs: Long,
+        limit: Int = 10
+    ): List<TopSpender> = expenseDao.getTopSpendersForMonth(startMs, endMs, limit)
+
+    suspend fun getPaymentTypeBreakdownInRange(
+        startMs: Long,
+        endMs: Long
+    ): List<PaymentTypeTotal> = expenseDao.getPaymentTypeBreakdownForMonth(startMs, endMs)
+
+    suspend fun searchRecipientSpendingInRange(
+        query: String,
+        startMs: Long,
+        endMs: Long
+    ): List<TopSpender> = expenseDao.searchRecipientSpendingForMonth(query, startMs, endMs)
+
     // ==================== Yearly Analytics ====================
 
     /**

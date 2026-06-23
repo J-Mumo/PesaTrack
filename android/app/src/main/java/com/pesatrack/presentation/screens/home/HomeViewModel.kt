@@ -69,6 +69,7 @@ class HomeViewModel @Inject constructor(
             categoryRepository.initializeDefaultCategories()
             // Ensure budget month start day is loaded from preferences
             budgetRepository.refreshMonthStartDay()
+            incomeRepository.refreshMonthStartDay()
         }
     }
     
@@ -207,13 +208,10 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             expenseRepository.getExpensesForCurrentMonth().collect {
                 try {
-                    val now = Calendar.getInstance()
-                    val year = now.get(Calendar.YEAR)
-                    val month = now.get(Calendar.MONTH) + 1
-                    val yearMonth = String.format(Locale.US, "%04d-%02d", year, month)
-                    val effective = incomeRepository.effectiveMonthlyIncome(yearMonth)
+                    val (start, end) = incomeRepository.currentMonthBounds()
+                    val effective = incomeRepository.effectiveIncomeForCurrentMonth()
                     val detected = effective.detectedAmount
-                    val spent = expenseRepository.getTotalForMonth(year, month)
+                    val spent = expenseRepository.getSpendingInRange(start, end)
                     val rate: Double? = if (detected > 0) {
                         (((detected - spent) / detected) * 100.0).coerceIn(-100.0, 100.0)
                     } else null

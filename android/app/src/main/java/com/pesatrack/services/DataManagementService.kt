@@ -9,8 +9,10 @@ import com.pesatrack.data.local.database.PesaTrackDatabase
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.entities.DefaultCategories
 import com.pesatrack.data.local.preferences.AppPreferences
+import com.pesatrack.domain.models.IncomeSource
 import com.pesatrack.utils.UsageSummaryGenerator
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
@@ -25,7 +27,7 @@ import javax.inject.Singleton
 /**
  * Service for data management operations:
  * - Reset categories to defaults (removes custom categories + all rules)
- * - Export expenses to CSV (write to cache dir + share via Android share sheet)
+ * - Export expenses + income to CSV (write to cache dir + share via Android share sheet)
  * - Backup database to raw .db file via SAF (settings embedded in metadata table)
  * - Restore database from raw .db file via SAF
  */
@@ -34,6 +36,7 @@ class DataManagementService @Inject constructor(
     private val database: PesaTrackDatabase,
     private val appPreferences: AppPreferences,
     private val expenseDao: ExpenseDao,
+    private val incomeTransactionDao: IncomeTransactionDao,
     private val categoryDao: CategoryDao,
     private val categoryRuleDao: CategoryRuleDao,
     private val usageSummaryGenerator: UsageSummaryGenerator
@@ -73,15 +76,18 @@ class DataManagementService @Inject constructor(
     }
 
     /**
-     * Export all expenses to a CSV file in the app's cache directory.
+     * Export all expenses and income transactions to a single CSV file in the
+     * app's cache directory. Rows are tagged with a `Type` column (Expense / Income)
+     * and merged in timestamp-descending order.
      *
      * @param context Android context for accessing cache directory
-     * @return the File pointing to the generated CSV, or null on failure
+     * @return the File pointing to the generated CSV, or null on failure / nothing to export
      */
     suspend fun exportExpensesToCsv(context: Context): File? {
         return try {
             val expenses = expenseDao.getAllExpensesForExport()
-            if (expenses.isEmpty()) return null
+            val incomes = incomeTransactionDao.getAllIncomeForExport()
+            if (expenses.isEmpty() && incomes.isEmpty()) return null
 
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
             val fileNameFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
@@ -91,25 +97,55 @@ class DataManagementService @Inject constructor(
             exportDir.mkdirs()
             val csvFile = File(exportDir, fileName)
 
+            // Build a unified row list so expense + income rows interleave by timestamp.
+            data class CsvRow(val timestamp: Long, val line: String)
+            val rows = ArrayList<CsvRow>(expenses.size + incomes.size)
+
+            for (expense in expenses) {
+                val date = dateFormat.format(Date(expense.timestamp))
+                val amount = "%.2f".format(expense.amount)
+                val recipient = escapeCsv(expense.recipientName ?: expense.recipient)
+                val category = escapeCsv(expense.categoryName)
+                val group = escapeCsv(expense.groupName)
+                val paymentType = escapeCsv(expense.paymentType)
+                val txnId = escapeCsv(expense.transactionId ?: "")
+                val source = escapeCsv(expense.source)
+                val notes = escapeCsv(expense.notes ?: "")
+                val excluded = if (expense.isExcluded) "Yes" else "No"
+                rows.add(
+                    CsvRow(
+                        expense.timestamp,
+                        "Expense,$date,$amount,$recipient,$category,$group,$paymentType,$txnId,$source,$notes,$excluded"
+                    )
+                )
+            }
+
+            for (income in incomes) {
+                val date = dateFormat.format(Date(income.timestamp))
+                val amount = "%.2f".format(income.amount)
+                val counterparty = escapeCsv(income.sender ?: "")
+                val category = escapeCsv(IncomeSource.fromName(income.source).displayName)
+                val group = escapeCsv("Income")
+                val paymentType = escapeCsv("")
+                val txnId = escapeCsv(income.transactionId)
+                val source = escapeCsv(income.parserSource)
+                val notes = escapeCsv(income.note ?: "")
+                val excluded = if (income.isExcluded) "Yes" else "No"
+                rows.add(
+                    CsvRow(
+                        income.timestamp,
+                        "Income,$date,$amount,$counterparty,$category,$group,$paymentType,$txnId,$source,$notes,$excluded"
+                    )
+                )
+            }
+
+            rows.sortByDescending { it.timestamp }
+
             csvFile.bufferedWriter().use { writer ->
-                // CSV header
-                writer.write("Date,Amount (KES),Recipient,Category,Group,Payment Type,Transaction ID,Source,Notes,Excluded")
+                writer.write("Type,Date,Amount (KES),Recipient,Category,Group,Payment Type,Transaction ID,Source,Notes,Excluded")
                 writer.newLine()
-
-                // CSV rows
-                for (expense in expenses) {
-                    val date = dateFormat.format(Date(expense.timestamp))
-                    val amount = "%.2f".format(expense.amount)
-                    val recipient = escapeCsv(expense.recipientName ?: expense.recipient)
-                    val category = escapeCsv(expense.categoryName)
-                    val group = escapeCsv(expense.groupName)
-                    val paymentType = escapeCsv(expense.paymentType)
-                    val txnId = escapeCsv(expense.transactionId ?: "")
-                    val source = escapeCsv(expense.source)
-                    val notes = escapeCsv(expense.notes ?: "")
-                    val excluded = if (expense.isExcluded) "Yes" else "No"
-
-                    writer.write("$date,$amount,$recipient,$category,$group,$paymentType,$txnId,$source,$notes,$excluded")
+                for (row in rows) {
+                    writer.write(row.line)
                     writer.newLine()
                 }
             }
@@ -141,7 +177,7 @@ class DataManagementService @Inject constructor(
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/csv"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "PesaTrack Expense Export")
+            putExtra(Intent.EXTRA_SUBJECT, "PesaTrack Transaction Export")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 

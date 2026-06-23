@@ -654,7 +654,7 @@ private fun DataManagementSection(
                     Icon(imageVector = Icons.Default.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column {
                         Text(text = "Export Data", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Text(text = "Export all expenses as CSV", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(text = "Export all expenses and income as CSV", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 if (uiState.isExporting) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)

@@ -78,4 +78,12 @@ interface IncomeTransactionDao {
 
     @Query("DELETE FROM income_transactions")
     suspend fun deleteAll()
+
+    // ==================== Export Queries ====================
+
+    /**
+     * All income transactions ordered by timestamp descending, for CSV export.
+     */
+    @Query("SELECT * FROM income_transactions ORDER BY timestamp DESC")
+    suspend fun getAllIncomeForExport(): List<IncomeTransactionEntity>
 }
