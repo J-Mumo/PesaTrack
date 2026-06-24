@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.4.1 |
 | **1.3.2** | 9 | 2026-06-02 | Production | ✅ Published |
 | **1.3.1** | 8 | 2026-05-29 | Production | 🟡 Pending upload |
 | **1.3.0** | 7 | 2026-05-20 | Production | 🟡 Pending upload |
@@ -18,6 +19,40 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.4.1 (versionCode 11) — 2026-06-24
+
+**Focus:** Patch release on top of v1.4.0 — four polish items that landed after v1.4.0's release commit. Closes the loop on income tracking (self-transfer noise, scroll regression) and finishes the "month starts on" alignment across the rest of the app (Analytics Monthly charts, CSV export).
+
+### 🐛 Bug Fixes
+
+- **Bank → M-PESA self-transfers no longer count as income** — When you move money from your NCBA bank account to M-PESA via the bank app, the SMS pair is two halves of the same self-transfer. The M-PESA half (`You have received Ksh… from NCBA BANK…`) was being saved as `UNCATEGORIZED` income, inflating monthly income totals and triggering a stray "Income received" notification. `MpesaSmsParser.tryParseIncome` now keeps a bank-self-transfer sender list (currently `NCBA BANK` / `NCBA`) and rewrites matching rows to `source = TRANSFER_IN, isExcluded = true` before persisting. Side effects: the notification stays silent (only `UNCATEGORIZED` rows notify), the row is filtered out of every total, and the row still appears on the Income screen (dimmed, struck-through) so you can audit or restore it via long-press.
+
+- **Income screen no longer jumps back to the top on refresh** — Returning to the Income screen from `CategorizeIncomeScreen` kicked the list back to the top because the entire `LazyColumn` was being unmounted whenever `uiState.isLoading == true`. Gated the spinner branch on `isInitialLoad = isLoading && transactions.isEmpty() && totalInflow == 0.0` — refreshes with existing data no longer rebuild the list, preserving scroll position.
+
+- **Analytics Monthly charts now respect your "month starts on" setting** — The Charts → Monthly tab was still using calendar months while Budgets, Income, Home, and the savings-rate card had already moved to your `monthStartDay` preference. A salary-on-the-25th user would see "May 2026" data on the Analytics tab even though the active budget period was "Apr 25 – May 24". The period selector label (`"Mar 25 – Apr 24, 2026"` when offset), arrow navigation, totals, previous-period comparison, By Category / Top Spenders / Payment Type breakdowns, recipient search, the 6-period trend chart, the 6-period category trends, and the days-for-average computation now all use the same offset-aware period as Budgets.
+
+- **CSV export now includes income** — Settings → Export Data emitted only expenses; income transactions were nowhere in the file. The export now bundles both into a single CSV ordered by date, with a new leading `Type` column (`Expense` / `Income`) so you can filter or pivot. The empty-state toast and Settings row subtitle were updated accordingly.
+
+### 📦 Technical
+
+- New unit test: `MpesaSmsParserIncomeTest."NCBA bank to MPESA self-transfer is excluded TRANSFER_IN"`. Extend the bank-self-transfer sender list in `MpesaSmsParser` as new banks appear in the wild.
+- New shared utility [`MonthPeriod.kt`](../android/app/src/main/java/com/pesatrack/utils/MonthPeriod.kt) — centralises offset-aware period bounds, keys, and labels used across `IncomeRepository`, `AnalyticsViewModel`, and (already) `BudgetRepository`.
+- New `ExpenseRepository` range-based wrappers (`getCategoryTotalsInRange`, `getTopSpendersInRange`, `getPaymentTypeBreakdownInRange`, `searchRecipientSpendingInRange`) so analytics surfaces can pass explicit period bounds instead of `(year, month)` tuples.
+- New `IncomeTransactionDao.getAllIncomeForExport()` query; `DataManagementService` constructor takes an `IncomeTransactionDao` (4th param).
+- Removed unused `AnalyticsViewModel` helpers (`buildMonthKeys`, `fillMissingMonths`, `formatMonthLabel`) and the stale `private val calendar` field.
+
+### 🏪 Play Store Release Notes
+
+```
+What's New:
+• Analytics → Charts → Monthly tab now follows your "month starts on" day, so the period selector and all monthly charts match your budget cycle
+• CSV export (Settings → Export Data) now includes income transactions alongside expenses, with a new "Type" column
+• Bank → M-PESA self-transfers (e.g. NCBA app to M-PESA) no longer count as income — they're auto-excluded but still visible on the Income screen for audit
+• Income screen no longer jumps to the top after categorizing a row
+```
 
 ---
 
@@ -49,10 +84,6 @@
 
 ### 🐛 Bug Fixes
 
-- **Analytics Monthly charts now respect your "month starts on" setting** — The Charts → Monthly tab was still using calendar months while Budgets, Income, Home, and the savings-rate card had already moved to your `monthStartDay` preference. A salary-on-the-25th user would see "May 2026" data on the Analytics tab even though the active budget period was "Apr 25 – May 24". The period selector label (`"Mar 25 – Apr 24, 2026"` when offset), arrow navigation, totals, previous-period comparison, By Category / Top Spenders / Payment Type breakdowns, recipient search, the 6-period trend chart, the 6-period category trends, and the days-for-average computation now all use the same offset-aware period as Budgets.
-
-- **CSV export now includes income** — Settings → Export Data emitted only expenses; income transactions were nowhere in the file. The export now bundles both into a single CSV ordered by date, with a new leading `Type` column (`Expense` / `Income`) so you can filter or pivot. The empty-state toast and Settings row subtitle were updated accordingly.
-
 - **Income / savings rate now respect your "month starts on" setting** — Previously the Income screen, Home "received this month" line, and Analytics savings-rate card all hard-coded a calendar month (1st to last day) while the Budget screen used your `monthStartDay` preference. A salary-on-the-25th user would see their budget period as Mar 25 – Apr 24 but their income shown for Mar 1 – Mar 31, making the savings rate compare numbers from different periods. Aligned all three surfaces (`HomeViewModel.loadIncomeData`, `AnalyticsViewModel.loadSavingsRateCard` + `loadIncomeVsSpendChart`, `IncomeViewModel` MONTH tab) on the same offset-aware period via a new shared `MonthPeriod` helper that mirrors `BudgetRepository`'s existing convention (period named after its start year/month, key `"yyyy-MM"` when offset is 1 else `"yyyy-MM-dd"`). Also fixed a latent crash-then-swallow bug where `IncomeRepository.monthBoundsFor` threw `IllegalArgumentException` whenever `BudgetViewModel` passed an offset key like `"2026-03-25"` — the surrounding `try/catch` was silently hiding the user's manual income override from the budget income card.
 
 - **Live income SMS now triggers the "Income received" notification** — `SmsReceiver` was gating the M-PESA branch on the legacy `SmsParser.isTransactionSms`, whose keyword list (`sent to` / `paid to` / `withdrawn` / `of airtime` / `Fuliza` / `bought`) only matched expense SMS. Every live income SMS was silently dropped before the parser ran, so no row was saved and the notification never fired. Replaced with `body.contains("Confirmed")` — the universal M-PESA transaction marker the parser already uses — and the parser strategy now decides expense vs income vs irrelevant.
@@ -83,8 +114,6 @@ What's New:
 • "By Category" card on Home
 • Low-priority notification when new income arrives, so you can tag the source
 • Income and Savings Rate now follow the same "month starts on" day as your budget — salary-cycle users get a coherent picture
-• Analytics → Charts → Monthly tab also follows your "month starts on" day, so the period selector and all monthly charts match your budget cycle
-• CSV export (Settings → Export Data) now includes income transactions alongside expenses, with a new "Type" column
 • Fixes: feedback emails now pre-fill in Gmail, "By Category" tap target on Home, import-result counts include income
 ```
 
