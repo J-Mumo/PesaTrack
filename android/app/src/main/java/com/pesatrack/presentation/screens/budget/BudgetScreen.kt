@@ -334,11 +334,23 @@ fun IncomeAllocationCard(
                     val needsApply = monthlyIncome == null ||
                         (monthlyIncome != null && kotlin.math.abs(monthlyIncome - detectedIncome) > 1.0)
                     if (needsApply) {
-                        TextButton(
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilledTonalButton(
                             onClick = onUseDetected,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.heightIn(min = 32.dp)
                         ) {
-                            Text("Use detected", style = MaterialTheme.typography.labelSmall)
+                            Icon(
+                                imageVector = Icons.Filled.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Use this",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }

@@ -121,8 +121,15 @@ object AppModule {
         expenseDao: ExpenseDao,
         categoryDao: CategoryDao,
         budgetDao: BudgetDao,
-        monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao
+        monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao,
+        incomeTransactionDao: IncomeTransactionDao
     ): SampleDataService {
-        return SampleDataService(expenseDao, categoryDao, budgetDao, monthlyIncomeBudgetDao)
+        return SampleDataService(
+            expenseDao,
+            categoryDao,
+            budgetDao,
+            monthlyIncomeBudgetDao,
+            incomeTransactionDao
+        )
     }
 }

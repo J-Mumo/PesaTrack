@@ -225,27 +225,43 @@ class StatementImportService @Inject constructor(
      * 2. CategorizationService (user rules + built-in keyword rules engine)
      */
     private suspend fun autoCategorize(expense: Expense): Expense {
-        // 1. Try recipient mapping first
         val recipientKey = expense.recipientName?.trim()?.lowercase()
             ?: expense.recipient.trim().lowercase()
 
-        val mappedCategory = recipientMappingRepository.getCategoryForRecipient(recipientKey)
-        if (mappedCategory != null) {
-            return expense.copy(
-                categoryId = mappedCategory,
-                isCategorized = true
+        // 1. Try recipient mapping first
+        //    Paybill payments use a composite (paybill, account) key so aggregator
+        //    paybills (e.g. NCBA Loop 247247) don't misfire across unrelated merchants.
+        if (expense.paymentType == PaymentType.PAY_BILL) {
+            val paybillCategory = recipientMappingRepository.getCategoryForPaybill(
+                paybillName = expense.recipientName,
+                account = expense.recipient
             )
-        }
-
-        // Also try the raw recipient (phone/till/paybill number)
-        val recipientNumericKey = expense.recipient.trim().lowercase()
-        if (recipientNumericKey != recipientKey) {
-            val numericMapped = recipientMappingRepository.getCategoryForRecipient(recipientNumericKey)
-            if (numericMapped != null) {
+            if (paybillCategory != null) {
                 return expense.copy(
-                    categoryId = numericMapped,
+                    categoryId = paybillCategory,
                     isCategorized = true
                 )
+            }
+            // Skip name/account-only fallbacks for paybills — see comment above.
+        } else {
+            val mappedCategory = recipientMappingRepository.getCategoryForRecipient(recipientKey)
+            if (mappedCategory != null) {
+                return expense.copy(
+                    categoryId = mappedCategory,
+                    isCategorized = true
+                )
+            }
+
+            // Also try the raw recipient (phone/till/paybill number)
+            val recipientNumericKey = expense.recipient.trim().lowercase()
+            if (recipientNumericKey != recipientKey) {
+                val numericMapped = recipientMappingRepository.getCategoryForRecipient(recipientNumericKey)
+                if (numericMapped != null) {
+                    return expense.copy(
+                        categoryId = numericMapped,
+                        isCategorized = true
+                    )
+                }
             }
         }
 

@@ -214,6 +214,19 @@ class SmsReceiver : BroadcastReceiver() {
             showCategorizeNotification(context, expenseId, mainExpense.amount, recipient)
         }
 
+        // Nudge the user to reclassify auto-Misc catch-alls (SEND_MONEY fallback etc.).
+        if (expenseId > 0 && mainExpense.isCategorized &&
+            mainExpense.categoryId == KeywordRulesEngine.MISCELLANEOUS_CATEGORY_ID
+        ) {
+            val recipient = mainExpense.recipientName ?: mainExpense.recipient
+            NotificationHelper.showMiscAutoCategorizedNotification(
+                context = context,
+                expenseId = expenseId,
+                amount = mainExpense.amount,
+                recipient = recipient
+            )
+        }
+
         // Check budget alerts (only for categorized expenses)
         if (mainExpense.isCategorized && mainExpense.categoryId != null) {
             try {
@@ -274,10 +287,19 @@ class SmsReceiver : BroadcastReceiver() {
         }
 
         // 2. Recipient mapping lookup
-        val mappedCategory = recipientMappingRepository.getCategoryForRecipientOrName(
-            recipient = expense.recipient,
-            recipientName = expense.recipientName
-        )
+        //    Paybill payments use a composite (paybill, account) key so aggregator
+        //    paybills (e.g. NCBA Loop 247247) don't misfire across unrelated merchants.
+        val mappedCategory = if (expense.paymentType == PaymentType.PAY_BILL) {
+            recipientMappingRepository.getCategoryForPaybill(
+                paybillName = expense.recipientName,
+                account = expense.recipient
+            )
+        } else {
+            recipientMappingRepository.getCategoryForRecipientOrName(
+                recipient = expense.recipient,
+                recipientName = expense.recipientName
+            )
+        }
         if (mappedCategory != null) {
             Log.d(TAG, "Auto-categorized ${expense.recipientName ?: expense.recipient} via mapping → category $mappedCategory")
             return expense.copy(
@@ -369,6 +391,17 @@ class SmsReceiver : BroadcastReceiver() {
             showCategorizeNotification(
                 context, expenseId, finalAmount,
                 cardApproval.recipientName ?: "Card Payment"
+            )
+        }
+
+        if (expenseId > 0 && categorized.isCategorized &&
+            categorized.categoryId == KeywordRulesEngine.MISCELLANEOUS_CATEGORY_ID
+        ) {
+            NotificationHelper.showMiscAutoCategorizedNotification(
+                context = context,
+                expenseId = expenseId,
+                amount = finalAmount,
+                recipient = cardApproval.recipientName ?: "Card Payment"
             )
         }
     }

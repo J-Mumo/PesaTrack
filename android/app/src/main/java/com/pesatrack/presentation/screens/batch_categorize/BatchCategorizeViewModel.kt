@@ -7,6 +7,7 @@ import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.services.CategorizationService
 import com.pesatrack.services.RecipientInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -163,20 +164,26 @@ class BatchCategorizeViewModel @Inject constructor(
                 }
 
                 // 2. Save the recipient→category mapping (multi-category aware)
-                val mappingKey = recipientName ?: recipient
-                recipientMappingRepository.saveMapping(
-                    recipientKey = mappingKey,
-                    categoryId = category.id,
-                    displayName = recipientName
-                )
-
-                // Also save the alternate key if both exist
-                if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                //    Paybill groups save composite (paybill, account) keys so aggregator
+                //    paybills don't cross-fire between merchants sharing the paybill number.
+                if (recipientGroup.paymentType == PaymentType.PAY_BILL.name) {
+                    savePaybillMappingsForGroup(recipientGroup, category.id)
+                } else {
+                    val mappingKey = recipientName ?: recipient
                     recipientMappingRepository.saveMapping(
-                        recipientKey = recipient,
+                        recipientKey = mappingKey,
                         categoryId = category.id,
                         displayName = recipientName
                     )
+
+                    // Also save the alternate key if both exist
+                    if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = recipient,
+                            categoryId = category.id,
+                            displayName = recipientName
+                        )
+                    }
                 }
 
                 // 3. Refresh the list and remove applied suggestion
@@ -291,12 +298,21 @@ class BatchCategorizeViewModel @Inject constructor(
                 // 2. Find the expense to learn the mapping
                 val expense = expenseRepository.getExpenseById(expenseId)
                 if (expense != null) {
-                    val mappingKey = expense.recipientName ?: expense.recipient
-                    recipientMappingRepository.saveMapping(
-                        recipientKey = mappingKey,
-                        categoryId = category.id,
-                        displayName = expense.recipientName
-                    )
+                    if (expense.paymentType == PaymentType.PAY_BILL) {
+                        recipientMappingRepository.savePaybillMapping(
+                            paybillName = expense.recipientName,
+                            account = expense.recipient,
+                            categoryId = category.id,
+                            displayName = expense.recipientName
+                        )
+                    } else {
+                        val mappingKey = expense.recipientName ?: expense.recipient
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = mappingKey,
+                            categoryId = category.id,
+                            displayName = expense.recipientName
+                        )
+                    }
                 }
 
                 // 3. Refresh expanded group and groups list
@@ -405,19 +421,23 @@ class BatchCategorizeViewModel @Inject constructor(
                 }
 
                 // 2. Save recipient→category mapping
-                val mappingKey = recipientName ?: recipient
-                recipientMappingRepository.saveMapping(
-                    recipientKey = mappingKey,
-                    categoryId = suggestion.categoryId,
-                    displayName = recipientName
-                )
-
-                if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                if (group.paymentType == PaymentType.PAY_BILL.name) {
+                    savePaybillMappingsForGroup(group, suggestion.categoryId)
+                } else {
+                    val mappingKey = recipientName ?: recipient
                     recipientMappingRepository.saveMapping(
-                        recipientKey = recipient,
+                        recipientKey = mappingKey,
                         categoryId = suggestion.categoryId,
                         displayName = recipientName
                     )
+
+                    if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                        recipientMappingRepository.saveMapping(
+                            recipientKey = recipient,
+                            categoryId = suggestion.categoryId,
+                            displayName = recipientName
+                        )
+                    }
                 }
 
                 // 3. Refresh and remove suggestion
@@ -475,19 +495,23 @@ class BatchCategorizeViewModel @Inject constructor(
                     }
 
                     // Save recipient→category mapping
-                    val mappingKey = group.recipientName ?: group.recipient
-                    recipientMappingRepository.saveMapping(
-                        recipientKey = mappingKey,
-                        categoryId = suggestion.categoryId,
-                        displayName = group.recipientName
-                    )
-
-                    if (!group.recipientName.isNullOrBlank() && group.recipient.isNotBlank() && group.recipientName != group.recipient) {
+                    if (group.paymentType == PaymentType.PAY_BILL.name) {
+                        savePaybillMappingsForGroup(group, suggestion.categoryId)
+                    } else {
+                        val mappingKey = group.recipientName ?: group.recipient
                         recipientMappingRepository.saveMapping(
-                            recipientKey = group.recipient,
+                            recipientKey = mappingKey,
                             categoryId = suggestion.categoryId,
                             displayName = group.recipientName
                         )
+
+                        if (!group.recipientName.isNullOrBlank() && group.recipient.isNotBlank() && group.recipientName != group.recipient) {
+                            recipientMappingRepository.saveMapping(
+                                recipientKey = group.recipient,
+                                categoryId = suggestion.categoryId,
+                                displayName = group.recipientName
+                            )
+                        }
                     }
 
                     appliedCount++
@@ -645,20 +669,24 @@ class BatchCategorizeViewModel @Inject constructor(
                     }
 
                     // 2. Save recipient→category mapping (multi-category aware)
-                    val mappingKey = recipientName ?: recipient
-                    recipientMappingRepository.saveMapping(
-                        recipientKey = mappingKey,
-                        categoryId = category.id,
-                        displayName = recipientName
-                    )
-
-                    // Also save the alternate key if both exist
-                    if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                    if (group.paymentType == PaymentType.PAY_BILL.name) {
+                        savePaybillMappingsForGroup(group, category.id)
+                    } else {
+                        val mappingKey = recipientName ?: recipient
                         recipientMappingRepository.saveMapping(
-                            recipientKey = recipient,
+                            recipientKey = mappingKey,
                             categoryId = category.id,
                             displayName = recipientName
                         )
+
+                        // Also save the alternate key if both exist
+                        if (!recipientName.isNullOrBlank() && recipient.isNotBlank() && recipientName != recipient) {
+                            recipientMappingRepository.saveMapping(
+                                recipientKey = recipient,
+                                categoryId = category.id,
+                                displayName = recipientName
+                            )
+                        }
                     }
 
                     appliedCount++
@@ -774,6 +802,31 @@ class BatchCategorizeViewModel @Inject constructor(
     }
 
     // ==================== General ====================
+
+    /**
+     * Save composite (paybill, account) mappings for every distinct paybill account
+     * in a recipient group. Aggregator paybills (e.g. NCBA Loop 247247) can group
+     * multiple unrelated merchants under one paybill name; each account gets its own
+     * mapping so future auto-categorization stays account-specific.
+     * No-op for non-paybill groups (caller handles those with the generic saveMapping).
+     */
+    private suspend fun savePaybillMappingsForGroup(group: RecipientGroup, categoryId: Long) {
+        if (group.paymentType != PaymentType.PAY_BILL.name) return
+        val expenses = expenseRepository.getUncategorizedByRecipientKey(group.recipientKey)
+        val distinct = expenses
+            .filter { it.paymentType == PaymentType.PAY_BILL }
+            .map { (it.recipientName ?: group.recipientName) to it.recipient }
+            .filter { (name, acct) -> !name.isNullOrBlank() && acct.isNotBlank() }
+            .distinct()
+        for ((paybillName, account) in distinct) {
+            recipientMappingRepository.savePaybillMapping(
+                paybillName = paybillName,
+                account = account,
+                categoryId = categoryId,
+                displayName = paybillName
+            )
+        }
+    }
 
     /**
      * Refresh the data

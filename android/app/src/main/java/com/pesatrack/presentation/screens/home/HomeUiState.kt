@@ -40,6 +40,14 @@ data class HomeUiState(
     /** Whether to show the SMS permission banner (permission missing + not permanently dismissed) */
     val showSmsPermissionBanner: Boolean = false,
 
+    // ==================== Notification Permission ====================
+
+    /**
+     * Whether to show the notification permission banner (Android 13+ POST_NOTIFICATIONS
+     * missing + not permanently dismissed).
+     */
+    val showNotificationPermissionBanner: Boolean = false,
+
     // ==================== Budget ====================
 
     /** Top budget progress items (sorted by % used, max 4) — shown when user has budgets */

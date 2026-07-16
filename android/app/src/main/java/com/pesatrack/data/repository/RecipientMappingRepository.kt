@@ -33,6 +33,28 @@ class RecipientMappingRepository @Inject constructor(
         const val AUTO_CATEGORIZE_CONFIDENCE_THRESHOLD = 0.80f
 
         /**
+         * Prefix on the composite key used for Paybill mappings.
+         * A paybill business (e.g. "NCBA LOOP" for paybill 247247) can be an aggregator
+         * shared by many unrelated merchants that are only distinguished by the account
+         * number. Keying paybill mappings on `<paybillBusiness>::<account>` prevents one
+         * merchant's category from cross-firing onto another under the same paybill.
+         */
+        private const val PAYBILL_KEY_PREFIX = "PAYBILL::"
+
+        /**
+         * Build the composite mapping key for a Paybill payment.
+         * Returns null if either half is missing/blank — in that case the caller
+         * should skip saving/looking up a paybill mapping.
+         */
+        fun composePaybillKey(paybillName: String?, account: String?): String? {
+            val name = paybillName?.let { normalizeRecipientKey(it) }?.takeIf { it.isNotBlank() }
+                ?: return null
+            val acct = account?.let { normalizeRecipientKey(it) }?.takeIf { it.isNotBlank() }
+                ?: return null
+            return "$PAYBILL_KEY_PREFIX$name::$acct"
+        }
+
+        /**
          * Normalize a recipient key for consistent lookups.
          *
          * - Trims whitespace
@@ -148,6 +170,38 @@ class RecipientMappingRepository @Inject constructor(
     suspend fun getCategoryForRecipient(recipientKey: String): Long? {
         val suggestion = getCategorySuggestion(recipientKey) ?: return null
         return if (suggestion.isHighConfidence) suggestion.categoryId else null
+    }
+
+    /**
+     * Save a mapping for a Paybill payment under the composite `<paybill>::<account>` key.
+     * Silently no-ops when either half is blank so we don't fall back to the (poisonable)
+     * paybill-name-only mapping used before this fix.
+     */
+    suspend fun savePaybillMapping(
+        paybillName: String?,
+        account: String?,
+        categoryId: Long,
+        displayName: String? = null
+    ) {
+        val composite = composePaybillKey(paybillName, account) ?: return
+        saveMapping(
+            recipientKey = composite,
+            categoryId = categoryId,
+            displayName = displayName ?: paybillName
+        )
+    }
+
+    /**
+     * Look up an auto-categorization for a Paybill payment. Only matches on the
+     * exact `<paybill>::<account>` pair, so aggregator paybills (e.g. NCBA Loop 247247)
+     * never cross-fire between merchants that share the paybill number.
+     */
+    suspend fun getCategoryForPaybill(paybillName: String?, account: String?): Long? {
+        val composite = composePaybillKey(paybillName, account) ?: return null
+        val suggestion = getCategorySuggestion(composite) ?: return null
+        if (!suggestion.isHighConfidence) return null
+        mappingDao.incrementUsage(composite, suggestion.categoryId)
+        return suggestion.categoryId
     }
 
     /**

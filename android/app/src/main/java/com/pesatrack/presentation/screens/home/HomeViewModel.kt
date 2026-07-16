@@ -59,6 +59,7 @@ class HomeViewModel @Inject constructor(
         loadBudgetData()
         loadIncomeData()
         loadSmsBannerState()
+        loadNotificationBannerState()
         checkReviewPromptEligibility()
         checkStructuredFeedbackPromptEligibility()
     }
@@ -365,6 +366,44 @@ class HomeViewModel @Inject constructor(
             appPreferences.dismissSmsBanner()
             smsBannerPermanentlyDismissed = true
             _uiState.update { it.copy(showSmsPermissionBanner = false) }
+        }
+    }
+
+    // ==================== Notification Permission Banner ====================
+
+    /** Whether the notification banner was permanently dismissed — cached from DataStore. */
+    private var notificationBannerPermanentlyDismissed = false
+
+    /**
+     * Load the permanent dismiss state from DataStore.
+     * The actual permission check happens in the composable via [updateNotificationPermissionStatus].
+     */
+    private fun loadNotificationBannerState() {
+        viewModelScope.launch {
+            notificationBannerPermanentlyDismissed = appPreferences.isNotificationBannerDismissed()
+        }
+    }
+
+    /**
+     * Called by the composable when it checks notification permission on (re)composition.
+     * If permission is granted OR banner was permanently dismissed → hide.
+     */
+    fun updateNotificationPermissionStatus(hasPermission: Boolean) {
+        val shouldShow = !hasPermission && !notificationBannerPermanentlyDismissed
+        _uiState.update { it.copy(showNotificationPermissionBanner = shouldShow) }
+    }
+
+    /** Dismiss the notification permission banner for this session only. */
+    fun dismissNotificationBannerSession() {
+        _uiState.update { it.copy(showNotificationPermissionBanner = false) }
+    }
+
+    /** Permanently dismiss the notification permission banner ("Don't ask again"). */
+    fun dismissNotificationBannerPermanently() {
+        viewModelScope.launch {
+            appPreferences.dismissNotificationBanner()
+            notificationBannerPermanentlyDismissed = true
+            _uiState.update { it.copy(showNotificationPermissionBanner = false) }
         }
     }
 

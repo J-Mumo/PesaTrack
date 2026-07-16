@@ -35,6 +35,11 @@ object NotificationHelper {
     private const val INCOME_CHANNEL_DESCRIPTION =
         "Low-priority prompt to categorize a newly detected income transaction."
 
+    private const val MISC_AUTOCAT_CHANNEL_ID = "pesatrack_misc_autocategorized"
+    private const val MISC_AUTOCAT_CHANNEL_NAME = "Auto-categorized as Miscellaneous"
+    private const val MISC_AUTOCAT_CHANNEL_DESCRIPTION =
+        "Low-priority nudge when a new expense was auto-categorized as Miscellaneous, so you can reclassify it."
+
     private const val WEEKLY_REVIEW_CHANNEL_ID = "pesatrack_weekly_review"
     private const val WEEKLY_REVIEW_CHANNEL_NAME = "Weekly Review"
     private const val WEEKLY_REVIEW_CHANNEL_DESCRIPTION =
@@ -284,6 +289,71 @@ object NotificationHelper {
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
         notificationManager.notify((incomeId + 700_000).toInt(), notification)
+    }
+
+    // ==================== Auto-categorized as Miscellaneous ====================
+
+    /**
+     * Create the "auto-categorized as Miscellaneous" channel. Low priority — we
+     * only want the user to see it when they're already on their phone, so they
+     * can reclassify if desired.
+     */
+    fun createMiscAutoCategorizedChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                MISC_AUTOCAT_CHANNEL_ID,
+                MISC_AUTOCAT_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = MISC_AUTOCAT_CHANNEL_DESCRIPTION
+            }
+            val notificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Show a notification when a new expense was auto-categorized as Miscellaneous,
+     * letting the user tap to reclassify. Tap deep-links to the Categorize screen for
+     * this expense (same route as the "New Expense" prompt for uncategorized items).
+     */
+    fun showMiscAutoCategorizedNotification(
+        context: Context,
+        expenseId: Long,
+        amount: Double,
+        recipient: String
+    ) {
+        createMiscAutoCategorizedChannel(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "categorize")
+            putExtra("expense_id", expenseId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            (expenseId + 800_000).toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val formattedAmount = String.format("KES %,.2f", amount)
+
+        val notification = NotificationCompat.Builder(context, MISC_AUTOCAT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Categorized as Miscellaneous: $formattedAmount")
+            .setContentText("To $recipient — Tap to reclassify")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(
+            Context.NOTIFICATION_SERVICE
+        ) as NotificationManager
+        notificationManager.notify((expenseId + 800_000).toInt(), notification)
     }
 
     // ==================== Recurring Reminders ====================

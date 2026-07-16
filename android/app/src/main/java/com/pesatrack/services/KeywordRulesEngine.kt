@@ -30,6 +30,13 @@ class KeywordRulesEngine @Inject constructor() {
         private const val CONFIDENCE_KEYWORD = 0.85f
         private const val CONFIDENCE_PAYMENT_TYPE = 0.95f
         private const val CONFIDENCE_FALLBACK = 0.30f
+
+        /**
+         * Category id for the "Miscellaneous" sub-category (group 12, sortOrder 1).
+         * Used as the low-confidence fallback for SEND_MONEY to unknown persons and
+         * surfaced to callers that want to notify the user to reclassify.
+         */
+        const val MISCELLANEOUS_CATEGORY_ID: Long = 1201L
     }
 
     /**
@@ -77,7 +84,7 @@ class KeywordRulesEngine @Inject constructor() {
         // 4. Fallback for SEND_MONEY → Miscellaneous (likely personal transfer)
         if (paymentType == "SEND_MONEY") {
             return CategorySuggestion(
-                categoryId = 1201L,
+                categoryId = MISCELLANEOUS_CATEGORY_ID,
                 categoryName = "Miscellaneous",
                 groupName = "Miscellaneous",
                 confidence = CONFIDENCE_FALLBACK

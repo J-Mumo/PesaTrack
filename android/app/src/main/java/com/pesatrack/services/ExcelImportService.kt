@@ -213,18 +213,35 @@ class ExcelImportService @Inject constructor(
                 if (categoryId != null) {
                     categoriesToUpdate.add(matchedExpense.id to categoryId)
 
-                    // Save recipient→category mapping for future auto-categorization
-                    val recipientKey = RecipientMappingRepository.normalizeRecipientKey(
-                        matchedExpense.recipientName ?: matchedExpense.recipient
-                    )
-                    if (recipientKey.isNotBlank()) {
-                        mappingsToSave.add(
-                            Triple(
-                                recipientKey, categoryId,
-                                matchedExpense.recipientName ?: matchedExpense.recipient
-                            )
+                    // Save recipient→category mapping for future auto-categorization.
+                    // Paybills use a composite (paybill, account) key so aggregator paybills
+                    // (e.g. NCBA Loop 247247) don't misfire across unrelated merchants.
+                    if (matchedExpense.paymentType == PaymentType.PAY_BILL.name) {
+                        val composite = RecipientMappingRepository.composePaybillKey(
+                            matchedExpense.recipientName, matchedExpense.recipient
                         )
-                        recipientMappingsLearned++
+                        if (composite != null) {
+                            mappingsToSave.add(
+                                Triple(
+                                    composite, categoryId,
+                                    matchedExpense.recipientName ?: matchedExpense.recipient
+                                )
+                            )
+                            recipientMappingsLearned++
+                        }
+                    } else {
+                        val recipientKey = RecipientMappingRepository.normalizeRecipientKey(
+                            matchedExpense.recipientName ?: matchedExpense.recipient
+                        )
+                        if (recipientKey.isNotBlank()) {
+                            mappingsToSave.add(
+                                Triple(
+                                    recipientKey, categoryId,
+                                    matchedExpense.recipientName ?: matchedExpense.recipient
+                                )
+                            )
+                            recipientMappingsLearned++
+                        }
                     }
                 }
 

@@ -359,6 +359,23 @@ class SmsImportService @Inject constructor(
         }
 
         // 2. Confident recipient mapping lookup (≥80% confidence only)
+        //    Paybill payments look up a composite (paybill, account) key so aggregator
+        //    paybills (e.g. NCBA Loop 247247) don't misfire across unrelated merchants.
+        if (expense.paymentType == PaymentType.PAY_BILL) {
+            val composite = RecipientMappingRepository.composePaybillKey(
+                expense.recipientName, expense.recipient
+            )
+            val paybillCategory = composite?.let { confidentMappings[it] }
+            if (paybillCategory != null) {
+                return expense.copy(
+                    categoryId = paybillCategory,
+                    isCategorized = true
+                )
+            }
+            // Fall through — no other lookup for paybills.
+            return expense
+        }
+
         val recipientKey = RecipientMappingRepository.normalizeRecipientKey(
             expense.recipientName ?: expense.recipient
         )

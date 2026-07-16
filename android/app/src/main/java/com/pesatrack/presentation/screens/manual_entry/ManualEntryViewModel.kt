@@ -186,21 +186,31 @@ class ManualEntryViewModel @Inject constructor(
 
                 // Save recipient→category mapping if category was selected
                 if (state.selectedCategory != null) {
-                    // Save by number if provided
-                    if (state.recipient.isNotBlank()) {
-                        recipientMappingRepository.saveMapping(
-                            recipientKey = state.recipient.trim(),
+                    if (state.paymentType == PaymentType.PAY_BILL) {
+                        // Composite (paybill, account) key — see RecipientMappingRepository.
+                        recipientMappingRepository.savePaybillMapping(
+                            paybillName = state.recipientName.trim().ifBlank { null },
+                            account = state.recipient.trim().ifBlank { null },
                             categoryId = state.selectedCategory.id,
                             displayName = recipientNameValue
                         )
-                    }
-                    // Also save by name
-                    if (state.recipientName.isNotBlank()) {
-                        recipientMappingRepository.saveMapping(
-                            recipientKey = state.recipientName.trim(),
-                            categoryId = state.selectedCategory.id,
-                            displayName = state.recipientName.trim()
-                        )
+                    } else {
+                        // Save by number if provided
+                        if (state.recipient.isNotBlank()) {
+                            recipientMappingRepository.saveMapping(
+                                recipientKey = state.recipient.trim(),
+                                categoryId = state.selectedCategory.id,
+                                displayName = recipientNameValue
+                            )
+                        }
+                        // Also save by name
+                        if (state.recipientName.isNotBlank()) {
+                            recipientMappingRepository.saveMapping(
+                                recipientKey = state.recipientName.trim(),
+                                categoryId = state.selectedCategory.id,
+                                displayName = state.recipientName.trim()
+                            )
+                        }
                     }
                 }
 

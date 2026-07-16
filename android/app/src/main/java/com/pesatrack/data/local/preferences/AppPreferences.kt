@@ -94,6 +94,15 @@ class AppPreferences @Inject constructor(
          */
         private val KEY_SMS_BANNER_DISMISSED = booleanPreferencesKey("sms_banner_dismissed")
 
+        // ── Notification Permission Banner ──
+
+        /**
+         * Whether the user has permanently dismissed the notification permission banner on the Home screen.
+         * Respects users who don't want any notifications.
+         */
+        private val KEY_NOTIFICATION_BANNER_DISMISSED =
+            booleanPreferencesKey("notification_banner_dismissed")
+
         // ── Recurring Expense Reminders ──
 
         /**
@@ -408,6 +417,28 @@ class AppPreferences @Inject constructor(
     suspend fun dismissSmsBanner() {
         context.dataStore.edit { preferences ->
             preferences[KEY_SMS_BANNER_DISMISSED] = true
+        }
+    }
+
+    // ==================== Notification Permission Banner ====================
+
+    /**
+     * Whether the notification permission banner has been permanently dismissed.
+     * Respects users who don't want notifications at all.
+     */
+    val notificationBannerDismissed: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_NOTIFICATION_BANNER_DISMISSED] ?: false
+    }
+
+    /** Snapshot: is the notification banner dismissed? */
+    suspend fun isNotificationBannerDismissed(): Boolean {
+        return context.dataStore.data.first()[KEY_NOTIFICATION_BANNER_DISMISSED] ?: false
+    }
+
+    /** Permanently dismiss the notification permission banner ("Don't ask again"). */
+    suspend fun dismissNotificationBanner() {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_NOTIFICATION_BANNER_DISMISSED] = true
         }
     }
 

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -115,12 +117,29 @@ fun HomeScreen(
         }
     }
 
+    // Check notification permission status on every resume
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val hasPermission = hasNotificationPermission(context)
+            viewModel.updateNotificationPermissionStatus(hasPermission)
+        }
+    }
+
     // Permission launcher for SMS — used by the banner "Enable" button
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions.values.all { it }
         viewModel.updateSmsPermissionStatus(granted)
+    }
+
+    // Permission launcher for notifications (Android 13+ POST_NOTIFICATIONS)
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // If the system dialog was suppressed (permanently denied), granted will be false
+        // and the follow-up resume check via NotificationManagerCompat still updates state.
+        viewModel.updateNotificationPermissionStatus(granted || hasNotificationPermission(context))
     }
 
     Scaffold(
@@ -204,6 +223,25 @@ fun HomeScreen(
                     },
                     onDismissSession = { viewModel.dismissSmsBannerSession() },
                     onDismissPermanently = { viewModel.dismissSmsBannerPermanently() }
+                )
+            }
+        }
+
+        // Notification Permission Banner (shown when notifications are disabled + not permanently dismissed)
+        if (uiState.showNotificationPermissionBanner) {
+            item {
+                NotificationPermissionBanner(
+                    onEnable = {
+                        // On Android 13+ request the runtime permission; on older versions
+                        // there is no runtime prompt, so send the user straight to app notification settings.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            context.startActivity(buildAppNotificationSettingsIntent(context))
+                        }
+                    },
+                    onDismissSession = { viewModel.dismissNotificationBannerSession() },
+                    onDismissPermanently = { viewModel.dismissNotificationBannerPermanently() }
                 )
             }
         }
@@ -1143,6 +1181,135 @@ fun SmsPermissionBanner(
 
             Text(
                 text = "Grant SMS permission to auto-capture M-PESA transactions from your messages.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onEnable,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Enable")
+                }
+                OutlinedButton(
+                    onClick = onDismissSession,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Not now")
+                }
+            }
+        }
+    }
+}
+
+// ==================== Notification Permission Banner ====================
+
+/**
+ * Returns true when the app can post notifications. On Android 13+ this checks the
+ * runtime POST_NOTIFICATIONS grant; on older versions it reflects the user's system
+ * notification toggle for the app.
+ */
+private fun hasNotificationPermission(context: Context): Boolean {
+    return NotificationManagerCompat.from(context).areNotificationsEnabled()
+}
+
+/** Intent that opens the app's notification settings (works on all supported API levels). */
+private fun buildAppNotificationSettingsIntent(context: Context): Intent {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+        }
+    }
+}
+
+/**
+ * Banner shown on the Home screen when notifications are disabled.
+ * Mirrors [SmsPermissionBanner]: primary "Enable" button + Close menu with
+ * "Not now" (session) and "Don't ask again" (permanent) options.
+ */
+@Composable
+fun NotificationPermissionBanner(
+    onEnable: () -> Unit,
+    onDismissSession: () -> Unit,
+    onDismissPermanently: () -> Unit
+) {
+    var showDismissMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Turn on notifications?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Box {
+                    IconButton(
+                        onClick = { showDismissMenu = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Dismiss",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showDismissMenu,
+                        onDismissRequest = { showDismissMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Not now") },
+                            onClick = {
+                                showDismissMenu = false
+                                onDismissSession()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Don't ask again") },
+                            onClick = {
+                                showDismissMenu = false
+                                onDismissPermanently()
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Get gentle reminders to categorize new transactions and weekly review alerts. You can change this any time.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
             )
