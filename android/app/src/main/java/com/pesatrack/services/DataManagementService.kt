@@ -343,6 +343,11 @@ class DataManagementService @Inject constructor(
             // 7. Cleanup
             tempFile.delete()
 
+            // Stamp the restore timestamp so UsageSummaryGenerator can flag
+            // this session as post-restore (create-action counters will
+            // under-report the actual DB state after a restore).
+            appPreferences.recordRestoreCompleted()
+
             Log.i(TAG, "Database restore completed successfully")
             true
         } catch (e: Exception) {

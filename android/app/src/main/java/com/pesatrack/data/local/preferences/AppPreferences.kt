@@ -142,6 +142,16 @@ class AppPreferences @Inject constructor(
         val KEY_FIRST_BUDGET_CREATED = longPreferencesKey("first_budget_created")
         val KEY_FIRST_ANALYTICS_VIEWED = longPreferencesKey("first_analytics_viewed")
 
+        /**
+         * Epoch millis of the most recent successful DB restore (backup import).
+         * Not a milestone — overwritten on every restore. Zero means "never
+         * restored on this install". Read by [UsageSummaryGenerator] so
+         * feedback triage can tell whether the user's current data came from
+         * a restored backup (in which case create-action counters like
+         * `KEY_COUNT_BUDGETS_CREATED` under-report actual state).
+         */
+        val KEY_LAST_RESTORE_TIMESTAMP = longPreferencesKey("last_restore_timestamp")
+
         // ── Re-engagement Markers ──
 
         val KEY_LAST_APP_OPEN = longPreferencesKey("last_app_open")
@@ -170,6 +180,7 @@ class AppPreferences @Inject constructor(
         // ── Feature Usage Counters ──
 
         val KEY_COUNT_SMS_PARSED = intPreferencesKey("count_sms_parsed")
+        val KEY_COUNT_SMS_IMPORTED = intPreferencesKey("count_sms_imported")
         val KEY_COUNT_IMPORTS = intPreferencesKey("count_imports")
         val KEY_COUNT_MANUAL_ENTRIES = intPreferencesKey("count_manual_entries")
         val KEY_COUNT_CATEGORIZATIONS = intPreferencesKey("count_categorizations")
@@ -554,6 +565,17 @@ class AppPreferences @Inject constructor(
     }
 
     /**
+     * Atomically add [byN] to an integer counter key. Used by batch operations
+     * (e.g. SMS bulk import) that produce many events in one shot.
+     */
+    suspend fun incrementCounterBy(key: Preferences.Key<Int>, byN: Int) {
+        if (byN <= 0) return
+        context.dataStore.edit { prefs ->
+            prefs[key] = (prefs[key] ?: 0) + byN
+        }
+    }
+
+    /**
      * Record an app open event:
      * - Increments raw_launch_count on every call
      * - Increments qualified_session_count only if the previous open is >= 5 minutes ago
@@ -682,6 +704,7 @@ class AppPreferences @Inject constructor(
         val returnDay7: Boolean,
         val returnDay30: Boolean,
         val countSmsParsed: Int,
+        val countSmsImported: Int,
         val countImports: Int,
         val countManualEntries: Int,
         val countCategorizations: Int,
@@ -689,7 +712,9 @@ class AppPreferences @Inject constructor(
         val countAnalyticsViews: Int,
         val countExcelImports: Int,
         val countExports: Int,
-        val countBackups: Int
+        val countBackups: Int,
+        /** Epoch millis of last restore, or 0 if never restored on this install. */
+        val lastRestoreTimestamp: Long
     )
 
     suspend fun getUsageMetricsSnapshot(): UsageMetricsSnapshot {
@@ -711,6 +736,7 @@ class AppPreferences @Inject constructor(
             returnDay7 = (prefs[KEY_RETURN_DAY_7] ?: 0L) > 0L,
             returnDay30 = (prefs[KEY_RETURN_DAY_30] ?: 0L) > 0L,
             countSmsParsed = prefs[KEY_COUNT_SMS_PARSED] ?: 0,
+            countSmsImported = prefs[KEY_COUNT_SMS_IMPORTED] ?: 0,
             countImports = prefs[KEY_COUNT_IMPORTS] ?: 0,
             countManualEntries = prefs[KEY_COUNT_MANUAL_ENTRIES] ?: 0,
             countCategorizations = prefs[KEY_COUNT_CATEGORIZATIONS] ?: 0,
@@ -718,7 +744,8 @@ class AppPreferences @Inject constructor(
             countAnalyticsViews = prefs[KEY_COUNT_ANALYTICS_VIEWS] ?: 0,
             countExcelImports = prefs[KEY_COUNT_EXCEL_IMPORTS] ?: 0,
             countExports = prefs[KEY_COUNT_EXPORTS] ?: 0,
-            countBackups = prefs[KEY_COUNT_BACKUPS] ?: 0
+            countBackups = prefs[KEY_COUNT_BACKUPS] ?: 0,
+            lastRestoreTimestamp = prefs[KEY_LAST_RESTORE_TIMESTAMP] ?: 0L
         )
     }
 
@@ -736,9 +763,21 @@ class AppPreferences @Inject constructor(
     suspend fun recordFirstBudgetCreated() = recordMilestone(KEY_FIRST_BUDGET_CREATED)
     suspend fun recordFirstAnalyticsViewed() = recordMilestone(KEY_FIRST_ANALYTICS_VIEWED)
 
+    /**
+     * Record that a DB restore just succeeded. Unlike [recordMilestone], this
+     * overwrites on every call so the snapshot always reports the *most
+     * recent* restore.
+     */
+    suspend fun recordRestoreCompleted() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_RESTORE_TIMESTAMP] = System.currentTimeMillis()
+        }
+    }
+
     // ── Counter convenience methods (delegate to incrementCounter) ──
 
     suspend fun incrementSmsParsedCount() = incrementCounter(KEY_COUNT_SMS_PARSED)
+    suspend fun incrementSmsImportedCount(byN: Int) = incrementCounterBy(KEY_COUNT_SMS_IMPORTED, byN)
     suspend fun incrementImportsCount() = incrementCounter(KEY_COUNT_IMPORTS)
     suspend fun incrementManualEntriesCount() = incrementCounter(KEY_COUNT_MANUAL_ENTRIES)
     suspend fun incrementCategorizationsCount() = incrementCounter(KEY_COUNT_CATEGORIZATIONS)

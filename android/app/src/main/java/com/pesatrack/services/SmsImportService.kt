@@ -226,6 +226,10 @@ class SmsImportService @Inject constructor(
         if (newExpensesImported > 0) {
             appPreferences.recordFirstImportCompleted()
             appPreferences.incrementImportsCount()
+            // Distinct from live-SMS parses (KEY_COUNT_SMS_PARSED, incremented by
+            // SmsReceiver only). Feedback triage needs to know how many SMS came
+            // from historical inbox pulls vs live receives.
+            appPreferences.incrementSmsImportedCount(newExpensesImported + newIncomesImported)
         }
 
         Log.d(TAG, "Import complete: $result")

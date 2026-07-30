@@ -221,6 +221,50 @@ interface ExpenseDao {
     @Query("SELECT COUNT(*) FROM expenses")
     suspend fun getTotalExpenseCount(): Int
 
+    /**
+     * Get the count of non-excluded categorized expenses that were bucketed
+     * to a real (non-Miscellaneous) category. Used by the usage-summary
+     * generator to answer "has this user reached first value yet?" — i.e.
+     * does the app currently contain at least one usefully-classified
+     * transaction they can act on. Category 1201 is Miscellaneous
+     * (see `KeywordRulesEngine.MISCELLANEOUS_CATEGORY_ID`).
+     */
+    @Query("""
+        SELECT COUNT(*) FROM expenses
+        WHERE isCategorized = 1
+          AND isExcluded = 0
+          AND categoryId IS NOT NULL
+          AND categoryId != 1201
+    """)
+    suspend fun getFirstValueExpenseCount(): Int
+
+    /**
+     * Get the count of expenses currently sitting in the uncategorized
+     * backlog (excluded rows don't count — they're pass-through money).
+     * Used by the usage-summary generator so feedback triage can see
+     * whether the user is stuck on categorization.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM expenses
+        WHERE isCategorized = 0
+          AND isExcluded = 0
+    """)
+    suspend fun getUncategorizedBacklogCount(): Int
+
+    /**
+     * Get the count of expenses that were auto-categorized to Miscellaneous
+     * (cat 1201). Non-zero values signal an auto-cat rules gap that made
+     * the app fall back — useful for feedback triage on the "Analytics
+     * looks noisy" complaint. Excluded rows don't count.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM expenses
+        WHERE isCategorized = 1
+          AND isExcluded = 0
+          AND categoryId = 1201
+    """)
+    suspend fun getMiscellaneousAutoCatCount(): Int
+
     // ==================== Excel Import Matching ====================
 
     /**
