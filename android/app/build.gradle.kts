@@ -17,12 +17,12 @@ if (localPropsFile.exists()) {
 
 android {
     namespace = "com.pesatrack"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.pesatrack"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 11
         versionName = "1.4.1"
 
