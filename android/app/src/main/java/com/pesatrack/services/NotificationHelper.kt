@@ -99,13 +99,14 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // "Categorize" action button — same deep link as tapping the notification
-        val categorizeIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("navigate_to", "categorize")
+        // "Categorize" action button — routed through NotificationActionReceiver
+        // so the notification is dismissed before MainActivity launches.
+        // (setAutoCancel only fires on the content tap, not on action buttons.)
+        val categorizeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = "com.pesatrack.ACTION_CATEGORIZE_EXPENSE"
             putExtra("expense_id", expenseId)
         }
-        val categorizePendingIntent = PendingIntent.getActivity(
+        val categorizePendingIntent = PendingIntent.getBroadcast(
             context,
             (expenseId + 500_000).toInt(),
             categorizeIntent,

@@ -10,6 +10,7 @@ import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import com.pesatrack.R
 import com.pesatrack.data.repository.ExpenseRepository
+import com.pesatrack.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
     private companion object {
         const val ACTION_IGNORE_EXPENSE = "com.pesatrack.ACTION_IGNORE_EXPENSE"
         const val ACTION_UNDO_IGNORE = "com.pesatrack.ACTION_UNDO_IGNORE"
+        const val ACTION_CATEGORIZE_EXPENSE = "com.pesatrack.ACTION_CATEGORIZE_EXPENSE"
         const val EXTRA_EXPENSE_ID = "expense_id"
 
         /** Delay before persisting the ignore (ms). User can undo within this window. */
@@ -52,6 +54,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_IGNORE_EXPENSE -> handleIgnore(context, expenseId)
             ACTION_UNDO_IGNORE -> handleUndo(context, expenseId)
+            ACTION_CATEGORIZE_EXPENSE -> handleCategorize(context, expenseId)
         }
     }
 
@@ -83,6 +86,24 @@ class NotificationActionReceiver : BroadcastReceiver() {
         // Dismiss the undo notification
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.cancel(expenseId.toInt())
+    }
+
+    /**
+     * Handle the "Categorize" action button on the expense notification.
+     *
+     * Dismisses the notification first (action buttons don't respect
+     * setAutoCancel), then launches MainActivity with the categorize deep link.
+     */
+    private fun handleCategorize(context: Context, expenseId: Long) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(expenseId.toInt())
+
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "categorize")
+            putExtra("expense_id", expenseId)
+        }
+        context.startActivity(launchIntent)
     }
 
     private fun showUndoNotification(context: Context, expenseId: Long) {
