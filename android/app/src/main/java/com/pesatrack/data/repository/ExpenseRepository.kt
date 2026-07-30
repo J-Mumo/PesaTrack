@@ -12,9 +12,11 @@ import com.pesatrack.data.local.database.dao.TopCategoryResult
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.data.local.database.entities.ExpenseEntity
+import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.utils.MonthPeriod
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.Calendar
@@ -26,8 +28,23 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExpenseRepository @Inject constructor(
-    private val expenseDao: ExpenseDao
+    private val expenseDao: ExpenseDao,
+    private val appPreferences: AppPreferences
 ) {
+
+    /**
+     * Cached user preference: which day of the month starts the budget cycle
+     * (mirrors the pattern in `BudgetRepository` / `IncomeRepository`). Kept in
+     * sync via [refreshMonthStartDay] on ViewModel init / screen resume so that
+     * synchronous callers of [getCurrentMonthRange] don't need to suspend.
+     * Default `1` = standard calendar month.
+     */
+    private var _monthStartDay: Int = 1
+    val monthStartDay: Int get() = _monthStartDay
+
+    suspend fun refreshMonthStartDay() {
+        _monthStartDay = appPreferences.getMonthStartDay()
+    }
 
     /**
      * Get all expenses as Flow
@@ -291,6 +308,17 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
+     * Get the [limit] categories with the most recent activity in the current
+     * budget-cycle period (honors [monthStartDay]).
+     */
+    suspend fun getRecentlyActiveCategoryTotalsForCurrentMonth(
+        limit: Int
+    ): List<CategoryTotal> {
+        val (start, end) = getCurrentMonthRange()
+        return expenseDao.getRecentlyActiveCategoryTotalsForMonth(start, end, limit)
+    }
+
+    /**
      * Get daily totals for a specific month.
      */
     suspend fun getDailyTotalsForMonth(year: Int, month: Int): List<DailyTotal> {
@@ -475,24 +503,12 @@ class ExpenseRepository @Inject constructor(
     }
 
     /**
-     * Get start and end timestamps for current month
+     * Get start and end timestamps for current month.
+     * Honors the user's [monthStartDay] preference so a salary-on-the-25th user
+     * sees the same Jun 25 – Jul 24 cycle Budgets and Income already use.
      */
     private fun getCurrentMonthRange(): Pair<Long, Long> {
-        val calendar = Calendar.getInstance()
-
-        // Start of current month
-        calendar.set(Calendar.DAY_OF_MONTH, 1)
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val start = calendar.timeInMillis
-
-        // Start of next month
-        calendar.add(Calendar.MONTH, 1)
-        val end = calendar.timeInMillis
-
-        return Pair(start, end)
+        return MonthPeriod.currentRange(_monthStartDay)
     }
 
     // Extension functions for mapping

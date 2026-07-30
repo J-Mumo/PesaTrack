@@ -49,6 +49,36 @@ class NcbaBankParserIncomeTest {
     }
 
     @Test
+    fun `real NCBA credit SMS with sender and date-before-from is detected as income`() {
+        val body =
+            "Your account 763****018 has been credited with KES 524,498.10 on 23/07/2026 at 15:25 " +
+                "from MICROSOFT RESEARCH & DEVELOPMENT KE 16000. Ref: FT26204ZG5R2. " +
+                "For queries, call 0711056444 / 0732156444 or WhatsApp: 0717804444."
+        val result = parser.parseSms(body, smsTimestamp)
+        assertTrue("Expected IncomeResult, got $result", result is ParsedSms.IncomeResult)
+        val income = (result as ParsedSms.IncomeResult).income
+        assertEquals(524_498.10, income.amount, 0.001)
+        assertEquals("FT26204ZG5R2", income.transactionId)
+        assertNotNull(income.sender)
+        assertTrue(
+            "Sender should contain MICROSOFT, was '${income.sender}'",
+            income.sender!!.contains("MICROSOFT", ignoreCase = true)
+        )
+    }
+
+    @Test
+    fun `real NCBA credit SMS without from clause is detected as income`() {
+        val body =
+            "Your account 763****018 has been credited with KES 3,125.00 on 20/07/2026 at 11:11 " +
+                "for . Ref: FT26201MC1KB. For queries, call 0711056444 / 0732156444 or WhatsApp: 0717804444."
+        val result = parser.parseSms(body, smsTimestamp)
+        assertTrue("Expected IncomeResult, got $result", result is ParsedSms.IncomeResult)
+        val income = (result as ParsedSms.IncomeResult).income
+        assertEquals(3_125.0, income.amount, 0.001)
+        assertEquals("FT26201MC1KB", income.transactionId)
+    }
+
+    @Test
     fun `detailed till transfer SMS still parses as ExpenseResult`() {
         // Generic "Your account ... has been debited" SMS are intentionally skipped;
         // the paired detailed "Mpesa Till transfer ..." SMS is the one that becomes an expense.

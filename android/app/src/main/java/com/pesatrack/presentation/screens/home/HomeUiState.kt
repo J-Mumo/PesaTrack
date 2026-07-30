@@ -15,6 +15,12 @@ data class HomeUiState(
     val totalThisMonth: Double = 0.0,
     /** Total invested this month (Investment & Savings group 18) */
     val investmentThisMonth: Double = 0.0,
+    /**
+     * Human-readable label for the current budget-cycle period shown in the summary card.
+     * Matches the label used by Budgets / Analytics — "July 2026" when
+     * `monthStartDay = 1`, "Jun 25 – Jul 24, 2026" when the user has moved their cycle.
+     */
+    val currentMonthLabel: String = "",
 
     // ==================== Income (Phase 3) ====================
 

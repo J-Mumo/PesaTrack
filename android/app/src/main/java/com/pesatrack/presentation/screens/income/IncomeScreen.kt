@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -127,6 +129,8 @@ fun IncomeScreen(
             uiState = uiState,
             contentPadding = padding,
             onPeriodChange = viewModel::setPeriod,
+            onPreviousPeriod = viewModel::previousPeriod,
+            onNextPeriod = viewModel::nextPeriod,
             onIncomeClick = onNavigateToCategorizeIncome,
             onIncomeLongPress = viewModel::markAsNotIncome,
             onRestoreIncome = viewModel::restoreIncome,
@@ -153,6 +157,8 @@ private fun IncomeContent(
     uiState: IncomeUiState,
     contentPadding: PaddingValues,
     onPeriodChange: (IncomePeriod) -> Unit,
+    onPreviousPeriod: () -> Unit,
+    onNextPeriod: () -> Unit,
     onIncomeClick: (Long) -> Unit,
     onIncomeLongPress: (Long) -> Unit,
     onRestoreIncome: (Long) -> Unit,
@@ -175,7 +181,10 @@ private fun IncomeContent(
                 total = uiState.totalInflow,
                 breakdown = uiState.breakdown,
                 effectiveIncomeSource = uiState.effectiveIncomeSource,
+                canGoNext = uiState.canGoNext,
                 onPeriodChange = onPeriodChange,
+                onPreviousPeriod = onPreviousPeriod,
+                onNextPeriod = onNextPeriod,
             )
         }
 
@@ -205,7 +214,10 @@ private fun IncomeHeaderCard(
     total: Double,
     breakdown: List<IncomeSourceTotal>,
     effectiveIncomeSource: EffectiveIncomeSource,
+    canGoNext: Boolean,
     onPeriodChange: (IncomePeriod) -> Unit,
+    onPreviousPeriod: () -> Unit,
+    onNextPeriod: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -235,11 +247,39 @@ private fun IncomeHeaderCard(
 
             Spacer(Modifier.height(12.dp))
 
-            Text(
-                text = periodLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-            )
+            // Period navigator — arrows flank the current period label so the
+            // user can step back through past months / quarters / years. The
+            // "next" arrow is disabled once we hit the current period.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onPreviousPeriod) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronLeft,
+                        contentDescription = "Previous ${periodLabelWord(period)}",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Text(
+                    text = periodLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                IconButton(onClick = onNextPeriod, enabled = canGoNext) {
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = "Next ${periodLabelWord(period)}",
+                        tint = if (canGoNext)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.35f),
+                    )
+                }
+            }
+
             Spacer(Modifier.height(4.dp))
             Text(
                 text = total.formatAsCurrency(),

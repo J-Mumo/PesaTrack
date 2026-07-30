@@ -68,10 +68,23 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             // Initialize default categories
             categoryRepository.initializeDefaultCategories()
-            // Ensure budget month start day is loaded from preferences
+            // Ensure the "month starts on" day is loaded before any repository query.
+            // Expense/Budget/Income all cache this preference for synchronous access.
+            expenseRepository.refreshMonthStartDay()
             budgetRepository.refreshMonthStartDay()
             incomeRepository.refreshMonthStartDay()
+            _uiState.update { it.copy(currentMonthLabel = currentPeriodLabel()) }
         }
+    }
+
+    /**
+     * Label for the current budget-cycle period, matching the convention used by
+     * Budgets / Analytics via [com.pesatrack.utils.MonthPeriod.labelForRange].
+     */
+    private fun currentPeriodLabel(): String {
+        val monthStartDay = expenseRepository.monthStartDay
+        val (start, end) = com.pesatrack.utils.MonthPeriod.currentRange(monthStartDay)
+        return com.pesatrack.utils.MonthPeriod.labelForRange(start, end, monthStartDay)
     }
     
     private fun loadCategories() {
@@ -126,11 +139,8 @@ class HomeViewModel @Inject constructor(
         // Re-fetched whenever the month's expense set changes.
         viewModelScope.launch {
             expenseRepository.getExpensesForCurrentMonth().collect {
-                val now = Calendar.getInstance()
-                val year = now.get(Calendar.YEAR)
-                val month = now.get(Calendar.MONTH) + 1
                 val breakdown = expenseRepository
-                    .getRecentlyActiveCategoryTotalsForMonth(year, month, 5)
+                    .getRecentlyActiveCategoryTotalsForCurrentMonth(5)
                 _uiState.update { state -> state.copy(recentCategoryBreakdown = breakdown) }
             }
         }
@@ -610,6 +620,14 @@ class HomeViewModel @Inject constructor(
 
     fun refresh() {
         _uiState.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            // Re-read the month-start-day preference in case the user changed it
+            // in Settings between visits, so the summary card and totals stay aligned.
+            expenseRepository.refreshMonthStartDay()
+            budgetRepository.refreshMonthStartDay()
+            incomeRepository.refreshMonthStartDay()
+            _uiState.update { it.copy(currentMonthLabel = currentPeriodLabel()) }
+        }
         loadData()
         // Budget data is reactively collected via Flow — no need to reload here.
         // The Flow from BudgetDao.getActiveBudgets() auto-emits on DB changes.

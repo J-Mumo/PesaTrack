@@ -14,6 +14,17 @@ enum class IncomePeriod {
 data class IncomeUiState(
     val isLoading: Boolean = true,
     val period: IncomePeriod = IncomePeriod.MONTH,
+    /**
+     * Anchor for the currently displayed period. Interpreted per [period]:
+     * MONTH → year + month1Based, QUARTER → year + quarter1Based, YEAR → year.
+     * Defaults to "now" and is stepped by [IncomeViewModel.previousPeriod] /
+     * [IncomeViewModel.nextPeriod].
+     */
+    val anchorYear: Int = 0,
+    val anchorMonth1Based: Int = 0,
+    val anchorQuarter1Based: Int = 0,
+    /** True while the anchor is before the current period (allows forward navigation). */
+    val canGoNext: Boolean = false,
     /** Human-readable label for the active period, e.g. "June 2026" or "Q2 2026" or "2026". */
     val periodLabel: String = "",
     /** Total detected inflow income for the active period (excludes self-transfers). */

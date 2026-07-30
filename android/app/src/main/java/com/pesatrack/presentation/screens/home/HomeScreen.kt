@@ -249,6 +249,7 @@ fun HomeScreen(
         // Monthly Summary Card
         item {
             MonthlySummaryCard(
+                label = uiState.currentMonthLabel,
                 total = uiState.totalThisMonth,
                 investmentTotal = uiState.investmentThisMonth,
                 received = uiState.receivedThisMonth,
@@ -619,6 +620,7 @@ private fun LowEngagementFeedbackDialog(
 
 @Composable
 fun MonthlySummaryCard(
+    label: String,
     total: Double,
     investmentTotal: Double = 0.0,
     received: Double = 0.0,
@@ -626,7 +628,9 @@ fun MonthlySummaryCard(
     effectiveIncomeSource: com.pesatrack.domain.models.EffectiveIncomeSource = com.pesatrack.domain.models.EffectiveIncomeSource.NONE,
     onTapIncome: () -> Unit = {}
 ) {
-    val currentMonth = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
+    val headerLabel = label.ifBlank {
+        SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
+    }
     val investmentPct = if (total > 0) (investmentTotal / total) * 100.0 else 0.0
     
     Card(
@@ -639,7 +643,7 @@ fun MonthlySummaryCard(
             modifier = Modifier.padding(20.dp)
         ) {
             Text(
-                text = currentMonth,
+                text = headerLabel,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )

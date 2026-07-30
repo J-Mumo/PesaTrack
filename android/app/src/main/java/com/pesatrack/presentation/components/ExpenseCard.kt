@@ -45,9 +45,13 @@ fun ExpenseCard(
     categoryColor: String? = null,
     onLongClick: (() -> Unit)? = null
 ) {
-    // Title: show category name (what the expense was for) as primary text
+    // Title: show category name (what the expense was for) as primary text.
+    // For paybills, fall back to "PaybillName · Account" so a paybill row is
+    // never just the aggregator name (e.g. "NCBA LOOP") with the account —
+    // which is what actually distinguishes the merchant — hidden.
+    val recipientDisplay = expenseRecipientDisplay(expense)
     val title = categoryName
-        ?: expense.recipientName
+        ?: recipientDisplay
         ?: expense.recipient
     
     val cardAlpha = if (expense.isExcluded) 0.5f else 1f
@@ -133,7 +137,7 @@ fun ExpenseCard(
                         )
                     } else if (categoryName != null) {
                         // When title is category, show recipient as secondary info
-                        val recipientInfo = expense.recipientName ?: expense.recipient
+                        val recipientInfo = recipientDisplay ?: expense.recipient
                         Text(
                             text = " • $recipientInfo",
                             style = MaterialTheme.typography.bodySmall,
@@ -170,6 +174,30 @@ fun ExpenseCard(
                 textDecoration = if (expense.isExcluded) TextDecoration.LineThrough else TextDecoration.None
             )
         }
+    }
+}
+
+/**
+ * Display string for the expense's counterparty.
+ *
+ * For Paybill payments the account is what actually identifies the merchant
+ * (an aggregator paybill like NCBA Loop maps many businesses onto one name),
+ * so we render "PaybillName · Account" whenever both are present and distinct.
+ * All other payment types keep the existing `recipientName ?: recipient`
+ * fallback.
+ *
+ * Returns `null` when both fields are blank so callers can chain their own fallback.
+ */
+fun expenseRecipientDisplay(expense: Expense): String? {
+    val name = expense.recipientName?.trim()?.takeIf { it.isNotEmpty() }
+    val account = expense.recipient.trim().takeIf { it.isNotEmpty() }
+    return if (expense.paymentType == PaymentType.PAY_BILL &&
+        name != null && account != null &&
+        !name.equals(account, ignoreCase = true)
+    ) {
+        "$name · $account"
+    } else {
+        name ?: account
     }
 }
 
