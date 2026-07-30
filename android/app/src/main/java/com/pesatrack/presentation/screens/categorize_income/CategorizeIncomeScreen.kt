@@ -15,6 +15,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +62,43 @@ fun CategorizeIncomeScreen(
         if (uiState.isSaved) onNavigateBack()
     }
 
+    // Confirmation gate for the (destructive) delete action — kept locally
+    // because it's pure UI state and doesn't need to survive process death.
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { if (!uiState.isDeleting) showDeleteConfirm = false },
+            title = { Text("Delete this income?") },
+            text = {
+                Text(
+                    "This income row will be removed permanently and won't count " +
+                        "toward income totals, savings rate, or analytics. " +
+                        "This can't be undone.\n\n" +
+                        "If you'd rather keep the record but hide it from totals, " +
+                        "use \"Not income\" instead."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.delete() },
+                    enabled = !uiState.isDeleting,
+                ) {
+                    Text(
+                        "Delete",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                    enabled = !uiState.isDeleting,
+                ) { Text("Cancel") }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,13 +108,28 @@ fun CategorizeIncomeScreen(
                         Icon(Icons.Filled.Close, contentDescription = "Close")
                     }
                 },
+                actions = {
+                    // Delete action for rows entered in error (typically manual
+                    // entries). Distinct from the "Not income" chip below —
+                    // that flag-hides; this removes the row entirely.
+                    IconButton(
+                        onClick = { showDeleteConfirm = true },
+                        enabled = uiState.income != null && !uiState.isSaving && !uiState.isDeleting,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = "Delete income",
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
             )
         },
         bottomBar = {
             Surface(shadowElevation = 8.dp) {
                 TextButton(
                     onClick = { viewModel.save() },
-                    enabled = !uiState.isSaving && uiState.income != null,
+                    enabled = !uiState.isSaving && !uiState.isDeleting && uiState.income != null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)

@@ -214,9 +214,23 @@ class HomeViewModel @Inject constructor(
     /**
      * Load detected income + savings rate for the current calendar month and
      * keep them in sync as expenses change.
+     *
+     * IMPORTANT: `expenseRepository.getExpensesForCurrentMonth()` binds its
+     * date range from `_monthStartDay` at call-time, and
+     * `incomeRepository.currentMonthBounds()` reads the same cached value.
+     * `initializeData()` refreshes those preferences in a *separate* coroutine,
+     * so we must ensure the refresh has completed here before subscribing —
+     * otherwise the first (and often only) emission fires with the default
+     * `monthStartDay = 1`, and a user with e.g. `monthStartDay = 23` sees a
+     * calendar-month window on Home while every other screen honours the
+     * offset. See analysis in AGENTS.md → "honest numbers" principle.
      */
     private fun loadIncomeData() {
         viewModelScope.launch {
+            // Force the offset-day preference to be loaded before we compute
+            // the current-period bounds. Cheap; a no-op after the first call.
+            expenseRepository.refreshMonthStartDay()
+            incomeRepository.refreshMonthStartDay()
             expenseRepository.getExpensesForCurrentMonth().collect {
                 try {
                     val (start, end) = incomeRepository.currentMonthBounds()

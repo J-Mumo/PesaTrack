@@ -152,6 +152,17 @@ class IncomeRepository @Inject constructor(
         incomeTransactionDao.setExcluded(id, excluded)
     }
 
+    /**
+     * Permanently remove an income transaction. Used when the row was entered
+     * in error (e.g. via [ManualIncomeEntryDialog]) or when the user is sure a
+     * detected income has no analytical value at all — different from
+     * [setExcluded], which leaves the row visible but flagged. This is
+     * destructive; the caller should confirm before invoking.
+     */
+    suspend fun delete(id: Long) {
+        incomeTransactionDao.deleteById(id)
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     //                       Manual monthly override
     // ──────────────────────────────────────────────────────────────────────

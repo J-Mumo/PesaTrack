@@ -15,6 +15,9 @@ data class CategorizeIncomeUiState(
     val selectedSource: IncomeSource = IncomeSource.UNCATEGORIZED,
     val isExcluded: Boolean = false,
     val isSaving: Boolean = false,
+    /** True while the delete request is in-flight, so the button can spin and the confirm dialog can lock. */
+    val isDeleting: Boolean = false,
+    /** True after either save or delete completes — the screen listens on this to pop back. */
     val isSaved: Boolean = false,
     val errorMessage: String? = null,
 )

@@ -631,7 +631,24 @@ fun MonthlySummaryCard(
     val headerLabel = label.ifBlank {
         SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
     }
-    val investmentPct = if (total > 0) (investmentTotal / total) * 100.0 else 0.0
+    // "% invested" honours the AGENTS.md "honest numbers" principle: it should
+    // be a share of what came IN, not what went OUT. Fall back to the expenses
+    // denominator only when income is unknown (SMS permission not granted,
+    // brand-new user, etc.) so we never divide by zero and never omit the line
+    // entirely for legitimate users of the app.
+    data class InvestmentShare(val pct: Double, val basisLabel: String)
+    val investmentShare: InvestmentShare? = when {
+        investmentTotal <= 0.0 -> null
+        received > 0.0 -> InvestmentShare(
+            pct = (investmentTotal / received) * 100.0,
+            basisLabel = "of income"
+        )
+        total > 0.0 -> InvestmentShare(
+            pct = (investmentTotal / total) * 100.0,
+            basisLabel = "of spending"
+        )
+        else -> null
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -682,7 +699,7 @@ fun MonthlySummaryCard(
 
             // Investment breakdown
             Spacer(modifier = Modifier.height(8.dp))
-            if (investmentTotal > 0) {
+            if (investmentShare != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -691,7 +708,24 @@ fun MonthlySummaryCard(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "${investmentTotal.formatAsCurrency()} (${String.format("%.0f", investmentPct)}%) invested",
+                        text = "${investmentTotal.formatAsCurrency()} " +
+                            "(${String.format("%.0f", investmentShare.pct)}% ${investmentShare.basisLabel}) invested",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    )
+                }
+            } else if (investmentTotal > 0) {
+                // No income and no expenses yet, but we've somehow got an
+                // investment total — show the raw amount without a misleading %.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📈 ",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = "${investmentTotal.formatAsCurrency()} invested",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
                     )

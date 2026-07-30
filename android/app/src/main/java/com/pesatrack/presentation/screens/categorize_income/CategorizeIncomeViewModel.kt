@@ -76,4 +76,22 @@ class CategorizeIncomeViewModel @Inject constructor(
             _uiState.update { it.copy(isSaving = false, isSaved = true) }
         }
     }
+
+    /**
+     * Permanently remove this income row. Used when the row was created in
+     * error (typically via [ManualIncomeEntryDialog]). Uses the same
+     * `isSaved = true` completion flag as [save] so the screen's existing
+     * `LaunchedEffect` navigates back without a second listener.
+     */
+    fun delete() {
+        val current = _uiState.value
+        val income = current.income ?: return
+        if (current.isDeleting || current.isSaving) return
+
+        _uiState.update { it.copy(isDeleting = true) }
+        viewModelScope.launch {
+            incomeRepository.delete(income.id)
+            _uiState.update { it.copy(isDeleting = false, isSaved = true) }
+        }
+    }
 }
