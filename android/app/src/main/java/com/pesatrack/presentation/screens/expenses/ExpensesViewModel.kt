@@ -94,4 +94,13 @@ class ExpensesViewModel @Inject constructor(
             expenseRepository.setExcluded(expenseId, !currentlyExcluded)
         }
     }
+
+    /**
+     * Update the client-side search query. Filtering happens in the screen
+     * so the ViewModel doesn't have to hold a second list, but the query
+     * itself lives here so it survives configuration changes.
+     */
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
 }
