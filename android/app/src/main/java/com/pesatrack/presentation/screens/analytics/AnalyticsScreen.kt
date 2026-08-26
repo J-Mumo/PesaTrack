@@ -2752,9 +2752,31 @@ private fun CategoryMonthGridCard(
 
             Spacer(Modifier.height(8.dp))
 
-            // Sticky column widths
+            // Sticky column widths. `cellWidth` is measured from the widest
+            // value actually in the grid so every cell can render its full
+            // amount without ellipsis; anything shorter is right-aligned.
             val categoryColWidth = 140.dp
-            val cellWidth = 88.dp
+            val amountStyle = MaterialTheme.typography.bodySmall
+            val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val cellWidth = remember(grid, amountStyle) {
+                val samples = buildList {
+                    add(grid.grandTotal)
+                    addAll(grid.periodTotals)
+                    grid.rows.forEach { r ->
+                        add(r.yearTotal)
+                        r.monthlyValues.forEach { v -> if (v != null) add(v) }
+                    }
+                }.ifEmpty { listOf(0.0) }
+                val widest = samples.maxOf { formatGridAmount(it).length }
+                val sampleText = "8".repeat(widest.coerceAtLeast(3))
+                val measuredPx = textMeasurer.measure(
+                    text = androidx.compose.ui.text.AnnotatedString(sampleText),
+                    style = amountStyle
+                ).size.width
+                with(density) { (measuredPx + 24.dp.roundToPx()).toDp() }
+                    .coerceAtLeast(72.dp)
+            }
 
             // Header row
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -2953,7 +2975,7 @@ private fun GridAmountCell(
         contentAlignment = Alignment.CenterEnd
     ) {
         Text(
-            text = if (amount == null) "—" else amount.formatAsCurrency(),
+            text = if (amount == null) "—" else formatGridAmount(amount),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = when {
                 emphasized -> FontWeight.Bold
@@ -2964,9 +2986,20 @@ private fun GridAmountCell(
                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            softWrap = false
         )
     }
+}
+
+/**
+ * Compact numeric formatter used inside the grid. Drops the "KES" prefix and
+ * decimal fraction so the pivot maximises usable width on phones — the
+ * currency is implicit from the surrounding UI. Uses locale-aware thousands
+ * separators.
+ */
+private fun formatGridAmount(value: Double): String {
+    return java.text.NumberFormat.getIntegerInstance(java.util.Locale.getDefault())
+        .format(value.toLong())
 }
 
 

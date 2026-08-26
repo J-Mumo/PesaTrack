@@ -172,7 +172,17 @@ class AnalyticsViewModel @Inject constructor(
     }
 
     private fun loadYearlyGrid() {
-        val year = _uiState.value.selectedYearForYearly
+        // Guard against a race with `init { … selectedYearForYearly = currentYear }`:
+        // Home's "Trend by group → View all" fires this via `selectYearlyView(GRID)`
+        // through a LaunchedEffect immediately on composition, which can beat the
+        // async init coroutine and read the default `0`. That produced an empty
+        // grid on first navigation; a year-change round-trip masked it because
+        // the next-year math ran against the (by-then-populated) real year.
+        val stateYear = _uiState.value.selectedYearForYearly
+        val year = if (stateYear > 0) stateYear else Calendar.getInstance().get(Calendar.YEAR)
+        if (stateYear == 0) {
+            _uiState.update { it.copy(selectedYearForYearly = year) }
+        }
         val includeFees = _uiState.value.yearlyGridIncludeFees
         _uiState.update { it.copy(yearlyGridLoading = true) }
         viewModelScope.launch {
@@ -821,7 +831,14 @@ class AnalyticsViewModel @Inject constructor(
      * Load all data for the yearly analytics tab.
      */
     private fun loadYearlyData() {
-        val year = _uiState.value.selectedYearForYearly
+        // Same init-race guard as loadYearlyGrid — deep-linking straight to
+        // Yearly (e.g. from Home) can beat the async init that writes
+        // `selectedYearForYearly = currentYear`.
+        val stateYear = _uiState.value.selectedYearForYearly
+        val year = if (stateYear > 0) stateYear else Calendar.getInstance().get(Calendar.YEAR)
+        if (stateYear == 0) {
+            _uiState.update { it.copy(selectedYearForYearly = year) }
+        }
 
         _uiState.update { it.copy(yearlyIsLoading = true) }
 
