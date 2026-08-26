@@ -2,6 +2,8 @@ package com.pesatrack.presentation.screens.analytics
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
+import com.pesatrack.data.export.CategoryMonthGridCsvExporter
 import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.YearMonthTotal
@@ -132,6 +134,41 @@ class AnalyticsViewModel @Inject constructor(
     fun toggleYearlyGridIncludeFees() {
         _uiState.update { it.copy(yearlyGridIncludeFees = !it.yearlyGridIncludeFees) }
         loadYearlyGrid()
+    }
+
+    /**
+     * Write the currently-loaded Grid as a CSV to the app cache dir under
+     * `exports/` and publish the resulting File to state so the Screen can
+     * fire the share sheet. Silently no-ops when the grid is null or empty.
+     */
+    fun exportYearlyGridAsCsv(context: Context) {
+        val grid = _uiState.value.yearlyGrid
+        if (grid == null || grid.rows.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val csv = CategoryMonthGridCsvExporter.buildCsv(grid)
+                val dir = java.io.File(context.cacheDir, "exports").apply { mkdirs() }
+                val file = java.io.File(dir, "pesatrack-category-grid-${grid.year}.csv")
+                file.writeText(csv, Charsets.UTF_8)
+                _uiState.update {
+                    it.copy(
+                        pendingGridExportFile = file,
+                        yearlyGridExportError = null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(yearlyGridExportError = "Export failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /** Called by the Screen after the share sheet has been launched. */
+    fun consumeGridExport() {
+        _uiState.update {
+            it.copy(pendingGridExportFile = null, yearlyGridExportError = null)
+        }
     }
 
     private fun loadYearlyGrid() {

@@ -219,6 +219,16 @@ data class AnalyticsUiState(
     val yearlyGridExpandedGroups: Set<Long> = emptySet(),
     /** When on, includes transaction fees (category 606) in the grid. */
     val yearlyGridIncludeFees: Boolean = false,
+    /**
+     * File written by the last successful "Export CSV" tap on the Grid.
+     * The Screen observes this and fires an `ACTION_SEND` chooser, then
+     * calls [AnalyticsViewModel.consumeGridExport] to clear it. Held as
+     * [java.io.File] rather than `Uri` so the ViewModel doesn't need to
+     * take a `Context` dependency in state.
+     */
+    val pendingGridExportFile: java.io.File? = null,
+    /** Non-null when the last export attempt failed; shown as a snackbar. */
+    val yearlyGridExportError: String? = null,
 
     // ==================== Recipient Search ====================
 

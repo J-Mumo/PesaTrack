@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -697,6 +698,40 @@ fun ChartsTabContent(
     pendingSection: String? = null,
     onSectionConsumed: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
+    // When the ViewModel finishes writing the CSV, launch a share sheet
+    // pointed at the FileProvider URI, then clear the pending flag so we
+    // don't re-fire on recomposition.
+    LaunchedEffect(uiState.pendingGridExportFile) {
+        val file = uiState.pendingGridExportFile ?: return@LaunchedEffect
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                putExtra(
+                    android.content.Intent.EXTRA_SUBJECT,
+                    "PesaTrack — Category × Month grid"
+                )
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(
+                android.content.Intent.createChooser(send, "Share monthly grid")
+            )
+        } catch (_: Exception) {
+            // Silently swallow — the user can retry from the button. The
+            // exception path here is almost always FileProvider misconfig or
+            // no share-capable app, neither of which is actionable via toast.
+        } finally {
+            viewModel.consumeGridExport()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Charts sub-tab Row: Monthly / Yearly
         TabRow(
@@ -737,7 +772,8 @@ fun ChartsTabContent(
                 onClearSearch = { viewModel.clearRecipientSearch() },
                 onSelectYearlyView = { viewModel.selectYearlyView(it) },
                 onToggleGridGroup = { viewModel.toggleYearlyGridGroup(it) },
-                onToggleGridIncludeFees = { viewModel.toggleYearlyGridIncludeFees() }
+                onToggleGridIncludeFees = { viewModel.toggleYearlyGridIncludeFees() },
+                onExportGridCsv = { viewModel.exportYearlyGridAsCsv(context) }
             )
         }
     }
@@ -977,7 +1013,8 @@ fun YearlyTabContent(
     onClearSearch: () -> Unit = {},
     onSelectYearlyView: (YearlyView) -> Unit = {},
     onToggleGridGroup: (Long) -> Unit = {},
-    onToggleGridIncludeFees: () -> Unit = {}
+    onToggleGridIncludeFees: () -> Unit = {},
+    onExportGridCsv: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -1014,7 +1051,8 @@ fun YearlyTabContent(
             YearlyView.GRID -> yearlyGridItems(
                 uiState = uiState,
                 onToggleGridGroup = onToggleGridGroup,
-                onToggleGridIncludeFees = onToggleGridIncludeFees
+                onToggleGridIncludeFees = onToggleGridIncludeFees,
+                onExportGridCsv = onExportGridCsv
             )
         }
 
@@ -1158,7 +1196,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearlyOverviewItems(
 private fun androidx.compose.foundation.lazy.LazyListScope.yearlyGridItems(
     uiState: AnalyticsUiState,
     onToggleGridGroup: (Long) -> Unit,
-    onToggleGridIncludeFees: () -> Unit
+    onToggleGridIncludeFees: () -> Unit,
+    onExportGridCsv: () -> Unit
 ) {
     when {
         uiState.yearlyGridLoading || uiState.yearlyGrid == null -> {
@@ -1183,7 +1222,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.yearlyGridItems(
                     expandedGroups = uiState.yearlyGridExpandedGroups,
                     includeFees = uiState.yearlyGridIncludeFees,
                     onToggleGroup = onToggleGridGroup,
-                    onToggleIncludeFees = onToggleGridIncludeFees
+                    onToggleIncludeFees = onToggleGridIncludeFees,
+                    onExportCsv = onExportGridCsv
                 )
             }
         }
@@ -2656,7 +2696,8 @@ private fun CategoryMonthGridCard(
     expandedGroups: Set<Long>,
     includeFees: Boolean,
     onToggleGroup: (Long) -> Unit,
-    onToggleIncludeFees: () -> Unit
+    onToggleIncludeFees: () -> Unit,
+    onExportCsv: () -> Unit = {}
 ) {
     // Two horizontal scroll states kept in sync so the sticky first column
     // stays fixed while header + data cells scroll together.
@@ -2695,6 +2736,13 @@ private fun CategoryMonthGridCard(
                         text = "Row per group. Tap to expand sub-categories.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onExportCsv) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "Export CSV",
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 TextButton(onClick = onToggleIncludeFees) {
