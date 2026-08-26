@@ -60,6 +60,13 @@ sealed class Screen(val route: String) {
     object ManualEntry : Screen("manual_entry")
     object Budget : Screen("budget")
     object CategoryManagement : Screen("category_management")
+
+    /**
+     * Merchants screen — bulk re-categorization by (merchant name, account).
+     * Reached from the Expenses TopAppBar overflow. See
+     * `MerchantsScreen.kt` for the rationale.
+     */
+    object Merchants : Screen("merchants")
     object PinSetup : Screen("pin_setup/{mode}") {
         fun createRoute(mode: String) = "pin_setup/$mode"
     }

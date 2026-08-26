@@ -132,7 +132,17 @@ fun NavGraph(
                 },
                 onNavigateToManualEntry = {
                     navController.navigate(Screen.ManualEntry.route)
+                },
+                onNavigateToMerchants = {
+                    navController.navigate(Screen.Merchants.route)
                 }
+            )
+        }
+
+        // Merchants (re-categorization) Screen
+        composable(route = Screen.Merchants.route) {
+            com.pesatrack.presentation.screens.merchants.MerchantsScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
         

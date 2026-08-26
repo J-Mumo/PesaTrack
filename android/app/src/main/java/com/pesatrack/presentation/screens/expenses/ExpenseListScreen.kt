@@ -25,10 +25,12 @@ fun ExpenseListScreen(
     onNavigateBack: () -> Unit,
     onNavigateToCategorize: (Long) -> Unit,
     onNavigateToManualEntry: () -> Unit = {},
+    onNavigateToMerchants: () -> Unit = {},
     viewModel: ExpensesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
+    var showOverflow by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -36,6 +38,26 @@ fun ExpenseListScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showOverflow = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                    }
+                    DropdownMenu(
+                        expanded = showOverflow,
+                        onDismissRequest = { showOverflow = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Manage merchants") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Storefront, contentDescription = null)
+                            },
+                            onClick = {
+                                showOverflow = false
+                                onNavigateToMerchants()
+                            }
+                        )
                     }
                 }
             )

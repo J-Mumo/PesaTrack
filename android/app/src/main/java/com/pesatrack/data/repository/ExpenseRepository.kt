@@ -6,6 +6,8 @@ import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.DailyTotal
 import com.pesatrack.data.local.database.dao.DateRangeResult
 import com.pesatrack.data.local.database.dao.ExpenseDao
+import com.pesatrack.data.local.database.dao.MerchantCategoryCount
+import com.pesatrack.data.local.database.dao.MerchantGroup
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.RecipientGroup
@@ -216,6 +218,74 @@ class ExpenseRepository @Inject constructor(
             excluded += expenseDao.excludeByRecipient(recipient)
         }
         return excluded
+    }
+
+    // ==================== Merchants (re-categorization) ====================
+
+    /**
+     * Summary row for the Merchants screen. Wraps the raw [MerchantGroup] with
+     * the derived dominant category and its confidence so the UI can show
+     * "currently categorized as X" without a second query per row.
+     */
+    data class MerchantGroupSummary(
+        val groupKey: String,
+        val recipient: String,
+        val recipientName: String?,
+        val paymentType: PaymentType,
+        val transactionCount: Int,
+        val totalAmount: Double,
+        /** Most-frequent categoryId across the group's categorized txns, or null if none are categorized. */
+        val dominantCategoryId: Long?,
+        /** Fraction of the group's categorized txns that use [dominantCategoryId] (0..1). */
+        val dominantCategoryConfidence: Float,
+        /** True when the group has more than one distinct category assigned across its txns. */
+        val hasMixedCategories: Boolean
+    )
+
+    /**
+     * Load merchant groups + dominant category in one shot. Two queries + a
+     * client-side join — cheaper than N+1 lookups and avoids window functions
+     * that Room's SQLite build may not have.
+     */
+    suspend fun getMerchantGroupsWithDominantCategory(): List<MerchantGroupSummary> {
+        val groups = expenseDao.getMerchantGroups()
+        val counts = expenseDao.getMerchantCategoryCounts().groupBy { it.groupKey }
+        return groups.map { g ->
+            val byKey = counts[g.groupKey].orEmpty()
+            val top = byKey.maxByOrNull { it.count }
+            val totalCategorized = byKey.sumOf { it.count }
+            val confidence = if (top != null && totalCategorized > 0) {
+                top.count.toFloat() / totalCategorized.toFloat()
+            } else 0f
+            MerchantGroupSummary(
+                groupKey = g.groupKey,
+                recipient = g.recipient,
+                recipientName = g.recipientName,
+                paymentType = PaymentType.fromString(g.paymentType),
+                transactionCount = g.transactionCount,
+                totalAmount = g.totalAmount,
+                dominantCategoryId = top?.categoryId,
+                dominantCategoryConfidence = confidence,
+                hasMixedCategories = byKey.size > 1
+            )
+        }
+    }
+
+    /**
+     * Fetch the individual expenses that belong to a merchant group, newest
+     * first. Used by the detail sheet on the Merchants screen.
+     */
+    suspend fun getExpensesForMerchantGroup(groupKey: String): List<Expense> {
+        return expenseDao.getExpensesForMerchantGroup(groupKey).map { it.toDomain() }
+    }
+
+    /**
+     * Bulk reassign every expense in a merchant group to [categoryId] and mark
+     * them as user-categorized. Returns the number of rows updated so the VM
+     * can surface a confirmation snackbar.
+     */
+    suspend fun reassignMerchantGroupCategory(groupKey: String, categoryId: Long): Int {
+        return expenseDao.reassignCategoryForMerchantGroup(groupKey, categoryId)
     }
 
     // ==================== Excel Import Matching ====================

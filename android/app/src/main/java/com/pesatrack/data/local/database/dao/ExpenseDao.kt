@@ -215,6 +215,91 @@ interface ExpenseDao {
     """)
     suspend fun excludeByRecipientName(recipientName: String): Int
 
+    // ==================== Merchants (re-categorization) ====================
+
+    /**
+     * Distinct merchant groups across the whole history, keyed for
+     * re-categorization:
+     *
+     * - Paybill payments are grouped by `<recipientName>::<recipient(account)>`
+     *   so different accounts under the same paybill (e.g. NCBA Loop) are
+     *   surfaced as separate rows and can be sent to different categories.
+     * - Every other payment type is grouped by `COALESCE(recipientName,
+     *   recipient)` — the merchant name where we have one, otherwise the
+     *   phone/till number.
+     *
+     * Excluded transactions are hidden. Ordered by count DESC so the noisiest
+     * merchants come first.
+     */
+    @Query("""
+        SELECT
+            CASE
+                WHEN paymentType = 'PAY_BILL' THEN COALESCE(recipientName, '') || '::' || recipient
+                ELSE COALESCE(recipientName, recipient)
+            END AS groupKey,
+            recipient,
+            recipientName,
+            paymentType,
+            COUNT(*) AS transactionCount,
+            SUM(amount) AS totalAmount
+        FROM expenses
+        WHERE isExcluded = 0
+        GROUP BY groupKey, paymentType
+        ORDER BY transactionCount DESC
+    """)
+    suspend fun getMerchantGroups(): List<MerchantGroup>
+
+    /**
+     * Per-group category counts. Used to compute a dominant/current category
+     * for each merchant group without shipping full expense rows to the VM.
+     * Only categorized expenses contribute — NULL categoryId rows are ignored.
+     */
+    @Query("""
+        SELECT
+            CASE
+                WHEN paymentType = 'PAY_BILL' THEN COALESCE(recipientName, '') || '::' || recipient
+                ELSE COALESCE(recipientName, recipient)
+            END AS groupKey,
+            categoryId AS categoryId,
+            COUNT(*) AS count
+        FROM expenses
+        WHERE isExcluded = 0 AND categoryId IS NOT NULL
+        GROUP BY groupKey, categoryId
+    """)
+    suspend fun getMerchantCategoryCounts(): List<MerchantCategoryCount>
+
+    /**
+     * All expenses (categorized or not) belonging to a merchant group. Used
+     * by the detail sheet before reassigning.
+     */
+    @Query("""
+        SELECT * FROM expenses
+        WHERE isExcluded = 0
+        AND (
+            (paymentType = 'PAY_BILL' AND COALESCE(recipientName, '') || '::' || recipient = :groupKey)
+            OR (paymentType != 'PAY_BILL' AND COALESCE(recipientName, recipient) = :groupKey)
+        )
+        ORDER BY timestamp DESC
+    """)
+    suspend fun getExpensesForMerchantGroup(groupKey: String): List<ExpenseEntity>
+
+    /**
+     * Bulk reassign every expense in a merchant group to a new category.
+     * Also flips `isCategorized = 1` so the row is treated as user-confirmed
+     * and stops surfacing in the uncategorized batch queue. Returns the row
+     * count updated.
+     */
+    @Query("""
+        UPDATE expenses
+        SET categoryId = :categoryId, isCategorized = 1
+        WHERE isExcluded = 0
+        AND (
+            (paymentType = 'PAY_BILL' AND COALESCE(recipientName, '') || '::' || recipient = :groupKey)
+            OR (paymentType != 'PAY_BILL' AND COALESCE(recipientName, recipient) = :groupKey)
+        )
+    """)
+    suspend fun reassignCategoryForMerchantGroup(groupKey: String, categoryId: Long): Int
+
     /**
      * Get total count of expenses
      */
@@ -881,6 +966,33 @@ data class RecipientGroup(
     val paymentType: String,
     val transactionCount: Int,
     val totalAmount: Double
+)
+
+/**
+ * Result class for the Merchants (re-categorization) screen.
+ *
+ * `groupKey` mirrors the CASE in `getMerchantGroups`:
+ * - Paybill: `"<recipientName>::<recipient>"` (name may be blank, account is
+ *   always the M-PESA-parsed value).
+ * - Anything else: `COALESCE(recipientName, recipient)`.
+ */
+data class MerchantGroup(
+    val groupKey: String,
+    val recipient: String,
+    val recipientName: String?,
+    val paymentType: String,
+    val transactionCount: Int,
+    val totalAmount: Double
+)
+
+/**
+ * (groupKey, categoryId, count) triple used to derive the dominant category
+ * of a merchant group in one round-trip.
+ */
+data class MerchantCategoryCount(
+    val groupKey: String,
+    val categoryId: Long,
+    val count: Int
 )
 
 // ==================== Analytics Result Classes ====================
