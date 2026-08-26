@@ -88,3 +88,109 @@ val DEFAULT_VARIABLE_SPEND_CATEGORIES = setOf(
     1505L, // General Shopping
     1503L  // Clothing
 )
+
+// ==================== Category × Month Grid (Analytics Yearly → Grid) ====================
+
+/**
+ * Full-year pivot of spend by category × period. Backs the Analytics
+ * "Yearly → Grid" sub-tab and provides the same data structure the Home
+ * "Trend by group" preview uses for its 3-month subset.
+ *
+ * Periods honour `monthStartDay` — a user on the 25th sees 12 columns
+ * labelled "Jan 25 – Feb 24", etc., not calendar Jan–Dec.
+ *
+ * Groups (rows whose category has `parentId == null`) come first; every
+ * group is followed by its sub-categories, both sorted by `yearTotal` desc.
+ * Callers that want a groups-only view filter to `depth == 0` and take the
+ * top N.
+ */
+data class CategoryMonthGrid(
+    /** Year the grid covers, based on the first period's start. */
+    val year: Int,
+    /** N short period labels, one per column (e.g. `["Jan","Feb",…]`). */
+    val periodLabels: List<String>,
+    /** All rows: groups and, immediately after each group, its sub-categories. */
+    val rows: List<GridRow>,
+    /** Column totals, one per period (same length as [periodLabels]). */
+    val periodTotals: List<Double>,
+    /** Sum of every cell in the grid. */
+    val grandTotal: Double,
+    /**
+     * 0-based column indexes that are partial (current period, or the very
+     * first period if it starts before the user has any recorded activity).
+     * The UI should mark these with a `*` and skip them from any heat-map.
+     */
+    val partialPeriodIndexes: Set<Int>,
+    /**
+     * True when the include-fees toggle was on and Investment & Savings row
+     * indices should still highlight positively — for the Grid this is
+     * informational only; the direction semantics live on [GroupTrendRow].
+     */
+    val includesFees: Boolean = false
+)
+
+/** One row of [CategoryMonthGrid]. Groups (depth 0) and sub-categories (depth 1). */
+data class GridRow(
+    val categoryId: Long,
+    val label: String,
+    val color: String?,
+    /** 0 = group (no parent), 1 = sub-category. */
+    val depth: Int,
+    val parentId: Long?,
+    /**
+     * One entry per column. `null` means the category had no expenses that
+     * period — rendered as `—`, never `KES 0`, so an absent period is visibly
+     * distinct from a genuine zero.
+     */
+    val monthlyValues: List<Double?>,
+    /** Sum of non-null entries in [monthlyValues]. */
+    val yearTotal: Double,
+    /** True if the group has at least one sub-category with activity. */
+    val isExpandable: Boolean
+)
+
+/**
+ * Home "Trend by group" preview data. Top N groups × last M periods (default
+ * 5 × 3), sorted by combined-window total. Complements the existing "By
+ * Category" section: `By Category` answers "where did this month's money
+ * go?"; this answers "which groups are drifting month-over-month?"
+ *
+ * The last column may be the current (partial) period — see
+ * [currentPeriodIsPartial]. Direction arrows compare the last period to the
+ * mean of the earlier ones; for group 18 (Investment & Savings) the UI
+ * should invert the semantic — an increase is a positive signal (see the
+ * AGENTS.md "save/invest by default" principle).
+ */
+data class GroupTrendPreview(
+    /** Short period labels, e.g. `["Jun","Jul","Aug"]`. */
+    val periodLabels: List<String>,
+    /** True when the last column is the ongoing (partial) period. */
+    val currentPeriodIsPartial: Boolean,
+    val rows: List<GroupTrendRow>
+)
+
+data class GroupTrendRow(
+    /** The group's category id (rows always have `parentId == null`). */
+    val categoryId: Long,
+    val label: String,
+    val color: String?,
+    /** One entry per column; `null` = no activity that period. */
+    val amounts: List<Double?>,
+    val direction: TrendDirection,
+    /**
+     * True when the row is group 18 (Investment & Savings). Callers should
+     * flip the direction semantics for this row so `▲` renders in the
+     * positive colour.
+     */
+    val isInvestment: Boolean
+)
+
+/**
+ * Direction of the last period vs the average of the earlier periods in the
+ * preview window.
+ * - `UP2` / `UP` — increase ≥ 25% / 5–25%
+ * - `FLAT` — within ±5%
+ * - `DOWN` / `DOWN2` — decrease 5–25% / ≥ 25%
+ * - `INSUFFICIENT` — fewer than 2 non-null earlier periods to compare against
+ */
+enum class TrendDirection { UP2, UP, FLAT, DOWN, DOWN2, INSUFFICIENT }

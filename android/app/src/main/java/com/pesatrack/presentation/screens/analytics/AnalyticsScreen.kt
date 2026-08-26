@@ -2,9 +2,11 @@ package com.pesatrack.presentation.screens.analytics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +46,8 @@ import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
 import com.pesatrack.domain.models.CategoryTrend
+import com.pesatrack.domain.models.CategoryMonthGrid
+import com.pesatrack.domain.models.GridRow
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.PaymentType
@@ -73,9 +77,17 @@ fun AnalyticsScreen(
     // composition. The scroll-to behaviour is handled inside MonthlyTabContent.
     var pendingSection by remember { mutableStateOf(initialSection) }
     LaunchedEffect(initialSection) {
-        if (initialSection == com.pesatrack.presentation.navigation.Screen.Analytics.SECTION_BY_CATEGORY) {
-            viewModel.selectInsightsTab(InsightsTab.CHARTS)
-            viewModel.selectTab(AnalyticsTab.MONTHLY)
+        when (initialSection) {
+            com.pesatrack.presentation.navigation.Screen.Analytics.SECTION_BY_CATEGORY -> {
+                viewModel.selectInsightsTab(InsightsTab.CHARTS)
+                viewModel.selectTab(AnalyticsTab.MONTHLY)
+            }
+            com.pesatrack.presentation.navigation.Screen.Analytics.SECTION_YEARLY_GRID -> {
+                viewModel.selectInsightsTab(InsightsTab.CHARTS)
+                viewModel.selectTab(AnalyticsTab.YEARLY)
+                viewModel.selectYearlyView(YearlyView.GRID)
+                pendingSection = null
+            }
         }
     }
 
@@ -722,7 +734,10 @@ fun ChartsTabContent(
                 onNextYear = { viewModel.nextYear() },
                 canGoNextYear = viewModel.canGoNextYear(),
                 onSearchRecipient = { viewModel.searchRecipient(it) },
-                onClearSearch = { viewModel.clearRecipientSearch() }
+                onClearSearch = { viewModel.clearRecipientSearch() },
+                onSelectYearlyView = { viewModel.selectYearlyView(it) },
+                onToggleGridGroup = { viewModel.toggleYearlyGridGroup(it) },
+                onToggleGridIncludeFees = { viewModel.toggleYearlyGridIncludeFees() }
             )
         }
     }
@@ -959,7 +974,10 @@ fun YearlyTabContent(
     onNextYear: () -> Unit,
     canGoNextYear: Boolean,
     onSearchRecipient: (String) -> Unit = {},
-    onClearSearch: () -> Unit = {}
+    onClearSearch: () -> Unit = {},
+    onSelectYearlyView: (YearlyView) -> Unit = {},
+    onToggleGridGroup: (Long) -> Unit = {},
+    onToggleGridIncludeFees: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -977,124 +995,197 @@ fun YearlyTabContent(
             )
         }
 
-        // Loading indicator
-        if (uiState.yearlyIsLoading) {
+        // Overview | Grid segmented toggle. Defaults to Overview so existing
+        // users see the cards they already know; Grid opens the Excel-style
+        // Category × Month pivot.
+        item {
+            YearlyViewToggle(
+                selected = uiState.yearlySelectedView,
+                onSelect = onSelectYearlyView
+            )
+        }
+
+        when (uiState.yearlySelectedView) {
+            YearlyView.OVERVIEW -> yearlyOverviewItems(
+                uiState = uiState,
+                onSearchRecipient = onSearchRecipient,
+                onClearSearch = onClearSearch
+            )
+            YearlyView.GRID -> yearlyGridItems(
+                uiState = uiState,
+                onToggleGridGroup = onToggleGridGroup,
+                onToggleGridIncludeFees = onToggleGridIncludeFees
+            )
+        }
+
+        // Bottom spacer for navigation bar
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * Extracts the existing Yearly Overview items so they can live alongside
+ * the new Grid view. Behaviour is unchanged from before the split.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.yearlyOverviewItems(
+    uiState: AnalyticsUiState,
+    onSearchRecipient: (String) -> Unit,
+    onClearSearch: () -> Unit
+) {
+    // Loading indicator
+    if (uiState.yearlyIsLoading) {
+        item {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
+
+    // Year-over-Year Comparison Card
+    if (uiState.yearComparison != null) {
+        item {
+            YearComparisonCard(comparison = uiState.yearComparison!!)
+        }
+    }
+
+    // Yearly Summary Stats Row
+    if (!uiState.yearlyIsLoading) {
+        item {
+            YearlySummaryStatsRow(
+                avgMonthly = uiState.yearlyAvgMonthlySpend,
+                transactionCount = uiState.yearlyTransactionCount
+            )
+        }
+    }
+
+    // 12-Month Overlay Chart (this year vs last year)
+    if (uiState.currentYearMonthlyTotals.isNotEmpty()) {
+        item {
+            SectionHeader(title = "Monthly Comparison")
+        }
+        item {
+            YearlyOverlayChart(
+                currentYearData = uiState.currentYearMonthlyTotals,
+                previousYearData = uiState.previousYearMonthlyTotals,
+                currentYearLabel = uiState.selectedYearForYearly.toString(),
+                previousYearLabel = (uiState.selectedYearForYearly - 1).toString()
+            )
+        }
+    }
+
+    // Category Breakdown for Year
+    if (uiState.yearlyCategoryBreakdown.isNotEmpty()) {
+        item {
+            SectionHeader(title = "By Category")
+        }
+        item {
+            CategoryBreakdownChart(
+                data = uiState.yearlyCategoryBreakdown,
+                totalForMonth = uiState.yearlyTotalForYear
+            )
+        }
+    }
+
+    // Top Spenders for Year with Recipient Search
+    if (uiState.yearlyTopSpenders.isNotEmpty() || uiState.yearlyRecipientSearchResults != null) {
+        item {
+            RecipientSearchHeader(
+                searchQuery = uiState.recipientSearchQuery,
+                onSearchQueryChange = onSearchRecipient,
+                onClearSearch = onClearSearch,
+                isLoading = uiState.recipientSearchLoading
+            )
+        }
+
+        // Show search results or default top-10
+        val displayList = uiState.yearlyRecipientSearchResults ?: uiState.yearlyTopSpenders
+        val maxTotal = displayList.firstOrNull()?.total ?: 1.0
+
+        if (uiState.yearlyRecipientSearchResults != null && displayList.isEmpty()) {
+            item {
+                Text(
+                    text = "No recipients found for \"${uiState.recipientSearchQuery}\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        } else {
+            items(displayList) { spender ->
+                TopSpenderRow(
+                    spender = spender,
+                    maxTotal = maxTotal
+                )
+            }
+        }
+
+        // Aggregate total row when searching with results
+        if (uiState.yearlyRecipientSearchResults != null && uiState.yearlyRecipientSearchResults!!.size > 1) {
+            item {
+                RecipientSearchTotalRow(
+                    query = uiState.recipientSearchQuery,
+                    total = uiState.yearlyRecipientSearchTotal,
+                    transactionCount = uiState.yearlyRecipientSearchResults!!.sumOf { it.transactionCount }
+                )
+            }
+        }
+    }
+
+    // Payment Type Breakdown for Year
+    if (uiState.yearlyPaymentTypeBreakdown.isNotEmpty()) {
+        item {
+            SectionHeader(title = "By Payment Type")
+        }
+        item {
+            PaymentTypeBreakdownChart(
+                data = uiState.yearlyPaymentTypeBreakdown,
+                totalForMonth = uiState.yearlyTotalForYear
+            )
+        }
+    }
+}
+
+/**
+ * Yearly → Grid sub-view items. Renders the Category × Month pivot table
+ * matching the Excel workbook users described (rows = groups, columns =
+ * periods, cells = KES, totals in the last column and last row).
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.yearlyGridItems(
+    uiState: AnalyticsUiState,
+    onToggleGridGroup: (Long) -> Unit,
+    onToggleGridIncludeFees: () -> Unit
+) {
+    when {
+        uiState.yearlyGridLoading || uiState.yearlyGrid == null -> {
             item {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
                 }
             }
         }
-
-        // Year-over-Year Comparison Card
-        if (uiState.yearComparison != null) {
+        uiState.yearlyGrid.rows.isEmpty() -> {
             item {
-                YearComparisonCard(comparison = uiState.yearComparison!!)
+                EmptyGridCard(year = uiState.yearlyGrid.year)
             }
         }
-
-        // Yearly Summary Stats Row
-        if (!uiState.yearlyIsLoading) {
+        else -> {
             item {
-                YearlySummaryStatsRow(
-                    avgMonthly = uiState.yearlyAvgMonthlySpend,
-                    transactionCount = uiState.yearlyTransactionCount
+                CategoryMonthGridCard(
+                    grid = uiState.yearlyGrid,
+                    expandedGroups = uiState.yearlyGridExpandedGroups,
+                    includeFees = uiState.yearlyGridIncludeFees,
+                    onToggleGroup = onToggleGridGroup,
+                    onToggleIncludeFees = onToggleGridIncludeFees
                 )
             }
-        }
-
-        // 12-Month Overlay Chart (this year vs last year)
-        if (uiState.currentYearMonthlyTotals.isNotEmpty()) {
-            item {
-                SectionHeader(title = "Monthly Comparison")
-            }
-            item {
-                YearlyOverlayChart(
-                    currentYearData = uiState.currentYearMonthlyTotals,
-                    previousYearData = uiState.previousYearMonthlyTotals,
-                    currentYearLabel = uiState.selectedYearForYearly.toString(),
-                    previousYearLabel = (uiState.selectedYearForYearly - 1).toString()
-                )
-            }
-        }
-
-        // Category Breakdown for Year
-        if (uiState.yearlyCategoryBreakdown.isNotEmpty()) {
-            item {
-                SectionHeader(title = "By Category")
-            }
-            item {
-                CategoryBreakdownChart(
-                    data = uiState.yearlyCategoryBreakdown,
-                    totalForMonth = uiState.yearlyTotalForYear
-                )
-            }
-        }
-
-        // Top Spenders for Year with Recipient Search
-        if (uiState.yearlyTopSpenders.isNotEmpty() || uiState.yearlyRecipientSearchResults != null) {
-            item {
-                RecipientSearchHeader(
-                    searchQuery = uiState.recipientSearchQuery,
-                    onSearchQueryChange = onSearchRecipient,
-                    onClearSearch = onClearSearch,
-                    isLoading = uiState.recipientSearchLoading
-                )
-            }
-
-            // Show search results or default top-10
-            val displayList = uiState.yearlyRecipientSearchResults ?: uiState.yearlyTopSpenders
-            val maxTotal = displayList.firstOrNull()?.total ?: 1.0
-
-            if (uiState.yearlyRecipientSearchResults != null && displayList.isEmpty()) {
-                item {
-                    Text(
-                        text = "No recipients found for \"${uiState.recipientSearchQuery}\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            } else {
-                items(displayList) { spender ->
-                    TopSpenderRow(
-                        spender = spender,
-                        maxTotal = maxTotal
-                    )
-                }
-            }
-
-            // Aggregate total row when searching with results
-            if (uiState.yearlyRecipientSearchResults != null && uiState.yearlyRecipientSearchResults!!.size > 1) {
-                item {
-                    RecipientSearchTotalRow(
-                        query = uiState.recipientSearchQuery,
-                        total = uiState.yearlyRecipientSearchTotal,
-                        transactionCount = uiState.yearlyRecipientSearchResults!!.sumOf { it.transactionCount }
-                    )
-                }
-            }
-        }
-
-        // Payment Type Breakdown for Year
-        if (uiState.yearlyPaymentTypeBreakdown.isNotEmpty()) {
-            item {
-                SectionHeader(title = "By Payment Type")
-            }
-            item {
-                PaymentTypeBreakdownChart(
-                    data = uiState.yearlyPaymentTypeBreakdown,
-                    totalForMonth = uiState.yearlyTotalForYear
-                )
-            }
-        }
-
-        // Bottom spacer for navigation bar
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -2503,3 +2594,331 @@ fun RecurringBreakdownCard(
         }
     }
 }
+
+// ==================== Yearly Grid (Category × Month pivot) ====================
+
+/**
+ * Segmented control shown at the top of the Yearly tab so the user can flip
+ * between the existing Overview cards and the new Category × Month Grid.
+ */
+@Composable
+private fun YearlyViewToggle(
+    selected: YearlyView,
+    onSelect: (YearlyView) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        SegmentedButton(
+            selected = selected == YearlyView.OVERVIEW,
+            onClick = { onSelect(YearlyView.OVERVIEW) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+        ) { Text("Overview") }
+        SegmentedButton(
+            selected = selected == YearlyView.GRID,
+            onClick = { onSelect(YearlyView.GRID) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+        ) { Text("Grid") }
+    }
+}
+
+@Composable
+private fun EmptyGridCard(year: Int) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "No spending recorded for $year",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Import SMS or add expenses to see the monthly grid.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/**
+ * The Category × Month pivot table. First column (category label) is sticky
+ * on the left; header row is sticky on the top of the scrollable area. Tap a
+ * group row to expand its sub-categories. Cells with no data render as "—"
+ * so an empty period is not confused with a zero.
+ */
+@Composable
+private fun CategoryMonthGridCard(
+    grid: CategoryMonthGrid,
+    expandedGroups: Set<Long>,
+    includeFees: Boolean,
+    onToggleGroup: (Long) -> Unit,
+    onToggleIncludeFees: () -> Unit
+) {
+    // Two horizontal scroll states kept in sync so the sticky first column
+    // stays fixed while header + data cells scroll together.
+    val headerScroll = rememberScrollState()
+    val bodyScroll = rememberScrollState()
+    LaunchedEffect(bodyScroll.value) { headerScroll.scrollTo(bodyScroll.value) }
+
+    // Build the visible row list: groups first, then their children when
+    // expanded. Rows already come ordered (group followed by its subs) from
+    // the repository, so we filter — no re-sort needed.
+    val visibleRows: List<GridRow> = remember(grid, expandedGroups) {
+        grid.rows.filter { row ->
+            row.depth == 0 || (row.parentId != null && expandedGroups.contains(row.parentId))
+        }
+    }
+
+    val periodCount = grid.periodLabels.size
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            // Title + controls
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Monthly grid • ${grid.year}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Row per group. Tap to expand sub-categories.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onToggleIncludeFees) {
+                    Text(if (includeFees) "Hide fees" else "Show fees")
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Sticky column widths
+            val categoryColWidth = 140.dp
+            val cellWidth = 88.dp
+
+            // Header row
+            Row(modifier = Modifier.fillMaxWidth()) {
+                GridHeaderCell(
+                    text = "Category",
+                    width = categoryColWidth,
+                    isSticky = true
+                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(headerScroll)
+                ) {
+                    grid.periodLabels.forEachIndexed { i, label ->
+                        val display = if (grid.partialPeriodIndexes.contains(i)) "$label*" else label
+                        GridHeaderCell(text = display, width = cellWidth)
+                    }
+                    GridHeaderCell(text = "Total", width = cellWidth, emphasized = true)
+                }
+            }
+
+            HorizontalDivider()
+
+            // Body rows
+            Column(modifier = Modifier.fillMaxWidth()) {
+                visibleRows.forEach { row ->
+                    val rowColor = row.color?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (row.isExpandable) Modifier.clickable { onToggleGroup(row.categoryId) }
+                                else Modifier
+                            )
+                    ) {
+                        GridCategoryCell(
+                            row = row,
+                            width = categoryColWidth,
+                            expanded = expandedGroups.contains(row.categoryId),
+                            color = rowColor
+                        )
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(bodyScroll)
+                        ) {
+                            row.monthlyValues.forEach { v ->
+                                GridAmountCell(
+                                    amount = v,
+                                    width = cellWidth,
+                                    isGroup = row.depth == 0
+                                )
+                            }
+                            GridAmountCell(
+                                amount = row.yearTotal.takeIf { it != 0.0 || row.monthlyValues.any { it != null } },
+                                width = cellWidth,
+                                isGroup = row.depth == 0,
+                                emphasized = true
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                }
+
+                // Grand total row
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    GridCategoryCell(
+                        row = null,
+                        width = categoryColWidth,
+                        expanded = false,
+                        color = null,
+                        overrideLabel = "Total"
+                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .horizontalScroll(bodyScroll)
+                    ) {
+                        grid.periodTotals.forEach { v ->
+                            GridAmountCell(
+                                amount = v.takeIf { it > 0.0 },
+                                width = cellWidth,
+                                isGroup = true,
+                                emphasized = true
+                            )
+                        }
+                        GridAmountCell(
+                            amount = grid.grandTotal.takeIf { it > 0.0 },
+                            width = cellWidth,
+                            isGroup = true,
+                            emphasized = true
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            if (grid.partialPeriodIndexes.isNotEmpty()) {
+                Text(
+                    text = "* current period is still in progress",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            @Suppress("UNUSED_VARIABLE")
+            val unused = periodCount // silence warning if not otherwise used
+        }
+    }
+}
+
+@Composable
+private fun GridHeaderCell(
+    text: String,
+    width: androidx.compose.ui.unit.Dp,
+    isSticky: Boolean = false,
+    emphasized: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .background(
+                if (isSticky) MaterialTheme.colorScheme.surface
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = if (isSticky) Alignment.CenterStart else Alignment.CenterEnd
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun GridCategoryCell(
+    row: GridRow?,
+    width: androidx.compose.ui.unit.Dp,
+    expanded: Boolean,
+    color: Color?,
+    overrideLabel: String? = null
+) {
+    Row(
+        modifier = Modifier
+            .width(width)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val indent = ((row?.depth ?: 0) * 8).dp
+        Spacer(Modifier.width(indent))
+        if (color != null) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = overrideLabel ?: (row?.label ?: ""),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if ((row?.depth ?: 0) == 0 || overrideLabel != null) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (row?.isExpandable == true) {
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun GridAmountCell(
+    amount: Double?,
+    width: androidx.compose.ui.unit.Dp,
+    isGroup: Boolean,
+    emphasized: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Text(
+            text = if (amount == null) "—" else amount.formatAsCurrency(),
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = when {
+                emphasized -> FontWeight.Bold
+                isGroup -> FontWeight.SemiBold
+                else -> FontWeight.Normal
+            },
+            color = if (amount == null)
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+

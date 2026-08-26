@@ -97,6 +97,68 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
+    // ==================== Yearly → Grid Sub-View ====================
+
+    /**
+     * Switch the Yearly tab between the existing "Overview" cards and the
+     * new Category × Month "Grid". Grid data is loaded lazily on first
+     * open and again whenever the year changes.
+     */
+    fun selectYearlyView(view: YearlyView) {
+        _uiState.update { it.copy(yearlySelectedView = view) }
+        if (view == YearlyView.GRID && _uiState.value.yearlyGrid == null) {
+            loadYearlyGrid()
+        }
+    }
+
+    /**
+     * Expand or collapse a group row in the Grid so its sub-categories show
+     * beneath it. Purely a UI-state toggle — no reload needed.
+     */
+    fun toggleYearlyGridGroup(groupId: Long) {
+        _uiState.update { state ->
+            val next = state.yearlyGridExpandedGroups.toMutableSet().apply {
+                if (contains(groupId)) remove(groupId) else add(groupId)
+            }
+            state.copy(yearlyGridExpandedGroups = next)
+        }
+    }
+
+    /**
+     * Toggle the "Include fees (606)" filter on the Grid and reload. Off by
+     * default so the grid reflects "money the user chose to spend" per the
+     * AGENTS.md honest-numbers principle.
+     */
+    fun toggleYearlyGridIncludeFees() {
+        _uiState.update { it.copy(yearlyGridIncludeFees = !it.yearlyGridIncludeFees) }
+        loadYearlyGrid()
+    }
+
+    private fun loadYearlyGrid() {
+        val year = _uiState.value.selectedYearForYearly
+        val includeFees = _uiState.value.yearlyGridIncludeFees
+        _uiState.update { it.copy(yearlyGridLoading = true) }
+        viewModelScope.launch {
+            try {
+                val grid = expenseRepository.getCategoryMonthGridForYear(year, includeFees)
+                _uiState.update {
+                    it.copy(
+                        yearlyGridLoading = false,
+                        yearlyGrid = grid,
+                        error = null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        yearlyGridLoading = false,
+                        error = "Failed to load yearly grid: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
     // ==================== Insight Cards ====================
 
     /**
@@ -417,6 +479,8 @@ class AnalyticsViewModel @Inject constructor(
                 selectedYearForYearly = it.selectedYearForYearly - 1,
                 yearlyIsLoading = true,
                 yearComparison = null, // Force reload
+                yearlyGrid = null,      // Force grid reload for the new year
+                yearlyGridExpandedGroups = emptySet(),
                 recipientSearchQuery = "",
                 yearlyRecipientSearchResults = null,
                 yearlyRecipientSearchTotal = 0.0,
@@ -424,6 +488,9 @@ class AnalyticsViewModel @Inject constructor(
             )
         }
         loadYearlyData()
+        if (_uiState.value.yearlySelectedView == YearlyView.GRID) {
+            loadYearlyGrid()
+        }
     }
 
     /**
@@ -437,6 +504,8 @@ class AnalyticsViewModel @Inject constructor(
                 selectedYearForYearly = it.selectedYearForYearly + 1,
                 yearlyIsLoading = true,
                 yearComparison = null, // Force reload
+                yearlyGrid = null,      // Force grid reload for the new year
+                yearlyGridExpandedGroups = emptySet(),
                 recipientSearchQuery = "",
                 yearlyRecipientSearchResults = null,
                 yearlyRecipientSearchTotal = 0.0,
@@ -444,6 +513,9 @@ class AnalyticsViewModel @Inject constructor(
             )
         }
         loadYearlyData()
+        if (_uiState.value.yearlySelectedView == YearlyView.GRID) {
+            loadYearlyGrid()
+        }
     }
 
     /**

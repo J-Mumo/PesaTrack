@@ -1,5 +1,6 @@
 package com.pesatrack.data.repository
 
+import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryMonthlyTotal
 import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.DailyTotal
@@ -29,6 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class ExpenseRepository @Inject constructor(
     private val expenseDao: ExpenseDao,
+    private val categoryDao: CategoryDao,
     private val appPreferences: AppPreferences
 ) {
 
@@ -452,6 +454,334 @@ class ExpenseRepository @Inject constructor(
         val (start, end) = getYearRange(year)
         return expenseDao.getPaymentTypeBreakdownForYear(start, end)
     }
+
+    // ==================== Category × Month Grid ====================
+
+    /**
+     * Build a full-year Category × Month grid for the Analytics
+     * "Yearly → Grid" sub-tab. Periods honour the user's `monthStartDay`
+     * (12 periods anchored on `year`, month 1 through 12), so a user on the
+     * 25th sees columns like "Jan 25 – Feb 24" not calendar Jan.
+     *
+     * One `getCategoryTotalsForMonth` call per period — cheap because the
+     * DAO query is indexed on `timestamp` and each aggregate is small.
+     * Building the pivot in Kotlin is simpler than a strftime-with-offset
+     * SQL trick and correctly handles the case where `monthStartDay ≠ 1`.
+     *
+     * Rows are grouped by parent: every group (`parentId == null`) is
+     * followed by its sub-categories, both sorted by year total desc.
+     * Uncategorized (`categoryId == null` from the DAO's LEFT JOIN) is
+     * dropped — the query already restricts to `categoryId IS NOT NULL`,
+     * but the DAO's result class marks it nullable, so we defend anyway.
+     *
+     * @param year        Anchor year (1..).
+     * @param includeFees When false, transaction-fee category (606) is
+     *                    excluded so the grid reflects only "money the
+     *                    user chose to spend", matching the honest-numbers
+     *                    principle.
+     */
+    suspend fun getCategoryMonthGridForYear(
+        year: Int,
+        includeFees: Boolean = false
+    ): com.pesatrack.domain.models.CategoryMonthGrid {
+        val startDay = _monthStartDay
+        // Compute 12 (startMs, endMs) windows anchored on `year`.
+        val periods: List<Triple<Long, Long, String>> = (1..12).map { month ->
+            val (start, end) = MonthPeriod.rangeForPeriodStart(year, month, startDay)
+            val label = shortPeriodLabel(start, startDay)
+            Triple(start, end, label)
+        }
+        val periodLabels = periods.map { it.third }
+
+        // Pull totals for each period; rows are per-category totals.
+        val perPeriod: List<List<CategoryTotal>> = periods.map { (s, e, _) ->
+            expenseDao.getCategoryTotalsForMonth(s, e)
+        }
+
+        // Determine which columns are partial. The current period (containing
+        // `now`) is partial. A leading period is also partial when the user
+        // has no expenses in it and no earlier expenses either (pre-history).
+        val nowMs = System.currentTimeMillis()
+        val partial = mutableSetOf<Int>()
+        periods.forEachIndexed { idx, (s, e, _) ->
+            if (nowMs in s until e) partial.add(idx)
+        }
+
+        // Transpose: categoryId → array of 12 nullable totals + metadata.
+        data class RawRow(
+            val categoryId: Long,
+            val name: String,
+            val color: String?,
+            val parentId: Long?,
+            val values: DoubleArray,
+            val hasValue: BooleanArray,
+        )
+
+        val rowsById = linkedMapOf<Long, RawRow>()
+        perPeriod.forEachIndexed { idx, totals ->
+            totals.forEach { t ->
+                val id = t.categoryId ?: return@forEach
+                if (!includeFees && id == 606L) return@forEach
+                val row = rowsById.getOrPut(id) {
+                    RawRow(
+                        categoryId = id,
+                        name = t.categoryName,
+                        color = t.categoryColor,
+                        parentId = t.parentId,
+                        values = DoubleArray(12),
+                        hasValue = BooleanArray(12),
+                    )
+                }
+                row.values[idx] = t.total
+                row.hasValue[idx] = true
+            }
+        }
+
+        // Split into groups vs children and compute totals.
+        val leafRows = rowsById.values.map { raw ->
+            val yearTotal = raw.values.sum()
+            val monthly: List<Double?> = raw.values.mapIndexed { i, v ->
+                if (raw.hasValue[i]) v else null
+            }
+            com.pesatrack.domain.models.GridRow(
+                categoryId = raw.categoryId,
+                label = raw.name,
+                color = raw.color,
+                depth = if (raw.parentId == null) 0 else 1,
+                parentId = raw.parentId,
+                monthlyValues = monthly,
+                yearTotal = yearTotal,
+                isExpandable = false // set below for groups that have children
+            )
+        }
+
+        // Directly-emitted group rows (a group with its own expenses — rare)
+        // vs sub-category rows.
+        val directGroupRows = leafRows.filter { it.depth == 0 }
+        val childRows = leafRows.filter { it.depth == 1 }
+        val childrenByParent: Map<Long, List<com.pesatrack.domain.models.GridRow>> = childRows
+            .groupBy { it.parentId!! }
+            .mapValues { (_, list) -> list.sortedByDescending { it.yearTotal } }
+
+        // Synthesize a group row for every parentId, summing the children's
+        // per-period values. If the group also has direct expenses, merge
+        // them in. In PesaTrack most groups have no direct expenses, so the
+        // synthesized row is what the user actually sees. Group metadata
+        // (name, color) is fetched from `CategoryDao` — one call, indexed.
+        val allCats = categoryDao.getAllCategoriesSync().associateBy { it.id }
+        val allGroupIds = (directGroupRows.map { it.categoryId } + childrenByParent.keys).toSet()
+        val groups: List<com.pesatrack.domain.models.GridRow> = allGroupIds.map { gid ->
+            val direct = directGroupRows.firstOrNull { it.categoryId == gid }
+            val children = childrenByParent[gid].orEmpty()
+            val summedValues = DoubleArray(12)
+            val summedHas = BooleanArray(12)
+            direct?.let { d ->
+                d.monthlyValues.forEachIndexed { i, v ->
+                    if (v != null) { summedValues[i] += v; summedHas[i] = true }
+                }
+            }
+            children.forEach { c ->
+                c.monthlyValues.forEachIndexed { i, v ->
+                    if (v != null) { summedValues[i] += v; summedHas[i] = true }
+                }
+            }
+            val cat = allCats[gid]
+            val label = direct?.label?.takeIf { it.isNotBlank() } ?: cat?.name ?: "Group $gid"
+            val color = direct?.color ?: cat?.color
+            com.pesatrack.domain.models.GridRow(
+                categoryId = gid,
+                label = label,
+                color = color,
+                depth = 0,
+                parentId = null,
+                monthlyValues = summedValues.mapIndexed { i, v ->
+                    if (summedHas[i]) v else null
+                },
+                yearTotal = summedValues.sum(),
+                isExpandable = children.isNotEmpty()
+            )
+        }.sortedByDescending { it.yearTotal }
+
+        // Emit: each group, followed by its sub-categories.
+        val orderedRows = buildList {
+            groups.forEach { g ->
+                add(g)
+                childrenByParent[g.categoryId]?.forEach { add(it) }
+            }
+        }
+
+        val periodTotals: List<Double> = (0 until 12).map { idx ->
+            groups.sumOf { it.monthlyValues[idx] ?: 0.0 }
+        }
+        val grandTotal = periodTotals.sum()
+
+        return com.pesatrack.domain.models.CategoryMonthGrid(
+            year = year,
+            periodLabels = periodLabels,
+            rows = orderedRows,
+            periodTotals = periodTotals,
+            grandTotal = grandTotal,
+            partialPeriodIndexes = partial,
+            includesFees = includeFees
+        )
+    }
+
+    /**
+     * Build the Home "Trend by group" preview: top [topN] groups by combined
+     * total across the last [monthsBack] periods (honouring `monthStartDay`),
+     * one row per group with amounts + trend direction. Sub-categories are
+     * intentionally excluded — the preview must fit on a phone screen
+     * without horizontal scroll.
+     *
+     * Returns `null` when there is insufficient data to draw a signal
+     * (fewer than 2 of the last [monthsBack] periods have any spend at all).
+     */
+    suspend fun getGroupTrendPreview(
+        monthsBack: Int = 3,
+        topN: Int = 5,
+        includeFees: Boolean = false
+    ): com.pesatrack.domain.models.GroupTrendPreview? {
+        require(monthsBack >= 2) { "monthsBack must be >= 2 for a trend signal" }
+        val startDay = _monthStartDay
+        val (currentStart, _) = MonthPeriod.currentRange(startDay)
+        val currentCal = Calendar.getInstance().apply { timeInMillis = currentStart }
+
+        // Newest last so callers render left→right chronologically.
+        data class Window(val start: Long, val end: Long, val label: String, val isPartial: Boolean)
+        val windows: List<Window> = (0 until monthsBack)
+            .map { offset ->
+                val cal = (currentCal.clone() as Calendar).apply { add(Calendar.MONTH, -offset) }
+                val y = cal.get(Calendar.YEAR)
+                val m = cal.get(Calendar.MONTH) + 1
+                val (s, e) = MonthPeriod.rangeForPeriodStart(y, m, startDay)
+                Window(s, e, shortPeriodLabel(s, startDay), isPartial = offset == 0)
+            }
+            .reversed()
+
+        val perWindow: List<List<CategoryTotal>> = windows.map { w ->
+            expenseDao.getCategoryTotalsForMonth(w.start, w.end)
+        }
+
+        val windowsWithAnySpend = perWindow.count { it.isNotEmpty() }
+        if (windowsWithAnySpend < 2) return null
+
+        // Aggregate to groups only. A row keyed by parent group id: if the
+        // category has no parent, it *is* a group (its own id); otherwise
+        // roll up under `parentId`. Uncategorized / group 606 handled via
+        // includeFees toggle.
+        data class RawGroup(
+            var name: String,
+            val color: String?,
+            val values: DoubleArray,
+            val hasValue: BooleanArray,
+        )
+        val groupsById = linkedMapOf<Long, RawGroup>()
+        perWindow.forEachIndexed { idx, totals ->
+            totals.forEach { t ->
+                val leafId = t.categoryId ?: return@forEach
+                if (!includeFees && leafId == 606L) return@forEach
+                val groupId = t.parentId ?: leafId
+                val row = groupsById.getOrPut(groupId) {
+                    RawGroup(
+                        name = if (t.parentId == null) t.categoryName else "",
+                        color = if (t.parentId == null) t.categoryColor else null,
+                        values = DoubleArray(monthsBack),
+                        hasValue = BooleanArray(monthsBack),
+                    )
+                }
+                row.values[idx] += t.total
+                row.hasValue[idx] = true
+            }
+        }
+
+        // Backfill group name/color for rows first seen via a sub-category.
+        // In PesaTrack, groups (e.g. "Food & Drink") rarely have direct
+        // expenses — leaf sub-categories do — so most group rows land here
+        // with a blank name. One `getAllCategoriesSync()` call is cheaper
+        // than N `getById` calls.
+        val missingNameGroupIds = groupsById.filterValues { it.name.isBlank() }.keys
+        if (missingNameGroupIds.isNotEmpty()) {
+            val allCats = categoryDao.getAllCategoriesSync().associateBy { it.id }
+            missingNameGroupIds.forEach { id ->
+                val row = groupsById[id] ?: return@forEach
+                val cat = allCats[id]
+                if (cat != null) {
+                    groupsById[id] = row.copy(name = cat.name, color = cat.color)
+                }
+            }
+            // Anything still nameless — drop rather than surface "??".
+            groupsById.entries.removeAll { it.value.name.isBlank() }
+        }
+
+        // Rank by combined-window total desc, take top N.
+        val ranked = groupsById.entries
+            .map { (id, r) -> id to r }
+            .sortedByDescending { (_, r) -> r.values.sum() }
+            .take(topN)
+
+        val rows = ranked.map { (id, r) ->
+            val amounts: List<Double?> = r.values.mapIndexed { i, v ->
+                if (r.hasValue[i]) v else null
+            }
+            com.pesatrack.domain.models.GroupTrendRow(
+                categoryId = id,
+                label = r.name,
+                color = r.color,
+                amounts = amounts,
+                direction = computeTrendDirection(amounts),
+                isInvestment = id == INVESTMENT_SAVINGS_GROUP_ID
+            )
+        }
+
+        return com.pesatrack.domain.models.GroupTrendPreview(
+            periodLabels = windows.map { it.label },
+            currentPeriodIsPartial = windows.last().isPartial,
+            rows = rows
+        )
+    }
+
+    /** Group id 18 = Investment & Savings. See `Category.kt` seed data. */
+    private val INVESTMENT_SAVINGS_GROUP_ID = 18L
+
+    /**
+     * Direction of the last non-null period vs the mean of the earlier
+     * non-null periods. Returns [com.pesatrack.domain.models.TrendDirection.INSUFFICIENT]
+     * when we can't build the comparison honestly.
+     */
+    private fun computeTrendDirection(
+        amounts: List<Double?>
+    ): com.pesatrack.domain.models.TrendDirection {
+        val last = amounts.lastOrNull() ?: return com.pesatrack.domain.models.TrendDirection.INSUFFICIENT
+        val earlier = amounts.dropLast(1).filterNotNull()
+        if (earlier.size < 2) return com.pesatrack.domain.models.TrendDirection.INSUFFICIENT
+        val mean = earlier.average()
+        if (mean <= 0.0) return com.pesatrack.domain.models.TrendDirection.INSUFFICIENT
+        val delta = (last - mean) / mean
+        return when {
+            delta >= 0.25 -> com.pesatrack.domain.models.TrendDirection.UP2
+            delta >= 0.05 -> com.pesatrack.domain.models.TrendDirection.UP
+            delta <= -0.25 -> com.pesatrack.domain.models.TrendDirection.DOWN2
+            delta <= -0.05 -> com.pesatrack.domain.models.TrendDirection.DOWN
+            else -> com.pesatrack.domain.models.TrendDirection.FLAT
+        }
+    }
+
+    /**
+     * Compact per-column period label used by the Grid and preview.
+     * - `monthStartDay = 1`  → `"Jan"`, `"Feb"`, …
+     * - `monthStartDay ≠ 1`  → `"Jan 25"`, `"Feb 25"`, … (short month + start day)
+     */
+    private fun shortPeriodLabel(startMs: Long, monthStartDay: Int): String {
+        val cal = Calendar.getInstance().apply { timeInMillis = startMs }
+        val month = SHORT_MONTHS[cal.get(Calendar.MONTH)]
+        val startDay = monthStartDay.coerceIn(1, 28)
+        return if (startDay == 1) month else "$month $startDay"
+    }
+
+    private val SHORT_MONTHS = arrayOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    )
 
     // ==================== Recipient Search ====================
 

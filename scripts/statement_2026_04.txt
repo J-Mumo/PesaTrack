@@ -1,0 +1,20 @@
+PAGES=1
+--- PAGE 1 ---
+M-PESA FULL STATEMENT Page 1 of 1
+Organisation Name: Joel Mumo Ngei
+Shortcode: 7961956
+Statement Period: 02 Apr 2026 - 01 May 2026
+Request Date: 06 Jul 2026
+Summary
+Transaction Type Paid In Paid Out
+Buy Goods 2,000.00 0.00
+Total 2,000.00 0.00
+Account Type - Merchant Account
+Receipt No Completion Details Transaction Paid in Withdrawn Balance Transaction Other Party
+Time Status Type
+UDQ3324POF 2026-04-26 Merchant Payment from Completed 2,000.00 0.00 3,324.50 Customer 7961956-Joel
+10:00:45 254726***987 - PRUDENCE Merchant Ngei
+MAURICE Payment
+Disclaimer: This record is produced for your personal use and is not transferable. If this record is sought to be produced in court, please contact the nearest retail shop
+for further guidance or send an email to Safaricom Customer Care via M-PESABusiness@Safaricom.et
+For self-help dial 747 | Web: www.safaricom.et | Twitter: @SafaricomET | Facebook: @SafaricomET | Terms and conditions apply

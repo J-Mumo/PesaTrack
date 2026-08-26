@@ -15,6 +15,12 @@ sealed class Screen(val route: String) {
         const val ARG_SECTION = "section"
         /** Deep-link target: Charts → Monthly → By Category. */
         const val SECTION_BY_CATEGORY = "byCategory"
+        /**
+         * Deep-link target: Charts → Yearly → Grid (Category × Month pivot).
+         * Used by the Home "Trend by group → View all" link so users land
+         * directly on the full-year table.
+         */
+        const val SECTION_YEARLY_GRID = "yearlyGrid"
 
         /** Base route used by the bottom navigation tab (no arguments). */
         const val BASE_ROUTE = "analytics"

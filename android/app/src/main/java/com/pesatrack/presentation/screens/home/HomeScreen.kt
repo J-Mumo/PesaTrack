@@ -51,6 +51,7 @@ import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
+import com.pesatrack.domain.models.GroupTrendPreview
 import com.pesatrack.presentation.components.ExpenseCard
 import com.pesatrack.presentation.screens.analytics.CategoryBreakdownChart
 import com.pesatrack.utils.formatAsCurrency
@@ -69,6 +70,7 @@ fun HomeScreen(
     onNavigateToManualEntry: () -> Unit = {},
     onNavigateToAnalytics: () -> Unit = {},
     onNavigateToAnalyticsByCategory: () -> Unit = {},
+    onNavigateToYearlyGrid: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
     onNavigateToIncome: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -339,6 +341,30 @@ fun HomeScreen(
                     data = uiState.recentCategoryBreakdown,
                     totalForMonth = uiState.totalThisMonth
                 )
+            }
+        }
+
+        // Trend by group — 3-period preview mirroring the "By Category" pattern.
+        // Full Excel-style Category × Month pivot lives in Analytics → Yearly → Grid.
+        val trend = uiState.groupTrendPreview
+        if (trend != null && trend.rows.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Trend by group",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    TextButton(onClick = onNavigateToYearlyGrid) {
+                        Text("View All")
+                    }
+                }
+            }
+            item {
+                GroupTrendPreviewCard(preview = trend)
             }
         }
 

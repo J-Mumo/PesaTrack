@@ -142,6 +142,14 @@ class HomeViewModel @Inject constructor(
                 val breakdown = expenseRepository
                     .getRecentlyActiveCategoryTotalsForCurrentMonth(5)
                 _uiState.update { state -> state.copy(recentCategoryBreakdown = breakdown) }
+
+                // Refresh the group trend preview on the same signal — new
+                // expenses this period can change which groups make the top 5
+                // and which direction they are moving.
+                val preview = runCatching {
+                    expenseRepository.getGroupTrendPreview()
+                }.getOrNull()
+                _uiState.update { state -> state.copy(groupTrendPreview = preview) }
             }
         }
         

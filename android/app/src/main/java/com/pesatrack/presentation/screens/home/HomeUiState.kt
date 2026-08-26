@@ -4,6 +4,7 @@ import com.pesatrack.data.local.database.dao.CategoryTotal
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.EffectiveIncomeSource
+import com.pesatrack.domain.models.GroupTrendPreview
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 
@@ -46,6 +47,12 @@ data class HomeUiState(
     val recentExpenses: List<ExpenseWithCategory> = emptyList(),
     /** Up to 5 categories with the most recent activity in the current month. */
     val recentCategoryBreakdown: List<CategoryTotal> = emptyList(),
+    /**
+     * Compact 3-period × top-N group preview shown on Home under "By Category".
+     * Null when we have fewer than two periods with any spend (nothing to compare
+     * against yet). Full-year drill-down lives in Analytics → Yearly → Grid.
+     */
+    val groupTrendPreview: GroupTrendPreview? = null,
     val uncategorizedCount: Int = 0,
     val error: String? = null,
     /** Last 6 months spending trend for mini chart */

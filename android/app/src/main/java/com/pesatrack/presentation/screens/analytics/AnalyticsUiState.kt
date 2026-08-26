@@ -5,6 +5,7 @@ import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.data.local.database.dao.PaymentTypeTotal
 import com.pesatrack.data.local.database.dao.TopSpender
 import com.pesatrack.data.local.database.dao.YearMonthTotal
+import com.pesatrack.domain.models.CategoryMonthGrid
 import com.pesatrack.domain.models.CategoryTrend
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
@@ -25,6 +26,17 @@ enum class InsightsTab {
 enum class AnalyticsTab {
     MONTHLY,
     YEARLY
+}
+
+/**
+ * Sub-view within the Yearly charts tab: the existing overview cards vs the
+ * new Category × Month pivot grid. Grid is off-by-default so existing users
+ * open the tab and see the same overview they had before; users who want
+ * the Excel-style pivot toggle to it.
+ */
+enum class YearlyView {
+    OVERVIEW,
+    GRID
 }
 
 /**
@@ -191,6 +203,22 @@ data class AnalyticsUiState(
     val yearlyCategoryBreakdown: List<CategoryTotal> = emptyList(),
     val yearlyTopSpenders: List<TopSpender> = emptyList(),
     val yearlyPaymentTypeBreakdown: List<PaymentTypeTotal> = emptyList(),
+
+    // ── Yearly → Grid sub-view (Category × Month pivot) ──
+
+    /** Which sub-view of the Yearly tab is showing: Overview cards or the Grid. */
+    val yearlySelectedView: YearlyView = YearlyView.OVERVIEW,
+    /**
+     * Full-year Category × Month pivot for the currently-selected year.
+     * Null while loading or before the Grid view has been opened.
+     */
+    val yearlyGrid: CategoryMonthGrid? = null,
+    /** True while the grid is being (re)computed. */
+    val yearlyGridLoading: Boolean = false,
+    /** Category ids of groups whose sub-categories are currently expanded. */
+    val yearlyGridExpandedGroups: Set<Long> = emptySet(),
+    /** When on, includes transaction fees (category 606) in the grid. */
+    val yearlyGridIncludeFees: Boolean = false,
 
     // ==================== Recipient Search ====================
 

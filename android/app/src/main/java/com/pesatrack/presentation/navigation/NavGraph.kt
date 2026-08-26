@@ -69,6 +69,11 @@ fun NavGraph(
                         Screen.Analytics.createRoute(Screen.Analytics.SECTION_BY_CATEGORY)
                     )
                 },
+                onNavigateToYearlyGrid = {
+                    navController.navigate(
+                        Screen.Analytics.createRoute(Screen.Analytics.SECTION_YEARLY_GRID)
+                    )
+                },
                 onNavigateToBudget = {
                     navController.navigate(Screen.Budget.route)
                 },

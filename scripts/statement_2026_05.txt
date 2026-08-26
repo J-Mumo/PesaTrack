@@ -1,0 +1,217 @@
+PAGES=3
+--- PAGE 1 ---
+M-PESA FULL STATEMENT Page 1 of 3
+Organisation Name: Joel Mumo Ngei
+Shortcode: 7961956
+Statement Period: 02 May 2026 - 01 Jun 2026
+Request Date: 06 Jul 2026
+Summary
+Transaction Type Paid In Paid Out
+Pay Bill 0.00 0.00
+Buy Goods 43,440.00 0.00
+Payment to Mobile Number 0.00 0.00
+Withdraw to Bank 0.00 0.00
+Withdraw at Agent 0.00 0.00
+Sell Airtime 0.00 0.00
+Fees 0.00 224.95
+Total 43,440.00 224.95
+Account Type - Merchant Account
+Receipt No Completion Details Transaction Paid in Withdrawn Balance Transaction Other Party
+Time Status Type
+UF1RQ5PWQ 2026-06-01 Merchant Payment from Completed 5,000.00 0.00 46,556.05 Customer 7961956-Joel
+G 09:25:49 254716***097 - EVANSON Merchant Ngei
+KEMBOI Payment
+UF1RQ5PWQ 2026-06-01 Pay merchant Charge Completed 0.00 27.50 46,528.55 Customer 7961956-Joel
+G 09:25:49 Merchant Ngei
+Payment
+UEVBD6DG79 2026-05-31 Pay merchant Charge Completed 0.00 16.50 41,556.05 Customer 7961956-Joel
+20:02:13 Merchant Ngei
+Payment
+UEVBD6DG79 2026-05-31 Merchant Payment Online from Completed 3,000.00 0.00 41,572.55 Customer 7961956-Joel
+20:02:13 254727***750 - JUSTUS Merchant Ngei
+MULIKA NGUNDO Payment
+UEVDI67FXA 2026-05-31 Merchant Payment from Completed 50.00 0.00 38,572.55 Customer 7961956-Joel
+13:45:57 254714***530 - ESTHER Merchant Ngei
+MWAULU Payment
+UEVJP5WYKD 2026-05-31 Merchant Payment from Completed 100.00 0.00 38,522.55 Customer 7961956-Joel
+12:18:09 254798***537 - James Kirobi Merchant Ngei
+Muoria Payment
+UEVMT66V0W 2026-05-31 Merchant Payment from Completed 20.00 0.00 38,422.55 Customer 7961956-Joel
+12:17:50 254118***471 - Catherine aboo Merchant Ngei
+eroni Payment
+UEV0Q6L1Z3 2026-05-31 Merchant Payment from Completed 20.00 0.00 38,402.55 Customer 7961956-Joel
+12:17:44 254727***287 - ALYSEN Merchant Ngei
+NYOKABI THANDE Payment
+UEVNP697UK 2026-05-31 Merchant Payment from Completed 100.00 0.00 38,382.55 Customer 7961956-Joel
+12:17:42 254790***848 - Babyline Merchant Ngei
+Jepkorir Kibet Payment
+UEVOC661OX 2026-05-31 Merchant Payment Online from Completed 100.00 0.00 38,282.55 Customer 7961956-Joel
+12:17:39 254717***026 - SAMUEL Merchant Ngei
+CHEGE KAHURA Payment
+UEVQE5YWP1 2026-05-31 Merchant Payment Online from Completed 100.00 0.00 38,182.55 Customer 7961956-Joel
+12:17:34 254711***740 - SUSAN Merchant Ngei
+MUENDO Payment
+UEULZ5YAGP 2026-05-30 Pay merchant Charge Completed 0.00 27.50 38,082.55 Customer 7961956-Joel
+15:46:35 Merchant Ngei
+Payment
+UEULZ5YAGP 2026-05-30 Merchant Payment Online from Completed 5,000.00 0.00 38,110.05 Customer 7961956-Joel
+15:46:35 254722***267 - PATRICK Merchant Ngei
+UKUMU MULUMU Payment
+UETRL5TDPS 2026-05-29 Merchant Payment from Completed 100.00 0.00 33,110.05 Customer 7961956-Joel
+06:59:50 254711***526 - EMMANUEL Merchant Ngei
+WANZETSE SUMBA Payment
+UES6T5YTAK 2026-05-28 Merchant Payment Online from Completed 50.00 0.00 33,010.05 Customer 7961956-Joel
+19:40:18 254726***205 - PHARIS Merchant Ngei
+KAMAU Payment
+UESRD62B3O 2026-05-28 Merchant Payment Online from Completed 200.00 0.00 32,960.05 Customer 7961956-Joel
+11:47:06 254722***354 - TITUS Merchant Ngei
+KINYANJUI WAWERU Payment
+Disclaimer: This record is produced for your personal use and is not transferable. If this record is sought to be produced in court, please contact the nearest retail shop
+for further guidance or send an email to Safaricom Customer Care via M-PESABusiness@Safaricom.et
+For self-help dial 747 | Web: www.safaricom.et | Twitter: @SafaricomET | Facebook: @SafaricomET | Terms and conditions apply
+--- PAGE 2 ---
+M-PESA FULL STATEMENT Page 2 of 3
+Receipt No Completion Details Transaction Paid in Withdrawn Balance Transaction Other Party
+Time Status Type
+UESPR5WGL8 2026-05-28 Pay merchant Charge Completed 0.00 5.50 32,760.05 Customer 7961956-Joel
+08:57:00 Merchant Ngei
+Payment
+UESPR5WGL8 2026-05-28 Merchant Payment Online from Completed 1,000.00 0.00 32,765.55 Customer 7961956-Joel
+08:57:00 254728***190 - JOSEPH Merchant Ngei
+WAMBUA KILONZO Payment
+UEREE5NOUK 2026-05-27 Pay merchant Charge Completed 0.00 11.00 31,765.55 Customer 7961956-Joel
+13:13:50 Merchant Ngei
+Payment
+UEREE5NOUK 2026-05-27 Merchant Payment from Completed 2,000.00 0.00 31,776.55 Customer 7961956-Joel
+13:13:50 254722***635 - ESTHER NJERI Merchant Ngei
+KIMANI MWANGI Payment
+UERQX5WWZ 2026-05-27 Merchant Payment from Completed 100.00 0.00 29,776.55 Customer 7961956-Joel
+1 12:51:39 254700***173 - RUTH MINOO Merchant Ngei
+MUTISYA Payment
+UEROE5UAT 2026-05-27 Merchant Payment from Completed 200.00 0.00 29,676.55 Customer 7961956-Joel
+W 11:16:23 254721***152 - EUNICE Merchant Ngei
+KANG'ARA Payment
+UEQNN5HMIX 2026-05-26 Merchant Payment from Completed 300.00 0.00 29,478.20 Customer 7961956-Joel
+23:24:22 254729***282 - SIMON MBURU Merchant Ngei
+WAITHIRA Payment
+UEQNN5HMIX 2026-05-26 Pay merchant Charge Completed 0.00 1.65 29,476.55 Customer 7961956-Joel
+23:24:22 Merchant Ngei
+Payment
+UEQDQ5D3FE 2026-05-26 Merchant Payment from Completed 200.00 0.00 29,178.20 Customer 7961956-Joel
+20:50:53 254791***877 - JOSEPHINE Merchant Ngei
+KANINI KUTUKAI Payment
+UEQ705L73M 2026-05-26 Merchant Payment from Completed 200.00 0.00 28,978.20 Customer 7961956-Joel
+18:13:38 254724***238 - ANNE Merchant Ngei
+MUTHONI GITHAIGA Payment
+UEQOX5RP61 2026-05-26 Merchant Payment Online from Completed 200.00 0.00 28,778.20 Customer 7961956-Joel
+17:21:03 254725***604 - CATHERINE Merchant Ngei
+WAMBUI MACHARIA Payment
+UEQE95NK6N 2026-05-26 Merchant Payment from Completed 100.00 0.00 28,578.20 Customer 7961956-Joel
+17:16:12 0769***658 - Caroline wambui Merchant Ngei
+ndungu Payment
+UEPGH5RGP 2026-05-25 Merchant Payment Online from Completed 200.00 0.00 28,478.20 Customer 7961956-Joel
+B 20:44:19 0759***194 - RAYSHONS Merchant Ngei
+KING'ATUA NDUATI Payment
+UEP1U5J6HJ 2026-05-25 Pay merchant Charge Completed 0.00 1.65 28,278.20 Customer 7961956-Joel
+20:32:43 Merchant Ngei
+Payment
+UEP1U5J6HJ 2026-05-25 Merchant Payment from Completed 300.00 0.00 28,279.85 Customer 7961956-Joel
+20:32:43 254715***016 - ELIZABETH Merchant Ngei
+MWONGELI MUTHAMA Payment
+UEPL55E0XB 2026-05-25 Pay merchant Charge Completed 0.00 5.50 27,979.85 Customer 7961956-Joel
+14:23:55 Merchant Ngei
+Payment
+UEPL55E0XB 2026-05-25 Merchant Payment Online from Completed 1,000.00 0.00 27,985.35 Customer 7961956-Joel
+14:23:55 254705***082 - DENNIS Merchant Ngei
+KAGIRI WANGARI Payment
+UEP1K5EHCW 2026-05-25 Merchant Payment from Completed 500.00 0.00 26,988.10 Customer 7961956-Joel
+14:00:58 254729***678 - THEOPHILUS Merchant Ngei
+MALEL Payment
+UEP1K5EHCW 2026-05-25 Pay merchant Charge Completed 0.00 2.75 26,985.35 Customer 7961956-Joel
+14:00:58 Merchant Ngei
+Payment
+UENL85E6V0 2026-05-23 Pay merchant Charge Completed 0.00 5.50 26,488.10 Customer 7961956-Joel
+16:11:37 Merchant Ngei
+Payment
+UENL85E6V0 2026-05-23 Merchant Payment from Completed 1,000.00 0.00 26,493.60 Customer 7961956-Joel
+16:11:37 254111***362 - Lydia Njeri Thuo Merchant Ngei
+Payment
+UENHU4ZDSG 2026-05-23 Pay merchant Charge Completed 0.00 5.50 25,493.60 Customer 7961956-Joel
+15:10:44 Merchant Ngei
+Payment
+UENHU4ZDSG 2026-05-23 Merchant Payment from Completed 1,000.00 0.00 25,499.10 Customer 7961956-Joel
+15:10:44 254711***668 - REBECCAH Merchant Ngei
+GATHONI CHEGE Payment
+UENJN55BXE 2026-05-23 Merchant Payment from Completed 500.00 0.00 24,501.85 Customer 7961956-Joel
+13:43:13 254722***701 - RUTH KAMAU Merchant Ngei
+Payment
+UENJN55BXE 2026-05-23 Pay merchant Charge Completed 0.00 2.75 24,499.10 Customer 7961956-Joel
+13:43:13 Merchant Ngei
+Payment
+UEIL54N9ND 2026-05-18 Pay merchant Charge Completed 0.00 27.50 24,001.85 Customer 7961956-Joel
+18:21:38 Merchant Ngei
+Payment
+Disclaimer: This record is produced for your personal use and is not transferable. If this record is sought to be produced in court, please contact the nearest retail shop
+for further guidance or send an email to Safaricom Customer Care via M-PESABusiness@Safaricom.et
+For self-help dial 747 | Web: www.safaricom.et | Twitter: @SafaricomET | Facebook: @SafaricomET | Terms and conditions apply
+--- PAGE 3 ---
+M-PESA FULL STATEMENT Page 3 of 3
+Receipt No Completion Details Transaction Paid in Withdrawn Balance Transaction Other Party
+Time Status Type
+UEIL54N9ND 2026-05-18 Merchant Payment Online from Completed 5,000.00 0.00 24,029.35 Customer 7961956-Joel
+18:21:38 254705***082 - DENNIS Merchant Ngei
+KAGIRI WANGARI Payment
+UEF264MVLP 2026-05-15 Merchant Payment from Completed 200.00 0.00 19,029.35 Customer 7961956-Joel
+18:14:21 0708***182 - PRISCILLA Merchant Ngei
+WAMBUI KABUE Payment
+UEBL53VRH0 2026-05-11 Merchant Payment Online from Completed 10,000.00 0.00 18,884.35 Customer 7961956-Joel
+19:49:49 254705***082 - DENNIS Merchant Ngei
+KAGIRI WANGARI Payment
+UEBL53VRH0 2026-05-11 Pay merchant Charge Completed 0.00 55.00 18,829.35 Customer 7961956-Joel
+19:49:49 Merchant Ngei
+Payment
+UE9GH3VNT4 2026-05-09 Pay merchant Charge Completed 0.00 1.65 8,884.35 Customer 7961956-Joel
+09:58:42 Merchant Ngei
+Payment
+UE9GH3VNT4 2026-05-09 Merchant Payment Online from Completed 300.00 0.00 8,886.00 Customer 7961956-Joel
+09:58:42 0759***194 - RAYSHONS Merchant Ngei
+KING'ATUA NDUATI Payment
+UE7583OSSA 2026-05-07 Pay merchant Charge Completed 0.00 5.50 8,586.00 Customer 7961956-Joel
+10:15:28 Merchant Ngei
+Payment
+UE7583OSSA 2026-05-07 Merchant Payment from Completed 1,000.00 0.00 8,591.50 Customer 7961956-Joel
+10:15:28 254724***877 - JANET NJERI Merchant Ngei
+KINYANJUI Payment
+UE4H538144 2026-05-04 Pay merchant Charge Completed 0.00 11.00 7,591.50 Customer 7961956-Joel
+20:36:54 Merchant Ngei
+Payment
+UE4H538144 2026-05-04 Merchant Payment Online from Completed 2,000.00 0.00 7,602.50 Customer 7961956-Joel
+20:36:54 254704***118 - hilda muthoni Merchant Ngei
+njoroge Payment
+UE35C31IOU 2026-05-03 Pay merchant Charge Completed 0.00 5.50 5,602.50 Customer 7961956-Joel
+13:36:48 Merchant Ngei
+Payment
+UE35C31IOU 2026-05-03 Merchant Payment Online from Completed 1,000.00 0.00 5,608.00 Customer 7961956-Joel
+13:36:48 254722***240 - DANIEL Merchant Ngei
+NJUNGE Payment
+UE3NZ2T9EY 2026-05-03 Merchant Payment from Completed 200.00 0.00 4,608.00 Customer 7961956-Joel
+13:31:10 0701***656 - PHILIS MUTHONI Merchant Ngei
+MAINA Payment
+UE3IL2XX61 2026-05-03 Merchant Payment from Completed 100.00 0.00 4,408.00 Customer 7961956-Joel
+13:25:43 254702***137 - jane ngendo Merchant Ngei
+wanjiru Payment
+UE3QA2RWW 2026-05-03 Merchant Payment Online from Completed 500.00 0.00 4,310.75 Customer 7961956-Joel
+C 12:10:24 254714***594 - justus nguli Merchant Ngei
+Payment
+UE3QA2RWW 2026-05-03 Pay merchant Charge Completed 0.00 2.75 4,308.00 Customer 7961956-Joel
+C 12:10:24 Merchant Ngei
+Payment
+UE3152XO1R 2026-05-03 Pay merchant Charge Completed 0.00 2.75 3,810.75 Customer 7961956-Joel
+12:07:53 Merchant Ngei
+Payment
+UE3152XO1R 2026-05-03 Merchant Payment from Completed 500.00 0.00 3,813.50 Customer 7961956-Joel
+12:07:53 254714***772 - LUCY CHEROP Merchant Ngei
+Payment
+Disclaimer: This record is produced for your personal use and is not transferable. If this record is sought to be produced in court, please contact the nearest retail shop
+for further guidance or send an email to Safaricom Customer Care via M-PESABusiness@Safaricom.et
+For self-help dial 747 | Web: www.safaricom.et | Twitter: @SafaricomET | Facebook: @SafaricomET | Terms and conditions apply
