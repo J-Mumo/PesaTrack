@@ -624,6 +624,13 @@ fun MonthlySummaryCard(
     total: Double,
     investmentTotal: Double = 0.0,
     received: Double = 0.0,
+    /**
+     * Share of received income deliberately moved into the Investment &
+     * Savings group this period (0–100). Rendered as "X% saved" next to the
+     * received figure. See the KDoc on [HomeUiState.savingsRatePct] for why
+     * this is `investment / income` and not the classic
+     * `(income − spend) / income` "savings rate".
+     */
     savingsRatePct: Double? = null,
     effectiveIncomeSource: com.pesatrack.domain.models.EffectiveIncomeSource = com.pesatrack.domain.models.EffectiveIncomeSource.NONE,
     onTapIncome: () -> Unit = {}

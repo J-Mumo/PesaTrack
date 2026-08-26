@@ -376,6 +376,15 @@ class ExpenseRepository @Inject constructor(
         expenseDao.getTotalSpendingInRange(startMs, endMs)
 
     /**
+     * Total money moved into the Investment & Savings group (18) in an
+     * arbitrary date range. This is the true "saved" figure — money the user
+     * deliberately set aside — used by the Home and Analytics savings-rate
+     * surfaces instead of the misleading `(income − spend) / income` formula.
+     */
+    suspend fun getInvestmentInRange(startMs: Long, endMs: Long): Double =
+        expenseDao.getInvestmentTotalInRange(startMs, endMs)
+
+    /**
      * Period-aware variants of the `*ForMonth` queries above.
      *
      * The Analytics Monthly tab uses these so its month bucket aligns with

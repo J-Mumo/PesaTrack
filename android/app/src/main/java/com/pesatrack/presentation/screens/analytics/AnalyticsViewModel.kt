@@ -269,7 +269,7 @@ class AnalyticsViewModel @Inject constructor(
                 currentMonthPct = current.ratePct,
                 rollingThreeMonthPct = rolling,
                 currentMonthIncome = current.income,
-                currentMonthSpend = current.spend,
+                currentMonthSavings = current.savings,
                 effectiveIncomeSource = current.source
             )
             _uiState.update { it.copy(savingsRate = data, showSavingsRateCard = true) }
@@ -281,7 +281,7 @@ class AnalyticsViewModel @Inject constructor(
     private data class SavingsRateRow(
         val ratePct: Double,
         val income: Double,
-        val spend: Double,
+        val savings: Double,
         val source: EffectiveIncomeSource,
     )
 
@@ -292,9 +292,11 @@ class AnalyticsViewModel @Inject constructor(
         val (start, end) = com.pesatrack.utils.MonthPeriod.rangeForPeriodStart(
             year, month1Based, incomeRepository.monthStartDay
         )
-        val spend = expenseRepository.getSpendingInRange(start, end)
-        val rate = (((income - spend) / income) * 100.0).coerceIn(-100.0, 100.0)
-        return SavingsRateRow(rate, income, spend, effective.source)
+        // Savings = money deliberately moved into the Investment & Savings
+        // group (18), not (income - spend). See SavingsRateData KDoc.
+        val savings = expenseRepository.getInvestmentInRange(start, end)
+        val rate = ((savings / income) * 100.0).coerceIn(0.0, 100.0)
+        return SavingsRateRow(rate, income, savings, effective.source)
     }
 
     /**

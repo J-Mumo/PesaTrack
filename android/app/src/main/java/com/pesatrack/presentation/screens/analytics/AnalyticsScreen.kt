@@ -540,7 +540,7 @@ fun SavingsRateInsightCard(data: SavingsRateData) {
             if (showAssumptions) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Based on $sourceLabel of ${data.currentMonthIncome.formatAsCurrency()} and spend of ${data.currentMonthSpend.formatAsCurrency()} this month. Savings rate = (income − spend) ÷ income. Transaction fees count as spend.",
+                    text = "Based on $sourceLabel of ${data.currentMonthIncome.formatAsCurrency()} and ${data.currentMonthSavings.formatAsCurrency()} moved into Investment & Savings this month. Savings rate = savings ÷ income.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
                 )

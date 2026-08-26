@@ -54,18 +54,24 @@ data class QuietLeakData(
 /**
  * Data for the Savings Rate insight card (Income tracking Phase 4).
  *
- * Savings rate = (income - spend) / income. We only show this when we have
- * income data we can trust (detected SMS or user override) — never assumed.
+ * Savings rate = investment / income, where `investment` is the sum of
+ * expenses categorised under the Investment & Savings group (18) — money
+ * the user deliberately set aside. We only show this when we have income
+ * data we can trust (detected SMS or user override) — never assumed.
+ *
+ * Previously computed as `(income − spend) / income`, which inflated the
+ * rate whenever the user simply hadn't spent yet and was labelled as
+ * "saved" — violating AGENTS.md "honest numbers".
  */
 data class SavingsRateData(
-    /** Current calendar-month savings rate as a percentage (-100..100). */
+    /** Current calendar-month savings rate as a percentage (0..100). */
     val currentMonthPct: Double,
     /** Rolling average over the last three calendar months (inclusive of current). */
     val rollingThreeMonthPct: Double,
     /** Detected income used for the current month. */
     val currentMonthIncome: Double,
-    /** Total spend used for the current month. */
-    val currentMonthSpend: Double,
+    /** Amount moved into Investment & Savings this month. */
+    val currentMonthSavings: Double,
     /** Reconciliation source so the card can describe where income came from. */
     val effectiveIncomeSource: EffectiveIncomeSource
 )

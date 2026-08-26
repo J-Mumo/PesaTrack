@@ -236,9 +236,14 @@ class HomeViewModel @Inject constructor(
                     val (start, end) = incomeRepository.currentMonthBounds()
                     val effective = incomeRepository.effectiveIncomeForCurrentMonth()
                     val detected = effective.detectedAmount
-                    val spent = expenseRepository.getSpendingInRange(start, end)
+                    // Savings rate = investment / income. Money actually set
+                    // aside into the Investment & Savings group (18), not the
+                    // classic (income - spend)/income formula, which inflates
+                    // to ~99% early in a period because spend is near-zero.
+                    // See HomeUiState.savingsRatePct KDoc.
+                    val investment = expenseRepository.getInvestmentInRange(start, end)
                     val rate: Double? = if (detected > 0) {
-                        (((detected - spent) / detected) * 100.0).coerceIn(-100.0, 100.0)
+                        ((investment / detected) * 100.0).coerceIn(0.0, 100.0)
                     } else null
                     _uiState.update { state ->
                         state.copy(

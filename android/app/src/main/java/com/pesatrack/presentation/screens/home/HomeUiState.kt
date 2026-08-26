@@ -26,9 +26,21 @@ data class HomeUiState(
 
     /** Sum of detected inflow income for the current calendar month (excludes self-transfers). */
     val receivedThisMonth: Double = 0.0,
-    /** Source of the income figure currently displayed — drives whether the received/saved line shows. */
+    /** Source of the income figure currently displayed — drives whether the received line shows. */
     val effectiveIncomeSource: EffectiveIncomeSource = EffectiveIncomeSource.NONE,
-    /** (received - spent) / received expressed as %. Null when received is 0 or income source is `NONE`/`MANUAL_OVERRIDE`. */
+    /**
+     * Share of received income deliberately set aside as savings / investment
+     * this period, expressed as %. Formula: `investmentThisMonth / receivedThisMonth × 100`,
+     * where `investmentThisMonth` is the sum of expenses categorised under the
+     * Investment & Savings group (18).
+     *
+     * This is what the user actually saved — not `(received − spent) / received`,
+     * which used to be labelled "% saved" and inflated to ~99% at the start of
+     * a new period because `spent` was still near zero. See AGENTS.md "honest
+     * numbers" principle.
+     *
+     * Null when received is 0 or income source is `NONE`/`MANUAL_OVERRIDE`.
+     */
     val savingsRatePct: Double? = null,
 
     val recentExpenses: List<ExpenseWithCategory> = emptyList(),
