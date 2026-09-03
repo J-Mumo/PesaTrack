@@ -9,6 +9,8 @@ import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.Budget
 import com.pesatrack.domain.models.BudgetPeriod
 import com.pesatrack.domain.models.BudgetRemaining
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +25,8 @@ class BudgetViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
     private val incomeRepository: IncomeRepository,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BudgetUiState())
@@ -302,6 +305,10 @@ class BudgetViewModel @Inject constructor(
                         error = null
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.BUDGET_SAVED,
+                    mapOf(TelemetryEvents.PARAM_SCOPE to TelemetryEvents.SCOPE_INCOME)
+                )
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to save income") }
             }
@@ -425,6 +432,11 @@ class BudgetViewModel @Inject constructor(
                         error = null
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.BUDGET_SAVED,
+                    mapOf(TelemetryEvents.PARAM_SCOPE to TelemetryEvents.SCOPE_CATEGORY)
+                )
 
                 // Track budget creation milestone and counter (fire-and-forget)
                 if (existing == null) {

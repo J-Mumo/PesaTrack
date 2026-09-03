@@ -3,6 +3,8 @@ package com.pesatrack.presentation.screens.import_history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.services.SmsImportService
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +24,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ImportViewModel @Inject constructor(
-    private val smsImportService: SmsImportService
+    private val smsImportService: SmsImportService,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportUiState())
@@ -51,6 +54,11 @@ class ImportViewModel @Inject constructor(
             )
         }
 
+        telemetryClient.logEvent(
+            TelemetryEvents.IMPORT_STARTED,
+            mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_SMS)
+        )
+
         viewModelScope.launch {
             try {
                 val result = smsImportService.importHistoricalSms(
@@ -72,6 +80,15 @@ class ImportViewModel @Inject constructor(
                         result = result
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.IMPORT_COMPLETED,
+                    mapOf(
+                        TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_SMS,
+                        TelemetryEvents.PARAM_COUNT_BUCKET to
+                            TelemetryEvents.countBucket(result.newExpensesImported + result.newIncomesImported)
+                    )
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -79,6 +96,10 @@ class ImportViewModel @Inject constructor(
                         error = e.message ?: "Import failed"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.IMPORT_FAILED,
+                    mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_SMS)
+                )
             }
         }
     }

@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.services.StatementImportService
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class StatementImportViewModel @Inject constructor(
     private val application: Application,
-    private val statementImportService: StatementImportService
+    private val statementImportService: StatementImportService,
+    private val telemetryClient: TelemetryClient
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(StatementImportUiState())
@@ -97,6 +100,11 @@ class StatementImportViewModel @Inject constructor(
             )
         }
 
+        telemetryClient.logEvent(
+            TelemetryEvents.IMPORT_STARTED,
+            mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_STATEMENT)
+        )
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val inputStream = application.contentResolver.openInputStream(uri)
@@ -134,6 +142,10 @@ class StatementImportViewModel @Inject constructor(
                             result = result
                         )
                     }
+                    telemetryClient.logEvent(
+                        TelemetryEvents.IMPORT_FAILED,
+                        mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_STATEMENT)
+                    )
                 } else {
                     _uiState.update {
                         it.copy(
@@ -141,6 +153,14 @@ class StatementImportViewModel @Inject constructor(
                             result = result
                         )
                     }
+                    telemetryClient.logEvent(
+                        TelemetryEvents.IMPORT_COMPLETED,
+                        mapOf(
+                            TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_STATEMENT,
+                            TelemetryEvents.PARAM_COUNT_BUCKET to
+                                TelemetryEvents.countBucket(result.imported)
+                        )
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -149,6 +169,10 @@ class StatementImportViewModel @Inject constructor(
                         error = e.message ?: "An unexpected error occurred."
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.IMPORT_FAILED,
+                    mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_STATEMENT)
+                )
             }
         }
     }

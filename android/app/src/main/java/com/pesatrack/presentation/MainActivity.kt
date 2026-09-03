@@ -41,9 +41,12 @@ import com.pesatrack.presentation.screens.onboarding.OnboardingScreen
 import com.pesatrack.presentation.screens.pin.PinLockScreen
 import com.pesatrack.presentation.screens.pin.PinMode
 import com.pesatrack.presentation.screens.pin.PinViewModel
+import com.pesatrack.presentation.components.TelemetryConsentSheet
 import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -59,6 +62,9 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var appPreferences: AppPreferences
 
+    @Inject
+    lateinit var telemetryClient: TelemetryClient
+
     /**
      * Launcher for requesting multiple permissions at once.
      * Handles SMS and notification permissions.
@@ -69,7 +75,33 @@ class MainActivity : FragmentActivity() {
         // Log results for debugging
         permissions.forEach { (permission, granted) ->
             android.util.Log.d("MainActivity", "$permission: ${if (granted) "GRANTED" else "DENIED"}")
+            // Telemetry — emit granted/denied with source=app for post-onboarding
+            // permission asks (returning-user SMS re-grant, notifications on
+            // Android 13+). The onboarding SMS flow reports separately with
+            // source=onboarding via OnboardingScreen callbacks.
+            val kind = permissionKind(permission) ?: return@forEach
+            val event = if (granted) TelemetryEvents.PERMISSION_GRANTED
+                        else TelemetryEvents.PERMISSION_DENIED
+            telemetryClient.logEvent(
+                event,
+                mapOf(
+                    TelemetryEvents.PARAM_KIND to kind,
+                    TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_APP
+                )
+            )
         }
+    }
+
+    /**
+     * Map an Android [Manifest.permission] string to the small telemetry enum
+     * we allow ourselves to send. Returns `null` for permissions we don't
+     * report, so unknown permissions never leak as novel enum values.
+     */
+    private fun permissionKind(permission: String): String? = when (permission) {
+        Manifest.permission.READ_SMS,
+        Manifest.permission.RECEIVE_SMS -> TelemetryEvents.PERMISSION_SMS
+        Manifest.permission.POST_NOTIFICATIONS -> TelemetryEvents.PERMISSION_NOTIFICATION
+        else -> null
     }
 
     private lateinit var biometricPrompt: BiometricPrompt
@@ -96,6 +128,11 @@ class MainActivity : FragmentActivity() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             appPreferences.recordAppOpen()
         }
+
+        // Phase 1 telemetry — emit app_opened once per cold start. The
+        // TelemetryClient itself short-circuits when the user has not opted
+        // in, so this is a no-op until consent is granted.
+        telemetryClient.logEvent(TelemetryEvents.APP_OPENED)
 
         // Create notification channels (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
@@ -141,6 +178,23 @@ class MainActivity : FragmentActivity() {
         if (year != -1) {
             pendingYear.value = year
         }
+
+        // Telemetry — bucket the deep-link target into one of the four
+        // notification kinds. Anything unrecognised is dropped (silence is
+        // safer than sending a novel enum value).
+        val kind = when (navigateTo) {
+            "categorize", "categorize_income" -> TelemetryEvents.NOTIFICATION_CATEGORIZE
+            "weekly_review", "monthly_review", "quarterly_review", "year_in_review" ->
+                TelemetryEvents.NOTIFICATION_REVIEW
+            "budget" -> TelemetryEvents.NOTIFICATION_BUDGET
+            else -> null
+        }
+        if (kind != null) {
+            telemetryClient.logEvent(
+                TelemetryEvents.NOTIFICATION_OPENED,
+                mapOf(TelemetryEvents.PARAM_KIND to kind)
+            )
+        }
     }
 
     /**
@@ -163,6 +217,7 @@ class MainActivity : FragmentActivity() {
             // Record onboarding started milestone (fire-and-forget)
             LaunchedEffect(Unit) {
                 appPreferences.recordOnboardingStarted()
+                telemetryClient.logEvent(TelemetryEvents.ONBOARDING_STARTED)
             }
 
             OnboardingScreen(
@@ -174,6 +229,18 @@ class MainActivity : FragmentActivity() {
                             appPreferences.recordOnboardingImportSkipped()
                         }
                     }
+                    // Telemetry — completion path is derived from whether the
+                    // user tapped "Import Now" during the flow. This is the
+                    // last signal before the flow tears down, so it fires here.
+                    val completionKind = if (pendingImportNavigation) {
+                        TelemetryEvents.ONBOARDING_COMPLETION_IMPORT
+                    } else {
+                        TelemetryEvents.ONBOARDING_COMPLETION_SKIPPED
+                    }
+                    telemetryClient.logEvent(
+                        TelemetryEvents.ONBOARDING_COMPLETED,
+                        mapOf(TelemetryEvents.PARAM_KIND to completionKind)
+                    )
                     // Request remaining permissions (notifications) after onboarding
                     requestNotificationPermission()
                 },
@@ -187,8 +254,33 @@ class MainActivity : FragmentActivity() {
                         appPreferences.recordOnboardingImportChosen()
                     }
                 },
+                onSmsPermissionRequested = {
+                    telemetryClient.logEvent(
+                        TelemetryEvents.PERMISSION_REQUESTED,
+                        mapOf(
+                            TelemetryEvents.PARAM_KIND to TelemetryEvents.PERMISSION_SMS,
+                            TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_ONBOARDING
+                        )
+                    )
+                },
                 onSmsPermissionGranted = {
                     coroutineScope.launch { appPreferences.recordOnboardingSmsGranted() }
+                    telemetryClient.logEvent(
+                        TelemetryEvents.PERMISSION_GRANTED,
+                        mapOf(
+                            TelemetryEvents.PARAM_KIND to TelemetryEvents.PERMISSION_SMS,
+                            TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_ONBOARDING
+                        )
+                    )
+                },
+                onSmsPermissionDenied = {
+                    telemetryClient.logEvent(
+                        TelemetryEvents.PERMISSION_DENIED,
+                        mapOf(
+                            TelemetryEvents.PARAM_KIND to TelemetryEvents.PERMISSION_SMS,
+                            TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_ONBOARDING
+                        )
+                    )
                 },
                 onSmsPermissionSkipped = {
                     coroutineScope.launch { appPreferences.recordOnboardingSmsSkipped() }
@@ -256,9 +348,75 @@ class MainActivity : FragmentActivity() {
                     pendingIncomeId.value = null
                     pendingSnapshotId.value = null
                     pendingYear.value = null
+                },
+                onScreenViewed = { screen ->
+                    telemetryClient.logEvent(
+                        TelemetryEvents.SCREEN_VIEWED,
+                        mapOf(TelemetryEvents.PARAM_SCREEN to screen)
+                    )
                 }
             )
+
+            // Phase 1 telemetry consent — shown once, only after onboarding
+            // is complete and the app is unlocked. Both actions dismiss
+            // permanently; the Settings toggle is the ongoing control.
+            TelemetryConsentGate()
         }
+    }
+
+    /**
+     * Shows the one-time telemetry consent sheet on top of the main app.
+     *
+     * Gating rules:
+     *  - Only after onboarding (handled by caller — we already passed the
+     *    onboarding branch).
+     *  - Only after the PIN unlock overlay is dismissed (again, caller-gated).
+     *  - Only if the prompt has never been shown before.
+     *
+     * Emits [TelemetryEvents.TELEMETRY_PROMPT_SHOWN] once the sheet is
+     * visible, and either `TELEMETRY_ENABLED` or `TELEMETRY_PROMPT_DISMISSED`
+     * depending on which button the user taps. The "enabled" event goes out
+     * *after* [TelemetryClient.setEnabled] flips the switch on, so it is the
+     * first event of the newly-consented session.
+     */
+    @Composable
+    private fun TelemetryConsentGate() {
+        val promptShown by appPreferences.telemetryPromptShown
+            .collectAsState(initial = true)
+        val scope = rememberCoroutineScope()
+        var visible by remember { mutableStateOf(false) }
+        var eventLogged by remember { mutableStateOf(false) }
+
+        LaunchedEffect(promptShown) {
+            if (!promptShown) {
+                visible = true
+                if (!eventLogged) {
+                    telemetryClient.logEvent(TelemetryEvents.TELEMETRY_PROMPT_SHOWN)
+                    eventLogged = true
+                }
+            }
+        }
+
+        if (!visible) return
+
+        TelemetryConsentSheet(
+            onAccept = {
+                scope.launch {
+                    appPreferences.setTelemetryEnabled(true)
+                    appPreferences.markTelemetryPromptShown()
+                    telemetryClient.setEnabled(true)
+                    telemetryClient.logEvent(TelemetryEvents.TELEMETRY_ENABLED)
+                    visible = false
+                }
+            },
+            onDismiss = {
+                scope.launch {
+                    appPreferences.markTelemetryPromptShown()
+                    telemetryClient.logEvent(TelemetryEvents.TELEMETRY_PROMPT_DISMISSED)
+                    visible = false
+                }
+            },
+        )
     }
 
     /**
@@ -319,6 +477,13 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
+                telemetryClient.logEvent(
+                    TelemetryEvents.PERMISSION_REQUESTED,
+                    mapOf(
+                        TelemetryEvents.PARAM_KIND to TelemetryEvents.PERMISSION_NOTIFICATION,
+                        TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_APP
+                    )
+                )
                 permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
             }
         }
@@ -340,6 +505,13 @@ class MainActivity : FragmentActivity() {
             permissionsNeeded.add(Manifest.permission.RECEIVE_SMS)
         }
         if (permissionsNeeded.isNotEmpty()) {
+            telemetryClient.logEvent(
+                TelemetryEvents.PERMISSION_REQUESTED,
+                mapOf(
+                    TelemetryEvents.PARAM_KIND to TelemetryEvents.PERMISSION_SMS,
+                    TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_APP
+                )
+            )
             permissionLauncher.launch(permissionsNeeded.toTypedArray())
         }
     }
@@ -355,11 +527,25 @@ fun MainScreen(
     deepLinkIncomeId: Long? = null,
     deepLinkSnapshotId: Long? = null,
     deepLinkYear: Int? = null,
-    onDeepLinkHandled: () -> Unit = {}
+    onDeepLinkHandled: () -> Unit = {},
+    onScreenViewed: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+
+    // Phase 2 telemetry — emit `screen_viewed` whenever the active
+    // destination changes. We strip both `?` (optional query args like
+    // `analytics?section={section}`) and `/` (path args like
+    // `categorize/{expenseId}`) so we only ever send the route base and
+    // never leak an id or user-controlled argument.
+    LaunchedEffect(currentDestination?.route) {
+        val route = currentDestination?.route ?: return@LaunchedEffect
+        val screen = route.substringBefore('?').substringBefore('/')
+        if (screen.isNotEmpty()) {
+            onScreenViewed(screen)
+        }
+    }
 
     // Navigate to import screen if user tapped "Import Now" during onboarding
     LaunchedEffect(navigateToImport) {

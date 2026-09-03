@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.PinManager
 import com.pesatrack.data.local.preferences.AppPreferences
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -31,6 +33,7 @@ class PinViewModel @Inject constructor(
     private val pinManager: PinManager,
     private val appPreferences: AppPreferences,
     private val appLockLifecycleObserver: AppLockLifecycleObserver,
+    private val telemetryClient: TelemetryClient,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -162,6 +165,7 @@ class PinViewModel @Inject constructor(
             // PINs match — save
             pinManager.savePin(pin)
             _uiState.value = _uiState.value.copy(isSuccess = true)
+            telemetryClient.logEvent(TelemetryEvents.PIN_SETUP_COMPLETED)
         } else {
             // PINs don't match — restart setup
             _uiState.value = _uiState.value.copy(
@@ -184,6 +188,7 @@ class PinViewModel @Inject constructor(
             // Current PIN verified — clear PIN and disable lock
             pinManager.clearPin()
             _uiState.value = _uiState.value.copy(isSuccess = true)
+            telemetryClient.logEvent(TelemetryEvents.PIN_DISABLED)
         } else {
             handleWrongPin()
         }
@@ -221,6 +226,7 @@ class PinViewModel @Inject constructor(
         if (pin == pendingPin) {
             pinManager.savePin(pin)
             _uiState.value = _uiState.value.copy(isSuccess = true)
+            telemetryClient.logEvent(TelemetryEvents.PIN_SETUP_COMPLETED)
         } else {
             _uiState.value = _uiState.value.copy(
                 mode = PinMode.CHANGE_ENTER,
@@ -239,6 +245,11 @@ class PinViewModel @Inject constructor(
     private fun handleWrongPin() {
         val current = _uiState.value
         val newAttempts = current.attemptsRemaining - 1
+
+        // Telemetry — every wrong-PIN attempt emits a single failure event.
+        // Success is not emitted separately; it can be inferred from the
+        // ratio of failures to app_opened / screen_viewed(pin).
+        telemetryClient.logEvent(TelemetryEvents.PIN_UNLOCK_FAILED)
 
         if (newAttempts <= 0) {
             // Start cooldown

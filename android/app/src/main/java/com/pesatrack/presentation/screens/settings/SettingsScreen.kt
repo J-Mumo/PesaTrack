@@ -139,6 +139,12 @@ fun SettingsScreen(
                     viewModel = viewModel
                 )
 
+                // Section: Privacy & Analytics (Phase 1 telemetry)
+                PrivacyAnalyticsSection(
+                    telemetryEnabled = uiState.telemetryEnabled,
+                    onTelemetryToggled = viewModel::setTelemetryEnabled
+                )
+
                 // Section: About
                 AboutSection(
                     onNavigateToAbout = onNavigateToAbout,
@@ -518,6 +524,71 @@ private fun MonthStartDaySection(
             Text(
                 text = "Set this to your salary date. A monthly budget from the ${ordinal(monthStartDay)} " +
                     "runs to the ${ordinal(if (monthStartDay == 1) 1 else monthStartDay - 1)} of the next month.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrivacyAnalyticsSection(
+    telemetryEnabled: Boolean,
+    onTelemetryToggled: (Boolean) -> Unit
+) {
+    Text(
+        text = "Privacy",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Insights,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Anonymous usage data",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = if (telemetryEnabled) {
+                                "On — thanks for helping improve PesaTrack"
+                            } else {
+                                "Off — nothing is transmitted from your device"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Switch(
+                    checked = telemetryEnabled,
+                    onCheckedChange = onTelemetryToggled
+                )
+            }
+            Text(
+                text = "We only send which screens you open and which features " +
+                    "you tap — never your SMS, transactions, amounts, or contact info.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

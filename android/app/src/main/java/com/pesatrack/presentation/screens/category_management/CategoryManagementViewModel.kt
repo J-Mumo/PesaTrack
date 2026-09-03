@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.entities.RuleMatchType
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.CategoryRuleRepository
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +24,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CategoryManagementViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
-    private val categoryRuleRepository: CategoryRuleRepository
+    private val categoryRuleRepository: CategoryRuleRepository,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     companion object {
@@ -121,6 +124,10 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Category \"$name\" added"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.CATEGORY_CREATED,
+                    mapOf(TelemetryEvents.PARAM_KIND to TelemetryEvents.KIND_SUB)
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add sub-category", e)
                 _uiState.update { it.copy(message = "Failed to add category: ${e.message}") }
@@ -138,6 +145,10 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Group \"$name\" added"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.CATEGORY_CREATED,
+                    mapOf(TelemetryEvents.PARAM_KIND to TelemetryEvents.KIND_GROUP)
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add group", e)
                 _uiState.update { it.copy(message = "Failed to add group: ${e.message}") }
@@ -155,6 +166,12 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Category updated"
                     )
                 }
+                val cat = _uiState.value.allCategories.find { it.id == id }
+                val kind = if (cat?.isGroup == true) TelemetryEvents.KIND_GROUP else TelemetryEvents.KIND_SUB
+                telemetryClient.logEvent(
+                    TelemetryEvents.CATEGORY_EDITED,
+                    mapOf(TelemetryEvents.PARAM_KIND to kind)
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update category", e)
                 _uiState.update { it.copy(message = "Failed to update: ${e.message}") }
@@ -178,6 +195,7 @@ class CategoryManagementViewModel @Inject constructor(
                             message = "Category deleted"
                         )
                     }
+                    telemetryClient.logEvent(TelemetryEvents.CATEGORY_DELETED)
                 } else {
                     _uiState.update {
                         it.copy(
@@ -210,6 +228,7 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Rule added: \"$pattern\""
                     )
                 }
+                telemetryClient.logEvent(TelemetryEvents.CATEGORY_RULE_CREATED)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to add rule", e)
                 _uiState.update { it.copy(message = "Failed to add rule: ${e.message}") }
@@ -241,6 +260,7 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Rule updated"
                     )
                 }
+                telemetryClient.logEvent(TelemetryEvents.CATEGORY_RULE_EDITED)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to update rule", e)
                 _uiState.update { it.copy(message = "Failed to update rule: ${e.message}") }
@@ -258,6 +278,7 @@ class CategoryManagementViewModel @Inject constructor(
                         message = "Rule deleted"
                     )
                 }
+                telemetryClient.logEvent(TelemetryEvents.CATEGORY_RULE_DELETED)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete rule", e)
                 _uiState.update { it.copy(message = "Failed to delete rule: ${e.message}") }

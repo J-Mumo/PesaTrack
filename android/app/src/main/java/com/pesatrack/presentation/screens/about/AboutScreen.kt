@@ -98,7 +98,8 @@ fun AboutScreen(
 
             // Description
             Text(
-                text = "Passive M-PESA & bank expense tracker.\nAll data stays on your device.",
+                text = "Passive M-PESA & bank expense tracker.\n" +
+                    "Your transactions stay on your device.",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -197,17 +198,18 @@ fun AboutScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "🔒 Your data stays on your device",
+                        text = "🔒 Your transactions stay on your device",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "• No internet permission — PesaTrack cannot send data anywhere\n" +
-                                "• No cloud sync, no ads, no data transmission\n" +
-                                "• Reads both incoming and outgoing M-PESA and bank SMS — nothing leaves your phone\n" +
-                                "• PIN lock + biometric for privacy",
+                        text = "• SMS content, transaction amounts, and merchants never leave your phone\n" +
+                                "• No cloud sync and no ads\n" +
+                                "• Reads both incoming and outgoing M-PESA and bank SMS locally\n" +
+                                "• PIN lock + biometric for privacy\n" +
+                                "• Anonymous usage analytics are opt-in and can be turned off in Settings",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                     )

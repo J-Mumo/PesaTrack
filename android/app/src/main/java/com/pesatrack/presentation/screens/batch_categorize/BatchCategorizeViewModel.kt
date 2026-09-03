@@ -10,6 +10,8 @@ import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.services.CategorizationService
 import com.pesatrack.services.RecipientInfo
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +40,8 @@ class BatchCategorizeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val recipientMappingRepository: RecipientMappingRepository,
-    private val categorizationService: CategorizationService
+    private val categorizationService: CategorizationService,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BatchCategorizeUiState())
@@ -201,6 +204,14 @@ class BatchCategorizeViewModel @Inject constructor(
                         autoSuggestions = updatedSuggestions
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.EXPENSE_CATEGORIZED_BATCH,
+                    mapOf(
+                        TelemetryEvents.PARAM_COUNT_BUCKET to
+                            TelemetryEvents.countBucket(updated)
+                    )
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -337,6 +348,11 @@ class BatchCategorizeViewModel @Inject constructor(
                         individualCategorizedCount = it.individualCategorizedCount + 1
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.EXPENSE_CATEGORIZED_BATCH,
+                    mapOf(TelemetryEvents.PARAM_COUNT_BUCKET to "1-10")
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -453,6 +469,11 @@ class BatchCategorizeViewModel @Inject constructor(
                         categorizedCount = it.categorizedCount + 1
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.EXPENSE_CATEGORIZED_BATCH,
+                    mapOf(TelemetryEvents.PARAM_COUNT_BUCKET to "1-10")
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -528,6 +549,14 @@ class BatchCategorizeViewModel @Inject constructor(
                         categorizedCount = it.categorizedCount + appliedCount
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.EXPENSE_CATEGORIZED_BATCH,
+                    mapOf(
+                        TelemetryEvents.PARAM_COUNT_BUCKET to
+                            TelemetryEvents.countBucket(appliedCount)
+                    )
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -709,6 +738,14 @@ class BatchCategorizeViewModel @Inject constructor(
                         showBulkCategoryPicker = false
                     )
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.EXPENSE_CATEGORIZED_BATCH,
+                    mapOf(
+                        TelemetryEvents.PARAM_COUNT_BUCKET to
+                            TelemetryEvents.countBucket(appliedCount)
+                    )
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

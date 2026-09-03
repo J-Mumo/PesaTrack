@@ -7,6 +7,8 @@ import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,6 +19,7 @@ class CategorizeViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val appPreferences: AppPreferences,
+    private val telemetryClient: TelemetryClient,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
@@ -102,6 +105,8 @@ class CategorizeViewModel @Inject constructor(
             try {
                 expenseRepository.updateCategory(expenseId, category.id)
                 _uiState.update { it.copy(isSaving = false, isSaved = true) }
+
+                telemetryClient.logEvent(TelemetryEvents.EXPENSE_CATEGORIZED_MANUAL)
 
                 // Track categorization milestone and counter (fire-and-forget)
                 launch {

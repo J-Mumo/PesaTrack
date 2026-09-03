@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.ExcelImportService
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +32,8 @@ import javax.inject.Inject
 class ExcelImportViewModel @Inject constructor(
     private val application: Application,
     private val excelImportService: ExcelImportService,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     companion object {
@@ -81,6 +84,11 @@ class ExcelImportViewModel @Inject constructor(
                 error = null
             )
         }
+
+        telemetryClient.logEvent(
+            TelemetryEvents.IMPORT_STARTED,
+            mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_EXCEL)
+        )
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -142,6 +150,17 @@ class ExcelImportViewModel @Inject constructor(
                 if (result.rowsImportedAsStandalone > 0 || result.rowsMatchedToSms > 0) {
                     appPreferences.incrementExcelImportsCount()
                 }
+
+                telemetryClient.logEvent(
+                    TelemetryEvents.IMPORT_COMPLETED,
+                    mapOf(
+                        TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_EXCEL,
+                        TelemetryEvents.PARAM_COUNT_BUCKET to
+                            TelemetryEvents.countBucket(
+                                result.rowsImportedAsStandalone + result.rowsMatchedToSms
+                            )
+                    )
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Excel import failed", e)
                 _uiState.update {
@@ -150,6 +169,10 @@ class ExcelImportViewModel @Inject constructor(
                         error = e.message ?: "Import failed"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.IMPORT_FAILED,
+                    mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_EXCEL)
+                )
             }
         }
     }

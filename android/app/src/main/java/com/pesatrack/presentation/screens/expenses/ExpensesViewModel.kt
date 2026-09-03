@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.domain.models.Category
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -13,7 +15,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ExpensesViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ExpensesUiState())
@@ -82,6 +85,7 @@ class ExpensesViewModel @Inject constructor(
             val expense = expenseRepository.getExpenseById(expenseId)
             if (expense != null) {
                 expenseRepository.deleteExpense(expense)
+                telemetryClient.logEvent(TelemetryEvents.EXPENSE_DELETED)
             }
         }
     }

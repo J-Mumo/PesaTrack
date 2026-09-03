@@ -10,6 +10,8 @@ import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.Expense
 import com.pesatrack.domain.models.ExpenseSource
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +25,8 @@ class ManualEntryViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
     private val recipientMappingRepository: RecipientMappingRepository,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ManualEntryUiState())
@@ -215,6 +218,8 @@ class ManualEntryViewModel @Inject constructor(
                 }
 
                 _uiState.update { it.copy(isSaving = false, isSaved = true) }
+
+                telemetryClient.logEvent(TelemetryEvents.EXPENSE_MANUAL_ADDED)
 
                 // Track manual entry milestone and counter (fire-and-forget)
                 launch {

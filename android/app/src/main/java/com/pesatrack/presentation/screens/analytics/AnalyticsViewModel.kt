@@ -18,6 +18,8 @@ import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.domain.models.YearComparison
 import com.pesatrack.services.RecurringExpenseService
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.MonthPeriod
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +41,8 @@ class AnalyticsViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val incomeRepository: IncomeRepository,
     private val recurringExpenseService: RecurringExpenseService,
-    private val appPreferences: AppPreferences
+    private val appPreferences: AppPreferences,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AnalyticsUiState())
@@ -84,6 +87,14 @@ class AnalyticsViewModel @Inject constructor(
      */
     fun selectInsightsTab(tab: InsightsTab) {
         _uiState.update { it.copy(selectedInsightsTab = tab) }
+        val tabName = when (tab) {
+            InsightsTab.INSIGHTS -> TelemetryEvents.TAB_INSIGHTS
+            InsightsTab.CHARTS -> TelemetryEvents.TAB_CHARTS
+        }
+        telemetryClient.logEvent(
+            TelemetryEvents.ANALYTICS_TAB_SWITCHED,
+            mapOf(TelemetryEvents.PARAM_TAB to tabName)
+        )
     }
 
     // ==================== Charts Sub-Tab Management ====================
@@ -94,6 +105,14 @@ class AnalyticsViewModel @Inject constructor(
      */
     fun selectTab(tab: AnalyticsTab) {
         _uiState.update { it.copy(selectedTab = tab) }
+        val tabName = when (tab) {
+            AnalyticsTab.MONTHLY -> TelemetryEvents.TAB_MONTHLY
+            AnalyticsTab.YEARLY -> TelemetryEvents.TAB_YEARLY
+        }
+        telemetryClient.logEvent(
+            TelemetryEvents.ANALYTICS_TAB_SWITCHED,
+            mapOf(TelemetryEvents.PARAM_TAB to tabName)
+        )
         if (tab == AnalyticsTab.YEARLY && _uiState.value.yearComparison == null) {
             loadYearlyData()
         }

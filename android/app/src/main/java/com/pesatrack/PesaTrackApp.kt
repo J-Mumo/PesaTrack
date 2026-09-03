@@ -10,6 +10,7 @@ import com.pesatrack.services.NotificationHelper
 import com.pesatrack.services.QuarterlyReviewWorker
 import com.pesatrack.services.WeeklyReviewWorker
 import com.pesatrack.services.YearInReviewWorker
+import com.pesatrack.services.telemetry.TelemetryClient
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -38,11 +39,21 @@ class PesaTrackApp : Application(), Configuration.Provider {
     @Inject
     lateinit var appPreferences: AppPreferences
 
+    @Inject
+    lateinit var telemetryClient: TelemetryClient
+
     override fun onCreate() {
         super.onCreate()
 
         // Initialize PDFBox for M-PESA statement PDF parsing
         PDFBoxResourceLoader.init(applicationContext)
+
+        // Apply the persisted telemetry opt-in state to the client on cold
+        // start. Default is false → analytics collection stays off until the
+        // user opts in via the consent sheet or Settings toggle.
+        CoroutineScope(Dispatchers.IO).launch {
+            telemetryClient.setEnabled(appPreferences.isTelemetryEnabled())
+        }
 
         // Set initial lock state before any Activity starts
         appLockLifecycleObserver.initLockState()

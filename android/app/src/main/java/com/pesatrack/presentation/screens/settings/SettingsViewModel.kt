@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.DataManagementService
 import com.pesatrack.services.SampleDataService
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -34,7 +36,8 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val dataManagementService: DataManagementService,
-    private val sampleDataService: SampleDataService
+    private val sampleDataService: SampleDataService,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -55,7 +58,8 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.pinEnabled,
                 appPreferences.biometricEnabled,
                 appPreferences.lockTimeoutSeconds,
-                appPreferences.monthStartDay
+                appPreferences.monthStartDay,
+                appPreferences.telemetryEnabled
             ) { values ->
                 val trackingEnabled = values[0] as Boolean
                 val enabledBanks = @Suppress("UNCHECKED_CAST") (values[1] as Set<String>)
@@ -63,6 +67,7 @@ class SettingsViewModel @Inject constructor(
                 val biometricEnabled = values[3] as Boolean
                 val lockTimeout = values[4] as Int
                 val monthStartDay = values[5] as Int
+                val telemetryEnabled = values[6] as Boolean
 
                 // Get all non-MPESA parser names from the registry
                 val bankNames = SmsParserRegistry.getAllParserNames()
@@ -82,7 +87,8 @@ class SettingsViewModel @Inject constructor(
                     pinEnabled = pinEnabled,
                     biometricEnabled = biometricEnabled,
                     lockTimeoutSeconds = lockTimeout,
-                    monthStartDay = monthStartDay
+                    monthStartDay = monthStartDay,
+                    telemetryEnabled = telemetryEnabled
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -98,6 +104,10 @@ class SettingsViewModel @Inject constructor(
     fun setBankTrackingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             appPreferences.setBankTrackingEnabled(enabled)
+            telemetryClient.logEvent(
+                TelemetryEvents.SETTINGS_BANK_TRACKING_TOGGLED,
+                mapOf(TelemetryEvents.PARAM_ENABLED to enabled)
+            )
         }
     }
 
@@ -107,6 +117,15 @@ class SettingsViewModel @Inject constructor(
     fun setBankEnabled(bankName: String, enabled: Boolean) {
         viewModelScope.launch {
             appPreferences.setBankEnabled(bankName, enabled)
+            // bankName comes from SmsParserRegistry (hardcoded displayName),
+            // not user input, so it's safe to send as a value.
+            telemetryClient.logEvent(
+                TelemetryEvents.SETTINGS_INDIVIDUAL_BANK_TOGGLED,
+                mapOf(
+                    TelemetryEvents.PARAM_BANK to bankName,
+                    TelemetryEvents.PARAM_ENABLED to enabled
+                )
+            )
         }
     }
 
@@ -118,6 +137,10 @@ class SettingsViewModel @Inject constructor(
     fun setBiometricEnabled(enabled: Boolean) {
         viewModelScope.launch {
             appPreferences.setBiometricEnabled(enabled)
+            telemetryClient.logEvent(
+                TelemetryEvents.SETTINGS_BIOMETRIC_TOGGLED,
+                mapOf(TelemetryEvents.PARAM_ENABLED to enabled)
+            )
         }
     }
 
@@ -127,6 +150,10 @@ class SettingsViewModel @Inject constructor(
     fun setLockTimeout(seconds: Int) {
         viewModelScope.launch {
             appPreferences.setLockTimeoutSeconds(seconds)
+            telemetryClient.logEvent(
+                TelemetryEvents.SETTINGS_LOCK_TIMEOUT_CHANGED,
+                mapOf(TelemetryEvents.PARAM_COUNT_BUCKET to TelemetryEvents.timeoutBucket(seconds))
+            )
         }
     }
 
@@ -137,6 +164,31 @@ class SettingsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(biometricAvailable = available)
     }
 
+    // ==================== Telemetry (Phase 1) ====================
+
+    /**
+     * Toggle anonymous usage analytics.
+     *
+     * Flips the persisted opt-in flag, updates the live [TelemetryClient] so
+     * Firebase collection reflects the new state within the same process, and
+     * emits a single confirming event. On disable, the `telemetry_disabled`
+     * event goes out *before* collection is turned off so it actually reaches
+     * the wire.
+     */
+    fun setTelemetryEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            if (enabled) {
+                appPreferences.setTelemetryEnabled(true)
+                telemetryClient.setEnabled(true)
+                telemetryClient.logEvent(TelemetryEvents.TELEMETRY_ENABLED)
+            } else {
+                telemetryClient.logEvent(TelemetryEvents.TELEMETRY_DISABLED)
+                telemetryClient.setEnabled(false)
+                appPreferences.setTelemetryEnabled(false)
+            }
+        }
+    }
+
     // ==================== Budget Settings ====================
 
     /**
@@ -145,6 +197,10 @@ class SettingsViewModel @Inject constructor(
     fun setMonthStartDay(day: Int) {
         viewModelScope.launch {
             appPreferences.setMonthStartDay(day)
+            telemetryClient.logEvent(
+                TelemetryEvents.SETTINGS_MONTH_START_DAY_CHANGED,
+                mapOf(TelemetryEvents.PARAM_COUNT_BUCKET to TelemetryEvents.monthStartDayBucket(day))
+            )
         }
     }
 
@@ -170,6 +226,7 @@ class SettingsViewModel @Inject constructor(
                     isResettingCategories = false,
                     dataManagementMessage = "Categories reset to defaults"
                 )
+                telemetryClient.logEvent(TelemetryEvents.SETTINGS_CATEGORIES_RESET)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isResettingCategories = false,
@@ -198,10 +255,18 @@ class SettingsViewModel @Inject constructor(
                         isExporting = false,
                         dataManagementMessage = "Export ready — opening share…"
                     )
+                    telemetryClient.logEvent(
+                        TelemetryEvents.DATA_EXPORTED,
+                        mapOf(TelemetryEvents.PARAM_SUCCESS to true)
+                    )
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isExporting = false,
                         dataManagementMessage = "No transactions to export"
+                    )
+                    telemetryClient.logEvent(
+                        TelemetryEvents.DATA_EXPORTED,
+                        mapOf(TelemetryEvents.PARAM_SUCCESS to false)
                     )
                     delay(3000)
                     _uiState.value = _uiState.value.copy(dataManagementMessage = null)
@@ -210,6 +275,10 @@ class SettingsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isExporting = false,
                     dataManagementMessage = "Export failed: ${e.message}"
+                )
+                telemetryClient.logEvent(
+                    TelemetryEvents.DATA_EXPORTED,
+                    mapOf(TelemetryEvents.PARAM_SUCCESS to false)
                 )
                 delay(3000)
                 _uiState.value = _uiState.value.copy(dataManagementMessage = null)
@@ -241,10 +310,18 @@ class SettingsViewModel @Inject constructor(
                         dataManagementMessage = "Backup failed — could not write file"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.DATABASE_BACKED_UP,
+                    mapOf(TelemetryEvents.PARAM_SUCCESS to success)
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isBackingUp = false,
                     dataManagementMessage = "Backup failed: ${e.message}"
+                )
+                telemetryClient.logEvent(
+                    TelemetryEvents.DATABASE_BACKED_UP,
+                    mapOf(TelemetryEvents.PARAM_SUCCESS to false)
                 )
             }
             delay(3000)
@@ -264,6 +341,12 @@ class SettingsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isRestoring = true, dataManagementMessage = null)
             try {
                 val success = dataManagementService.restoreDatabase(context, sourceUri)
+                // Emit the event BEFORE any process-kill path so the success
+                // case actually reaches the wire.
+                telemetryClient.logEvent(
+                    TelemetryEvents.DATABASE_RESTORED,
+                    mapOf(TelemetryEvents.PARAM_SUCCESS to success)
+                )
                 if (success) {
                     _uiState.value = _uiState.value.copy(
                         isRestoring = false,
@@ -285,6 +368,10 @@ class SettingsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isRestoring = false,
                     dataManagementMessage = "Restore failed: ${e.message}"
+                )
+                telemetryClient.logEvent(
+                    TelemetryEvents.DATABASE_RESTORED,
+                    mapOf(TelemetryEvents.PARAM_SUCCESS to false)
                 )
                 delay(3000)
                 _uiState.value = _uiState.value.copy(dataManagementMessage = null)
@@ -341,6 +428,7 @@ class SettingsViewModel @Inject constructor(
                     isPopulatingSampleData = false,
                     dataManagementMessage = "All data cleared successfully"
                 )
+                telemetryClient.logEvent(TelemetryEvents.ALL_DATA_CLEARED)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isPopulatingSampleData = false,

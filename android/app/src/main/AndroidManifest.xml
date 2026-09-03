@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
+    <!-- Internet access — used only for opt-in anonymous usage analytics
+         (Firebase Analytics) starting in v1.5.0. Financial data, SMS content,
+         and PII never leave the device. Users control this via a consent
+         prompt on first launch and a toggle in Settings → Anonymous usage data. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Telephony is core to the app (SMS parsing) but declared optional so the
          app still installs on tablets / Chromebooks. SMS features simply won't
          function there. Required by lint (PermissionImpliesUnsupportedChromeOsHardware). -->
@@ -27,6 +34,25 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PesaTrack"
         tools:targetApi="31">
+
+        <!-- Firebase Analytics: default OFF. We flip this on only after the
+             user explicitly opts in via the consent sheet. See
+             services/telemetry/FirebaseTelemetryClient.kt. -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_analytics_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_storage"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_user_data"
+            android:value="false" />
+        <meta-data
+            android:name="google_analytics_default_allow_ad_personalization_signals"
+            android:value="false" />
 
         <activity
             android:name=".presentation.MainActivity"

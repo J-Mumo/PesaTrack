@@ -18,6 +18,12 @@ gradle-wrapper.jar
 *.jks
 *.keystore
 
+# Firebase — google-services.json contains an API key restricted by package
+# name + SHA-1. Committing it is technically safe per Google, but we keep it
+# out of the repo so each environment (dev / CI / release) provides its own.
+# See android/README.md for the setup steps.
+app/google-services.json
+
 # OS files
 .DS_Store
 Thumbs.db

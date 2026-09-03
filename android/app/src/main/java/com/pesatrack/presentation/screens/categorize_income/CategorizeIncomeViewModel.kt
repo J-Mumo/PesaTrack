@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.repository.IncomeRepository
 import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,7 @@ import javax.inject.Inject
 @HiltViewModel
 class CategorizeIncomeViewModel @Inject constructor(
     private val incomeRepository: IncomeRepository,
+    private val telemetryClient: TelemetryClient,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -59,7 +62,12 @@ class CategorizeIncomeViewModel @Inject constructor(
     }
 
     fun toggleExcluded() {
-        _uiState.update { it.copy(isExcluded = !it.isExcluded) }
+        val newValue = !_uiState.value.isExcluded
+        _uiState.update { it.copy(isExcluded = newValue) }
+        telemetryClient.logEvent(
+            TelemetryEvents.INCOME_EXCLUDED_TOGGLED,
+            mapOf(TelemetryEvents.PARAM_ENABLED to newValue)
+        )
     }
 
     fun save() {
@@ -74,6 +82,7 @@ class CategorizeIncomeViewModel @Inject constructor(
             // Learn this sender → source mapping so future income auto-classifies.
             incomeRepository.learnSenderSource(income.sender, current.selectedSource)
             _uiState.update { it.copy(isSaving = false, isSaved = true) }
+            telemetryClient.logEvent(TelemetryEvents.INCOME_CATEGORIZED_MANUAL)
         }
     }
 
@@ -92,6 +101,7 @@ class CategorizeIncomeViewModel @Inject constructor(
         viewModelScope.launch {
             incomeRepository.delete(income.id)
             _uiState.update { it.copy(isDeleting = false, isSaved = true) }
+            telemetryClient.logEvent(TelemetryEvents.INCOME_DELETED)
         }
     }
 }

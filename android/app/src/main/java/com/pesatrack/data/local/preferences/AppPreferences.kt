@@ -189,6 +189,21 @@ class AppPreferences @Inject constructor(
         val KEY_COUNT_EXCEL_IMPORTS = intPreferencesKey("count_excel_imports")
         val KEY_COUNT_EXPORTS = intPreferencesKey("count_exports")
         val KEY_COUNT_BACKUPS = intPreferencesKey("count_backups")
+
+        // ── Telemetry (Phase 1) ──
+
+        /**
+         * Whether the user has opted into anonymous usage analytics.
+         * Default: false — we never transmit anything until explicit opt-in.
+         */
+        private val KEY_TELEMETRY_ENABLED = booleanPreferencesKey("telemetry_enabled")
+
+        /**
+         * Whether the one-time telemetry consent sheet has already been shown.
+         * Once true, we never show it again — user can flip the toggle in
+         * Settings if they change their mind.
+         */
+        private val KEY_TELEMETRY_PROMPT_SHOWN = booleanPreferencesKey("telemetry_prompt_shown")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -796,4 +811,51 @@ class AppPreferences @Inject constructor(
             .filter { it != "M-PESA" }
             .toSet()
     }
-}
+    // ==================== Telemetry (Phase 1) ====================
+
+    /**
+     * Whether anonymous usage analytics are currently enabled.
+     * Default: false. Only ever true after explicit user opt-in via the
+     * consent sheet or the Settings toggle.
+     */
+    val telemetryEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TELEMETRY_ENABLED] ?: false
+    }
+
+    /**
+     * Whether the one-time consent sheet has been shown.
+     * Used to gate the dismissible bottom sheet on app entry.
+     */
+    val telemetryPromptShown: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_TELEMETRY_PROMPT_SHOWN] ?: false
+    }
+
+    /** Snapshot read of the current telemetry-enabled flag. */
+    suspend fun isTelemetryEnabled(): Boolean {
+        return context.dataStore.data.first()[KEY_TELEMETRY_ENABLED] ?: false
+    }
+
+    /** Snapshot read of the consent-prompt-shown flag. */
+    suspend fun wasTelemetryPromptShown(): Boolean {
+        return context.dataStore.data.first()[KEY_TELEMETRY_PROMPT_SHOWN] ?: false
+    }
+
+    /**
+     * Set the telemetry opt-in flag. Called from the consent sheet primary
+     * button and the Settings screen toggle.
+     */
+    suspend fun setTelemetryEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TELEMETRY_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Mark the consent sheet as shown regardless of the user's choice. Both
+     * "Yes, help improve" and "Not now" set this so the sheet never nags.
+     */
+    suspend fun markTelemetryPromptShown() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TELEMETRY_PROMPT_SHOWN] = true
+        }
+    }}

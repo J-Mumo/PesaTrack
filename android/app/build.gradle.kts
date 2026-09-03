@@ -8,6 +8,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Apply the google-services plugin only when google-services.json is present.
+// This lets local/CI builds succeed without Firebase configuration while still
+// enabling Firebase Analytics for release builds where the config is provided.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Load local.properties for signing credentials
 val localProperties = Properties()
 val localPropsFile = rootProject.file("local.properties")
@@ -23,8 +30,8 @@ android {
         applicationId = "com.pesatrack"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.4.1"
+        versionCode = 14
+        versionName = "1.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -153,6 +160,13 @@ dependencies {
 
     // Google Play In-App Review API (Stage 1B)
     implementation("com.google.android.play:review-ktx:2.0.2")
+
+    // Firebase Analytics — Phase 1 telemetry (opt-in only).
+    // The BOM keeps Firebase library versions aligned. Analytics is a no-op
+    // when google-services.json is absent, and is guarded at runtime by
+    // FirebaseAnalytics.setAnalyticsCollectionEnabled() reflecting user consent.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-analytics-ktx")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

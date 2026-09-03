@@ -32,7 +32,10 @@ data class SettingsUiState(
     val isRestoring: Boolean = false,
     val isResettingCategories: Boolean = false,
     val isPopulatingSampleData: Boolean = false,
-    val dataManagementMessage: String? = null
+    val dataManagementMessage: String? = null,
+    // Telemetry (Phase 1)
+    /** Whether the user has opted in to anonymous usage analytics. */
+    val telemetryEnabled: Boolean = false
 )
 
 /**

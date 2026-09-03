@@ -14,6 +14,8 @@ import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.IncomeSource
 import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.SmsParser
 import com.pesatrack.utils.parsers.ParsedSms
 import com.pesatrack.utils.parsers.SmsParserRegistry
@@ -62,6 +64,9 @@ class SmsReceiver : BroadcastReceiver() {
 
     @Inject
     lateinit var categorizationService: CategorizationService
+
+    @Inject
+    lateinit var telemetryClient: TelemetryClient
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -136,8 +141,8 @@ class SmsReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 when (val parsed = SmsParserRegistry.parseSms(sender, smsBody, smsDate)) {
-                    is ParsedSms.ExpenseResult -> handleExpenseResult(context, parsed, smsBody, smsDate)
-                    is ParsedSms.IncomeResult -> handleIncomeResult(context, parsed.income, smsBody)
+                    is ParsedSms.ExpenseResult -> handleExpenseResult(context, parsed, smsBody, smsDate, sender)
+                    is ParsedSms.IncomeResult -> handleIncomeResult(context, parsed.income, smsBody, sender)
                     ParsedSms.NotARelevantMessage -> Unit
                 }
             } catch (e: Exception) {
@@ -147,10 +152,27 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     /**
+     * Emit a `sms_parsed` telemetry event with the parser display name.
+     * Falls back to the raw sender if we can't identify a parser (rare — we
+     * only reach this code when a parser already handled the SMS). No PII
+     * is included: only the parser bucket (e.g. `"M-PESA"`) and the kind.
+     */
+    private fun logSmsParsed(sender: String, body: String, kind: String) {
+        val source = SmsParserRegistry.findParser(sender, body)?.displayName ?: "other"
+        telemetryClient.logEvent(
+            TelemetryEvents.SMS_PARSED,
+            mapOf(
+                TelemetryEvents.PARAM_SOURCE to source,
+                TelemetryEvents.PARAM_KIND to kind
+            )
+        )
+    }
+
+    /**
      * Handle an income SMS — dedupe by `transactionId`, persist, and (for
      * UNCATEGORIZED sources) prompt the user to pick a source.
      */
-    private suspend fun handleIncomeResult(context: Context, income: IncomeTransaction, smsBody: String) {
+    private suspend fun handleIncomeResult(context: Context, income: IncomeTransaction, smsBody: String, senderAddress: String) {
         val toSave = income.copy(rawSms = smsBody)
         val rowId = incomeRepository.insertIfNew(toSave)
         if (rowId == null) {
@@ -161,6 +183,7 @@ class SmsReceiver : BroadcastReceiver() {
             TAG,
             "Saved income: Ksh${income.amount} source=${income.source.name} sender=${income.sender} txid=${income.transactionId}"
         )
+        logSmsParsed(senderAddress, smsBody, TelemetryEvents.KIND_INCOME)
 
         if (income.source == IncomeSource.UNCATEGORIZED) {
             val displaySender = income.sender ?: "Unknown sender"
@@ -177,7 +200,8 @@ class SmsReceiver : BroadcastReceiver() {
         context: Context,
         parsed: ParsedSms.ExpenseResult,
         smsBody: String,
-        smsDate: Long
+        smsDate: Long,
+        senderAddress: String
     ) {
         var mainExpense = parsed.expense.copy(rawSms = smsBody)
 
@@ -207,6 +231,7 @@ class SmsReceiver : BroadcastReceiver() {
         // Track SMS parsed milestone and counter (fire-and-forget)
         appPreferences.recordFirstSmsParsed()
         appPreferences.incrementSmsParsedCount()
+        logSmsParsed(senderAddress, smsBody, TelemetryEvents.KIND_EXPENSE)
 
         // Show notification to categorize (only if not auto-categorized)
         if (expenseId > 0 && !mainExpense.isCategorized) {

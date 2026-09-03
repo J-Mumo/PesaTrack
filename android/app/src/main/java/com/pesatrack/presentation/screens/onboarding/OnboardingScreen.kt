@@ -39,7 +39,9 @@ fun OnboardingScreen(
     onComplete: () -> Unit,
     onRequestSmsPermission: () -> Unit,
     onImportHistory: () -> Unit,
+    onSmsPermissionRequested: () -> Unit = {},
     onSmsPermissionGranted: () -> Unit = {},
+    onSmsPermissionDenied: () -> Unit = {},
     onSmsPermissionSkipped: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -64,6 +66,8 @@ fun OnboardingScreen(
         smsPermissionGranted = allGranted
         if (allGranted) {
             onSmsPermissionGranted()
+        } else {
+            onSmsPermissionDenied()
         }
     }
 
@@ -116,6 +120,7 @@ fun OnboardingScreen(
                     2 -> SmsPermissionPage(
                         smsPermissionGranted = smsPermissionGranted,
                         onGrantPermission = {
+                            onSmsPermissionRequested()
                             smsPermissionLauncher.launch(
                                 arrayOf(
                                     Manifest.permission.READ_SMS,

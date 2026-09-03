@@ -7,6 +7,8 @@ import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.ExpenseRepository.MerchantGroupSummary
 import com.pesatrack.data.repository.RecipientMappingRepository
 import com.pesatrack.domain.models.PaymentType
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +37,8 @@ import javax.inject.Inject
 class MerchantsViewModel @Inject constructor(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
-    private val recipientMappingRepository: RecipientMappingRepository
+    private val recipientMappingRepository: RecipientMappingRepository,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MerchantsUiState())
@@ -168,6 +171,10 @@ class MerchantsViewModel @Inject constructor(
                         snackbarMessage = "Reassigned $updated transaction${if (updated == 1) "" else "s"} to $categoryName"
                     )
                 }
+                telemetryClient.logEvent(
+                    TelemetryEvents.MERCHANT_RECATEGORIZED,
+                    mapOf(TelemetryEvents.PARAM_COUNT_BUCKET to TelemetryEvents.countBucket(updated))
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
