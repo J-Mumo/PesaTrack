@@ -1,0 +1,132 @@
+name: Android → Website Sync Check
+
+# Optional CI hint: for Android PRs, grep the diff for known trigger patterns
+# from plans/website-full-plan.md §16.1 and post a sticky comment reminding
+# the author to answer the sync-check question in the PR description.
+#
+# This job is advisory only. It NEVER fails the PR — the author still
+# owns the decision. See AGENTS.md → "Website Sync Check" and the PR
+# template checklist.
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '_docs/releases.md'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  sync-check-hint:
+    name: Post site-sync reminder
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect trigger patterns
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          # File list
+          FILES="$(git diff --name-only "$BASE".."$HEAD")"
+          # Full diff (added lines only)
+          ADDED="$(git diff "$BASE".."$HEAD" -- 'android/**' '_docs/releases.md' | grep '^+' | grep -v '^+++' || true)"
+
+          triggers=()
+
+          # 1. AndroidManifest permission change
+          if git diff --name-only "$BASE".."$HEAD" -- 'android/app/src/main/AndroidManifest.xml' | grep -q .; then
+            if git diff "$BASE".."$HEAD" -- 'android/app/src/main/AndroidManifest.xml' | grep -Eq '^[+-].*uses-permission'; then
+              triggers+=("**AndroidManifest.xml permission changed** → update \`/privacy\`, \`/how-it-works\`, \`/faq\`, \`factsheet.json\`.")
+            fi
+          fi
+
+          # 2. versionName / versionCode bump
+          if git diff "$BASE".."$HEAD" -- 'android/app/build.gradle.kts' | grep -Eq '^[+-]\s*(versionName|versionCode)'; then
+            triggers+=("**\`versionName\` / \`versionCode\` bumped** → \`/changelog\` and \`factsheet.currentVersion\` update automatically from \`_docs/releases.md\`; verify \`pnpm --dir website build\` still succeeds.")
+          fi
+
+          # 3. New SmsParserStrategy implementation
+          if echo "$ADDED" | grep -Eq ':\s*SmsParserStrategy'; then
+            triggers+=("**New \`SmsParserStrategy\` implementation** → update \`/how-it-works\`, \`/features/sms-tracking\`, \`/privacy\` §2, \`factsheet.supportedSenders\`.")
+          fi
+
+          # 4. New file under presentation/screens/
+          if echo "$FILES" | grep -Eq 'android/app/src/main/.*presentation/screens/.*\.kt$'; then
+            NEW_SCREENS="$(git diff --name-only --diff-filter=A "$BASE".."$HEAD" -- 'android/app/src/main/**/presentation/screens/**/*.kt' || true)"
+            if [ -n "$NEW_SCREENS" ]; then
+              triggers+=("**New screen(s) added under \`presentation/screens/\`** → consider a new \`/features/<slug>\` page, screenshots, and boilerplate paragraph update.")
+            fi
+          fi
+
+          # 5. Screen sealed class entry
+          if git diff "$BASE".."$HEAD" -- 'android/app/src/main/**/presentation/navigation/**' | grep -Eq '^\+.*object\s+\w+\s*:\s*Screen'; then
+            triggers+=("**New route on the \`Screen\` sealed class** → likely a new user-facing surface; verify \`/features\` and \`/docs\` coverage.")
+          fi
+
+          # 6. Releases.md row added
+          if git diff --name-only "$BASE".."$HEAD" -- '_docs/releases.md' | grep -q .; then
+            triggers+=("**\`_docs/releases.md\` changed** → \`/changelog\` and \`factsheet.currentVersion\` will re-render; verify \`pnpm --dir website build\` succeeds after merge.")
+          fi
+
+          # 7. Category taxonomy change (category 606 semantics live in Constants.kt)
+          if git diff "$BASE".."$HEAD" -- 'android/app/src/main/**/utils/Constants.kt' | grep -Eq '^[+-].*606'; then
+            triggers+=("**Category 606 (transaction fees) constants touched** → verify blog posts that cite the semantics; add \`last verified\` note if needed.")
+          fi
+
+          if [ ${#triggers[@]} -eq 0 ]; then
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "No sync-check triggers detected."
+            exit 0
+          fi
+
+          {
+            echo "body<<EOF"
+            echo "### 🌐 Website sync-check reminder"
+            echo ""
+            echo "This Android PR touches patterns that historically require a corresponding update to [website/](../tree/main/website). Please answer the sync-check question in the PR description (see the checklist in the PR template)."
+            echo ""
+            echo "**Detected triggers:**"
+            for t in "${triggers[@]}"; do
+              echo "- $t"
+            done
+            echo ""
+            echo "Full trigger table: [plans/website-full-plan.md §16.1](../blob/main/plans/website-full-plan.md#161-product-to-website-sync-check). Rule and checklist: [AGENTS.md → Website Sync Check](../blob/main/AGENTS.md#website-sync-check)."
+            echo ""
+            echo "> This comment is advisory. It does not block merge."
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "hit=true" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update sticky comment
+        if: steps.detect.outputs.hit == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- pesatrack:sync-check-hint -->';
+            const body = `${marker}\n${process.env.BODY}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+        env:
+          BODY: ${{ steps.detect.outputs.body }}
