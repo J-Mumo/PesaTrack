@@ -29,6 +29,7 @@ import java.util.regex.Pattern
  * 6. Buy Airtime (self): "bought ... of airtime on"
  * 7. Buy Airtime (other): "bought ... of airtime for PHONE"
  * 8. Fuliza Send: "Fuliza M-PESA amount sent to"
+ * 9. Pochi la Biashara: "sent to MERCHANT on DATE" (no phone, no account) — classified as Buy Goods
  */
 class MpesaSmsParser : SmsParserStrategy {
 
@@ -126,6 +127,12 @@ class MpesaSmsParser : SmsParserStrategy {
     )
     private val sendMoneyPattern = Pattern.compile(
         "sent to (.+?)\\s+(\\d{10,12})\\s+on", Pattern.CASE_INSENSITIVE
+    )
+    // Pochi la Biashara — "sent to MERCHANT on d/m/yy at h:mm AM/PM". No phone
+    // number and no "for account" clause distinguishes it from Send Money and
+    // Pay Bill. The trailing date anchor keeps the lazy name group tight.
+    private val pochiLaBiasharaPattern = Pattern.compile(
+        "sent to (.+?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}", Pattern.CASE_INSENSITIVE
     )
     private val buyGoodsPattern = Pattern.compile(
         "paid to (.+?)\\.\\s*on", Pattern.CASE_INSENSITIVE
@@ -449,7 +456,23 @@ class MpesaSmsParser : SmsParserStrategy {
             }
         }
 
-        // 8. Buy Goods (Till) — "paid to NAME. on"
+        // 8. Pochi la Biashara — "sent to MERCHANT on DATE" (no phone, no
+        // "for account"). M-PESA's "Business Pouch" product lets small
+        // traders receive money without a till. Semantically a merchant
+        // payment, so classify as BUY_GOODS. Must run after Send Money and
+        // Pay Bill so those still win when their fields are present.
+        pochiLaBiasharaPattern.matcher(message).let { m ->
+            if (m.find()) {
+                val recipientName = m.group(1)?.trim()?.replace(Regex("\\s+"), " ")
+                return TransactionInfo(
+                    paymentType = PaymentType.BUY_GOODS,
+                    recipient = recipientName ?: "",
+                    recipientName = recipientName
+                )
+            }
+        }
+
+        // 9. Buy Goods (Till) — "paid to NAME. on"
         buyGoodsPattern.matcher(message).let { m ->
             if (m.find()) {
                 val recipientName = m.group(1)?.trim()
