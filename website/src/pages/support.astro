@@ -1,0 +1,74 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Support', href: '/support' },
+];
+---
+
+<BaseLayout
+  title="Support"
+  description="Get help with PesaTrack — troubleshooting, feature requests, and how to reach a human."
+  canonical="/support"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Support</h1>
+  <p class="lede">
+    PesaTrack is a solo-built product. Every message is read by a real person —
+    usually within a couple of days.
+  </p>
+
+  <h2>Before you write in</h2>
+  <p>
+    A lot of common issues have answers already:
+  </p>
+  <ul>
+    <li><a href="/faq#sms-not-detected">New M-PESA SMS aren't being detected</a></li>
+    <li><a href="/faq#transaction-missing-or-wrong">A transaction is missing or wrong</a></li>
+    <li><a href="/faq#backup-restore">How do I back up and restore?</a></li>
+    <li><a href="/faq">All FAQs</a></li>
+  </ul>
+
+  <h2>Report a bug or request a feature</h2>
+  <p>
+    The fastest path is to open a GitHub issue — it lets other users see the
+    thread and add context:
+  </p>
+  <p>
+    <a href={`${SITE.githubUrl}/issues/new`} rel="noopener">Open a GitHub issue →</a>
+  </p>
+
+  <h2>Email</h2>
+  <p>
+    For anything private (a screenshot of a real SMS, a billing question if we
+    ever ship a paid tier, a security concern):
+  </p>
+  <p>
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>
+  </p>
+  <p>
+    When you report a parsing problem, please <strong>redact your phone number
+    and M-PESA transaction code</strong> before sending. We don't need those to
+    fix a parser.
+  </p>
+
+  <h2>What we don't do</h2>
+  <p>
+    We don't offer phone or WhatsApp support. There's no live chat. Every
+    exchange stays as text so we can reference it later — for you and for us.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+</style>

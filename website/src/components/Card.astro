@@ -1,0 +1,85 @@
+---
+/**
+ * Card — generic surface for feature grids, blog cards, roadmap columns.
+ */
+export interface Props {
+  href?: string;
+  eyebrow?: string;
+  title?: string;
+  tag?: 'article' | 'div' | 'li';
+}
+const { href, eyebrow, title, tag = 'div' } = Astro.props;
+const Tag = tag;
+---
+
+<Tag class="card">
+  {href ? (
+    <a href={href} class="card-link">
+      {eyebrow && <p class="card-eyebrow">{eyebrow}</p>}
+      {title && <h3 class="card-title">{title}</h3>}
+      <div class="card-body"><slot /></div>
+    </a>
+  ) : (
+    <>
+      {eyebrow && <p class="card-eyebrow">{eyebrow}</p>}
+      {title && <h3 class="card-title">{title}</h3>}
+      <div class="card-body"><slot /></div>
+    </>
+  )}
+</Tag>
+
+<style>
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
+    transition:
+      transform var(--duration-fast) var(--easing-standard),
+      box-shadow var(--duration-fast) var(--easing-standard),
+      border-color var(--duration-fast) var(--easing-standard);
+  }
+
+  .card:has(.card-link:hover),
+  .card:has(.card-link:focus-visible) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-accent);
+  }
+
+  .card-link {
+    color: inherit;
+    text-decoration: none;
+    display: block;
+  }
+
+  .card-link:focus-visible {
+    outline: none;
+  }
+
+  .card-eyebrow {
+    color: var(--color-primary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 var(--space-2);
+  }
+
+  .card-title {
+    font-size: var(--font-size-lg);
+    margin: 0 0 var(--space-2);
+    color: var(--color-text);
+  }
+
+  .card-body {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-snug);
+  }
+
+  .card-body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+</style>

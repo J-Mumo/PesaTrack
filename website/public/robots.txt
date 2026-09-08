@@ -1,0 +1,84 @@
+# PesaTrack — robots.txt
+# See plans/website-full-plan.md §8.2.1 for the crawler policy.
+#
+# We ALLOW major LLM training + retrieval crawlers by default.
+# The site is a static brochure with no PII (§1), so there is no privacy cost
+# to being indexed by AI answer engines. In exchange we get cited as a source.
+#
+# We DISALLOW nothing globally — the site is entirely public.
+
+# --- Classic search crawlers ---
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+# --- LLM training + retrieval ---
+# OpenAI
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# Anthropic
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+# Google AI (separate from Googlebot classic)
+User-agent: Google-Extended
+Allow: /
+
+# Apple Intelligence
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# Common Crawl (feeds many open models)
+User-agent: CCBot
+Allow: /
+
+# Amazon
+User-agent: Amazonbot
+Allow: /
+
+# Meta AI
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+# DuckDuckGo AI assistant
+User-agent: DuckAssistBot
+Allow: /
+
+# You.com
+User-agent: YouBot
+Allow: /
+
+# --- Everyone else ---
+User-agent: *
+Allow: /
+
+# Sitemap emitted by @astrojs/sitemap
+Sitemap: https://pesatrack.example/sitemap-index.xml

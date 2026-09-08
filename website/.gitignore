@@ -1,0 +1,25 @@
+# Astro build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Env
+.env
+.env.local
+.env.production
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# CI / test artifacts
+pa11y-report/
+lighthouse-report/

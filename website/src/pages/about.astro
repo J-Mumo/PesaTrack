@@ -1,0 +1,142 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'About', href: '/about' },
+];
+
+const principles = [
+  {
+    title: 'Awareness before action',
+    detail:
+      "Surface spending facts you didn't know before suggesting changes.",
+  },
+  {
+    title: "Nudge, don't nag",
+    detail:
+      'At most one proactive insight per session. Never use fear framing or dark patterns.',
+  },
+  {
+    title: 'Save and invest by default',
+    detail:
+      'Every analytics surface should, where honest, include a "what you could save or invest" framing.',
+  },
+  {
+    title: 'Privacy is non-negotiable',
+    detail:
+      'No feature that requires sending raw SMS or PII off-device without explicit, revocable consent.',
+  },
+  {
+    title: 'Honest numbers',
+    detail:
+      'No projections without visible assumptions. No "savings" figures that ignore transaction fees.',
+  },
+  {
+    title: 'Local-first',
+    detail: 'Features degrade gracefully offline.',
+  },
+];
+---
+
+<BaseLayout
+  title="About"
+  description="Why PesaTrack exists, who it's for, and the principles we use to decide what to build."
+  canonical="/about"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>About PesaTrack</h1>
+  <p class="lede">{SITE.boilerplate}</p>
+
+  <h2>Mission</h2>
+  <p>
+    Help people improve their finances by building a better <strong>spending
+    and investment culture</strong>. Not by generating anxiety about every
+    transaction. Not by turning saving into a streak. By making the fact of
+    where your money went visible enough that better decisions become
+    obvious.
+  </p>
+
+  <h2>The six principles</h2>
+  <p>
+    Every feature — from a chart to a notification — is checked against these:
+  </p>
+  <ol class="principles">
+    {
+      principles.map((p) => (
+        <li>
+          <h3>{p.title}</h3>
+          <p>{p.detail}</p>
+        </li>
+      ))
+    }
+  </ol>
+
+  <h2>Why we don't do certain things</h2>
+  <p>
+    <strong>Cloud sync of transaction data.</strong> The app does not sync
+    your amounts, recipients, categories, or notes anywhere — not to us,
+    not to a third party. If we ever offer sync, it will be an explicit,
+    opt-in, revocable feature. Not a silent update.
+  </p>
+  <p>
+    <strong>Recommending specific stocks or brokers.</strong> Off-limits.
+    Investment framing on the analytics screens is always an illustration
+    (with the rate and horizon assumption visible) — not personalised
+    financial advice.
+  </p>
+  <p>
+    <strong>Streaks, badges, and "days without going over budget".</strong>
+    Anything that rewards more transactions or amplifies shame is out. We
+    reward awareness and saving.
+  </p>
+  <p>
+    <strong>Third-party analytics or ad SDKs by default.</strong> The one
+    piece of telemetry — anonymous Firebase Analytics — is opt-in and off
+    by default. See <a href="/privacy">Privacy</a> for the exhaustive list of
+    what is and isn't sent.
+  </p>
+
+  <h2>Who builds this</h2>
+  <p>
+    PesaTrack is built by {SITE.copyrightHolder} — currently a small team out
+    of {SITE.country}. Contact:
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+  <p>
+    Source, issues, and the roadmap are on
+    <a href={SITE.githubUrl} rel="noopener">GitHub</a>.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+
+  .principles {
+    list-style: decimal;
+    padding-left: var(--space-6);
+  }
+
+  .principles li {
+    margin-bottom: var(--space-5);
+  }
+
+  .principles h3 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-lg);
+    color: var(--color-primary);
+  }
+
+  .principles p {
+    margin: 0;
+  }
+</style>

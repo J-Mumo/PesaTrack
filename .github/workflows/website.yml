@@ -1,0 +1,193 @@
+name: Website CI
+
+# Guards for the PesaTrack marketing site (website/).
+# See plans/website-full-plan.md §9 (a11y), §16.2 (cadence), §19 Q5 (auto-issue on failure).
+#
+# Runs on:
+#   - every PR that touches website/**
+#   - weekly schedule (Mondays 06:00 UTC) — catches drift from external content changes
+#   - manual dispatch
+#
+# On scheduled failure, an issue is auto-filed (see plans §19 Q5).
+
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  schedule:
+    - cron: '0 6 * * 1'   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: website
+
+jobs:
+  build:
+    name: Build & type-check
+    runs-on: ubuntu-latest
+    outputs:
+      dist-cache-key: ${{ steps.cache-key.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Node version from .nvmrc
+        id: nvmrc
+        run: echo "version=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.nvmrc.outputs.version }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        run: echo "path=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('website/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-dist
+          path: website/dist
+          retention-days: 7
+
+  a11y:
+    name: Accessibility (axe-core)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: website-dist
+          path: website/dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: website/.nvmrc
+
+      - name: Serve dist
+        run: npx --yes http-server dist -p 4321 -s &
+        env:
+          FORCE_COLOR: '0'
+
+      - name: Wait for server
+        run: npx --yes wait-on http://127.0.0.1:4321 --timeout 30000
+
+      # axe-core runs on every URL in the sitemap. Failures block merge on PRs.
+      - name: Run axe-core against built site
+        run: |
+          npx --yes @axe-core/cli \
+            http://127.0.0.1:4321/ \
+            http://127.0.0.1:4321/404.html \
+            --exit
+
+  links:
+    name: Broken-link scan
+    needs: build
+    runs-on: ubuntu-latest
+    # Only fails hard on schedule; PR link failures are informational because they
+    # may reference URLs not yet added (external Play Store link post-launch, etc.).
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: website-dist
+          path: website/dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: website/.nvmrc
+
+      - name: Serve dist
+        run: npx --yes http-server dist -p 4321 -s &
+
+      - name: Wait for server
+        run: npx --yes wait-on http://127.0.0.1:4321 --timeout 30000
+
+      - name: Broken-link check
+        run: |
+          npx --yes linkinator http://127.0.0.1:4321 \
+            --recurse \
+            --skip 'pesatrack\.example|play\.google\.com' \
+            --verbosity error
+
+  # §19 Q5 — auto-file an issue when the scheduled run fails.
+  # Only runs when the trigger was the schedule (not on PRs / pushes).
+  file-issue-on-failure:
+    name: Auto-file CI failure issue
+    needs: [build, a11y, links]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `[website-ci] Scheduled run failed on ${new Date().toISOString().slice(0,10)}`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              'The scheduled website CI run failed.',
+              '',
+              `- Run: ${runUrl}`,
+              `- Trigger: \`${context.eventName}\``,
+              '- See plans/website-full-plan.md §19 Q5 and §16.2.',
+              '',
+              'Check the axe-core and linkinator job logs for the failing rule / URL.',
+            ].join('\n');
+
+            // Dedupe: if there's an open issue with the same date-less title, comment instead.
+            const stem = '[website-ci] Scheduled run failed';
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'website,ci-failure',
+              per_page: 50,
+            });
+            const existing = open.find(i => i.title.startsWith(stem));
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['website', 'ci-failure'],
+              });
+            }

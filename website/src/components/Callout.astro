@@ -1,0 +1,56 @@
+---
+/**
+ * Callout — info / success / warning.
+ * Warning tone reserved for /security per plan §5.
+ */
+export interface Props {
+  variant?: 'info' | 'success' | 'warning';
+  title?: string;
+}
+const { variant = 'info', title } = Astro.props;
+---
+
+<aside class:list={['callout', `callout-${variant}`]} role="note">
+  {title && <p class="callout-title">{title}</p>}
+  <div class="callout-body">
+    <slot />
+  </div>
+</aside>
+
+<style>
+  .callout {
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-md);
+    border-left: 4px solid;
+    margin: var(--space-5) 0;
+  }
+
+  .callout-info {
+    background: var(--color-surface-alt);
+    border-left-color: var(--color-text-muted);
+  }
+
+  .callout-success {
+    background: var(--color-accent-soft);
+    border-left-color: var(--color-accent);
+  }
+
+  .callout-warning {
+    background: var(--color-warning-soft);
+    border-left-color: var(--color-warning);
+  }
+
+  .callout-title {
+    font-weight: var(--font-weight-semibold);
+    margin: 0 0 var(--space-2);
+    color: var(--color-text);
+  }
+
+  .callout-warning .callout-title {
+    color: var(--color-warning);
+  }
+
+  .callout-body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+</style>

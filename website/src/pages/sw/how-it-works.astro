@@ -1,0 +1,180 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import PhoneMock from '~/components/PhoneMock.astro';
+import Button from '~/components/Button.astro';
+import { breadcrumbList, faqPage } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Nyumbani', href: '/sw' },
+  { name: 'Inavyofanya kazi', href: '/sw/how-it-works' },
+];
+
+const howFaq = faqPage([
+  {
+    question: 'PesaTrack inagunduaje muamala mpya wa M-PESA?',
+    answer:
+      "Android hutuma kila SMS inayoingia kwa apps zenye ruhusa. Iwapo mtumaji ni 'MPESA' au 'NCBA', ujumbe hupitishwa kwa parser inayohusika, ambayo hutoa kiasi, mpokeaji, tarehe, na kodi ya muamala. Safu iliyochanganuliwa huingizwa kwenye database ya Room ndani ya kifaa, ikitumia transaction ID kama ufunguo, kwa hiyo hakuna rekodi mbili.",
+  },
+  {
+    question: 'Uainishaji wa kiotomatiki unaamuaje bidhaa ni ya aina gani?',
+    answer:
+      'Njia tatu kwa mfululizo: (1) sheria za maneno muhimu (mfano Uber → Usafiri), (2) uhusiano uliojifunza wa wapokeaji — kama ulishaeleza mpokeaji fulani hapo awali, PesaTrack anakumbuka, (3) njia ya kufikiri kutokana na aina ya malipo kama msaada wa mwisho. Kama hakuna kinachofanana, safu inaingia kwenye UNCATEGORIZED na tangazo dogo.',
+  },
+  {
+    question: 'Mpangilio wa "mwezi unaanza tarehe" unafanyaje kazi?',
+    answer:
+      'Unachagua tarehe ambayo mwezi wako wa bajeti unaanza (mfano tarehe 25 kama ndiyo siku ya mshahara). Bajeti zote, chati za Takwimu za mwezi, kadi ya kiwango cha kuweka akiba, na CSV exports zinatumia kipindi hicho. Kwa hiyo ukiweka 25, "mwezi huu" unaanza tarehe 25 ya mwezi uliopita hadi 24 ya mwezi wa sasa.',
+  },
+]);
+---
+
+<BaseLayout
+  title="Inavyofanya kazi"
+  description="Kutoka SMS ya M-PESA inayofika kwenye simu yako hadi matumizi yaliyoainishwa kwenye bajeti — mtiririko wote, ndani ya kifaa."
+  canonical="/sw/how-it-works"
+  lang="sw-KE"
+  alternates={[
+    { hreflang: 'en', href: '/how-it-works' },
+    { hreflang: 'sw-KE', href: '/sw/how-it-works' },
+    { hreflang: 'x-default', href: '/how-it-works' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs), howFaq]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Inavyofanya kazi</h1>
+  <p class="lede">
+    Kutoka SMS ya M-PESA inayofika kwenye simu yako hadi matumizi yaliyoainishwa
+    ndani ya bajeti — mwanzo mwisho, ndani ya kifaa chako.
+  </p>
+
+  <ol class="steps">
+    <li class="step">
+      <div class="step-body">
+        <h2>1. SMS inafika</h2>
+        <p>
+          M-PESA au NCBA anakutumia SMS ya muamala kama kawaida. Android
+          husambaza SMS hiyo kwa kila app iliyopewa ruhusa — mmoja wao ni
+          PesaTrack.
+        </p>
+      </div>
+      <PhoneMock label="SMS inayoingia" caption="Mtumaji: MPESA" />
+    </li>
+
+    <li class="step reverse">
+      <div class="step-body">
+        <h2>2. Parser inasoma — hakuna kingine</h2>
+        <p>
+          <code>SmsReceiver</code> ya PesaTrack inaangalia mtumaji. Ni
+          <code>MPESA</code> na <code>NCBA</code> pekee zinazoshughulikiwa; SMS
+          nyingine yoyote inapuuzwa mara moja. Parser inayohusika inatoa
+          kiasi, mpokeaji, tarehe, kodi ya muamala, na ada ya muamala.
+        </p>
+      </div>
+      <PhoneMock label="Safu iliyochanganuliwa" caption="KES 240 · Uber · MK7X4A2B" />
+    </li>
+
+    <li class="step">
+      <div class="step-body">
+        <h2>3. Uainishaji wa kiotomatiki unaanza</h2>
+        <p>
+          Njia tatu, kwa mfululizo — sheria za maneno, uhusiano uliojifunza
+          wa wapokeaji, kisha njia ya kufikiri kutokana na aina ya malipo.
+          Kama hakuna kinachofanana, safu inaingia kwenye
+          <code>UNCATEGORIZED</code> na tangazo la upole ili uweze
+          kuitambulisha wakati ukiwa huru.
+        </p>
+      </div>
+      <PhoneMock label="Kategoria imewekwa" caption="Usafiri" />
+    </li>
+
+    <li class="step reverse">
+      <div class="step-body">
+        <h2>4. Bajeti na takwimu zinasasishwa</h2>
+        <p>
+          Skrini ya Bajeti inaonyesha kiasi kilichobaki na siku zilizosalia.
+          Skrini ya Takwimu inasasisha jumla za kategoria, mstari wa mwenendo,
+          kadi ya kiwango cha kuweka akiba, na ulinganifu wa mapato na
+          matumizi. Kila kitu kwa wakati halisi. Hakuna safari kwa server.
+        </p>
+      </div>
+      <PhoneMock label="Bajeti imesasishwa" caption="KES 3,160 zimebaki · siku 12" />
+    </li>
+
+    <li class="step">
+      <div class="step-body">
+        <h2>5. Hakuna kitu kinachotoka kwenye kifaa</h2>
+        <p>
+          Safu iko kwenye database ya Room ndani ya simu. Uchambuzi — kama
+          umechagua kuutumia — unapokea matukio yasiyokuwa na utambulisho
+          kama "amefungua skrini ya Takwimu". Hakuna kiasi, hakuna wapokeaji,
+          hakuna majina ya kategoria, hakuna maandishi. Ona
+          <a href="/sw/privacy">Faragha</a>.
+        </p>
+      </div>
+      <PhoneMock label="Hifadhi ya ndani" caption="Room DB · v15" />
+    </li>
+  </ol>
+
+  <section class="cta">
+    <h2>Ijaribu</h2>
+    <p>
+      Sakinisha kutoka Google Play, ruhusu SMS, na muamala unaofuata wa M-PESA
+      utakuwa ndani ya app.
+    </p>
+    <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+      Pakua kwenye Google Play
+    </Button>
+  </section>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .steps {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-10) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .step {
+    display: grid;
+    gap: var(--space-6);
+    grid-template-columns: 1fr;
+    align-items: center;
+  }
+
+  @media (min-width: 800px) {
+    .step {
+      grid-template-columns: 1.4fr 1fr;
+    }
+    .step.reverse .step-body {
+      order: 2;
+    }
+  }
+
+  .step h2 {
+    margin-top: 0;
+  }
+
+  .cta {
+    background: var(--color-accent-soft);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    text-align: center;
+    margin-top: var(--space-12);
+  }
+
+  .cta h2 {
+    margin-top: 0;
+  }
+</style>

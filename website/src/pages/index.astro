@@ -1,0 +1,251 @@
+---
+/**
+ * Landing page — real M1 content.
+ * Per plan §4.1: hero, "What you'll see", "Why this is different", "What it tracks",
+ * FAQ preview, final CTA.
+ */
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Button from '~/components/Button.astro';
+import Card from '~/components/Card.astro';
+import PhoneMock from '~/components/PhoneMock.astro';
+import { softwareApplication } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const softwareLd = softwareApplication();
+
+const alternates = [
+  { hreflang: 'en', href: '/' },
+  { hreflang: 'sw-KE', href: '/sw' },
+  { hreflang: 'x-default', href: '/' },
+];
+---
+
+<BaseLayout
+  title={SITE.name}
+  description={SITE.description}
+  canonical="/"
+  alternates={alternates}
+  jsonLd={[softwareLd]}
+>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">M-PESA · Bank SMS · Kenya</p>
+      <h1>{SITE.tagline}</h1>
+      <p class="lede">{SITE.description}</p>
+      <div class="cta-row">
+        <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+          Get on Google Play
+        </Button>
+        <Button href="/how-it-works" variant="secondary" size="lg">
+          See how it works
+        </Button>
+      </div>
+      <p class="tldr">
+        <strong>TL;DR:</strong> PesaTrack reads M-PESA and NCBA SMS on your
+        Android phone, categorises the spend, and shows budgets and analytics.
+        Your transaction data never leaves the device.
+      </p>
+    </div>
+
+    <div class="hero-mock" aria-hidden="true">
+      <PhoneMock label="This month" caption="KES 24,180 spent · 42% of income" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>What you'll see on day one</h2>
+    <div class="triple">
+      <PhoneMock label="Expenses" caption="Auto-categorised from SMS" />
+      <PhoneMock label="Budgets" caption="Aligned to your payday" />
+      <PhoneMock label="Analytics" caption="Trends, savings rate, income" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Why this is different</h2>
+    <div class="grid-3">
+      <Card title="Awareness, not anxiety">
+        <p>
+          Neutral facts about your spending — no shame framing, no streaks, no
+          "you overspent". One insight per session, max.
+        </p>
+      </Card>
+      <Card title="Honest numbers">
+        <p>
+          Transaction fees get their own line. Projections show their
+          assumptions. If we don't have data, we don't invent it.
+        </p>
+      </Card>
+      <Card title="Privacy by construction">
+        <p>
+          Transaction data never leaves the device. The only telemetry is
+          opt-in anonymous analytics — off by default.
+        </p>
+      </Card>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>What it tracks today</h2>
+    <ul class="tracks">
+      <li><strong>M-PESA</strong> — Send Money, Buy Goods, Pay Bill, Withdrawal, Received, Deposit, Airtime, Fuliza, M-Shwari</li>
+      <li><strong>NCBA</strong> — Card purchases, funds transfers, credits, Loop wallet</li>
+      <li><strong>Imports</strong> — M-PESA PDF statements and Excel spreadsheets, on-device</li>
+      <li><strong>Manual entries</strong> — for cash or anything else</li>
+    </ul>
+    <p>
+      More banks are on the <a href="/roadmap">roadmap</a> as their SMS
+      formats stabilise.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Common questions</h2>
+    <ul class="faq-preview">
+      <li><a href="/faq#why-sms-permission">Why does PesaTrack need SMS permission?</a></li>
+      <li><a href="/faq#does-pesatrack-read-all-sms">Does it read all my SMS?</a></li>
+      <li><a href="/faq#does-pesatrack-send-data">Does anything leave my phone?</a></li>
+      <li><a href="/faq#sms-not-detected">New SMS aren't being detected — what's wrong?</a></li>
+    </ul>
+    <p><a href="/faq">All FAQs →</a></p>
+  </section>
+
+  <section class="cta-section">
+    <h2>Get PesaTrack</h2>
+    <p class="lede">Free. Android. No account needed.</p>
+    <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+      Get on Google Play
+    </Button>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: 1fr;
+    padding: var(--space-10) 0 var(--space-12);
+    align-items: center;
+  }
+
+  @media (min-width: 900px) {
+    .hero {
+      grid-template-columns: 1.4fr 1fr;
+    }
+  }
+
+  .eyebrow {
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-3);
+  }
+
+  .hero h1 {
+    font-size: var(--font-size-5xl);
+    line-height: 1.1;
+    margin: 0 0 var(--space-5);
+  }
+
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-6);
+    max-width: 620px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+
+  .tldr {
+    background: var(--color-surface);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    max-width: 620px;
+  }
+
+  .section {
+    padding: var(--space-12) 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .section h2 {
+    margin-top: 0;
+    margin-bottom: var(--space-8);
+  }
+
+  .triple {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 700px) {
+    .triple {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .grid-3 {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 700px) {
+    .grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .tracks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 720px;
+  }
+
+  .tracks li {
+    padding-left: var(--space-4);
+    border-left: 3px solid var(--color-accent);
+  }
+
+  .faq-preview {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 720px;
+  }
+
+  .cta-section {
+    background: var(--color-accent-soft);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-8);
+    text-align: center;
+    margin: var(--space-12) 0;
+  }
+
+  .cta-section h2 {
+    margin-top: 0;
+  }
+
+  .cta-section .lede {
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>

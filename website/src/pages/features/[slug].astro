@@ -1,0 +1,114 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+export async function getStaticPaths() {
+  const features = await getCollection('features', ({ data }) => !data.deprecated);
+  return features.map((f) => ({
+    params: { slug: f.id.replace(/\.(md|mdx)$/, '') },
+    props: { feature: f },
+  }));
+}
+
+const { feature } = Astro.props;
+const { Content } = await render(feature);
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Features', href: '/features' },
+  { name: feature.data.title, href: `/features/${feature.id.replace(/\.(md|mdx)$/, '')}` },
+];
+---
+
+<BaseLayout
+  title={feature.data.title}
+  description={feature.data.dek}
+  canonical={`/features/${feature.id.replace(/\.(md|mdx)$/, '')}`}
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <p class="eyebrow">{feature.data.principle}</p>
+  <h1>{feature.data.title}</h1>
+  <p class="dek">{feature.data.dek}</p>
+
+  <div class="does-grid">
+    <section class="does">
+      <h2>What it does</h2>
+      <ul>
+        {feature.data.doesDo.map((line: string) => <li>{line}</li>)}
+      </ul>
+    </section>
+
+    <section class="does-not">
+      <h2>What it doesn't do</h2>
+      <ul>
+        {feature.data.doesNotDo.map((line: string) => <li>{line}</li>)}
+      </ul>
+    </section>
+  </div>
+
+  <Content />
+
+  <p class="back"><a href="/features">← All features</a></p>
+</BaseLayout>
+
+<style>
+  .eyebrow {
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-2);
+  }
+
+  .dek {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-8);
+  }
+
+  .does-grid {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+    margin: var(--space-8) 0;
+  }
+
+  @media (min-width: 700px) {
+    .does-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .does,
+  .does-not {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .does h2,
+  .does-not h2 {
+    margin-top: 0;
+    font-size: var(--font-size-lg);
+  }
+
+  .does h2 {
+    color: var(--color-primary);
+  }
+
+  .does-not h2 {
+    color: var(--color-text-muted);
+  }
+
+  .back {
+    margin-top: var(--space-10);
+    color: var(--color-text-muted);
+  }
+</style>

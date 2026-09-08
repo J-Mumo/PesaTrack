@@ -1,0 +1,164 @@
+---
+import { SITE, NAV } from '~/data/site';
+import { langFromPath, MIRRORED_PATHS, t } from '~/i18n/strings';
+
+const year = new Date().getFullYear();
+const lang = langFromPath(Astro.url.pathname);
+const strings = t(lang);
+const prefix = lang === 'sw' ? '/sw' : '';
+
+// On Swahili, prefix only the routes we've translated. Untranslated pages
+// (changelog, roadmap, about, press, support, security, docs) stay on the
+// English canonical — that's honest and it avoids 404s.
+const prefixIfTranslated = (href: string) =>
+  MIRRORED_PATHS.has(href) ? `${prefix}${href}` : href;
+
+const productLinks = NAV.footer.product.map((item) => ({
+  ...item,
+  href: prefixIfTranslated(item.href),
+}));
+const companyLinks = NAV.footer.company;
+const legalLinks = NAV.footer.legal.map((item) => ({
+  ...item,
+  href: prefixIfTranslated(item.href),
+}));
+---
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <p class="brand-name">{SITE.name}</p>
+      <p class="tagline">{lang === 'sw' ? strings.footer.tagline : SITE.tagline}</p>
+      <!-- Boilerplate — see plans/website-full-plan.md §8.2.6. Keep English
+           for AI answer engines regardless of UI language, so the machine-
+           readable boilerplate stays canonical. -->
+      <p class="boilerplate">{SITE.boilerplate}</p>
+    </div>
+
+    <div class="footer-cols">
+      <div>
+        <h3 class="col-title">{strings.footer.product}</h3>
+        <ul>
+          {productLinks.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3 class="col-title">{strings.footer.company}</h3>
+        <ul>
+          {companyLinks.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3 class="col-title">{strings.footer.legal}</h3>
+        <ul>
+          {legalLinks.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="container footer-meta">
+    <p>{strings.footer.copyright(year, SITE.copyrightHolder)} {lang === 'sw' ? `Imetengenezwa ${SITE.country}.` : `Made in ${SITE.country}.`}</p>
+    <p>
+      <a href={SITE.playStoreUrl} rel="noopener">Google Play</a>
+    </p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    margin-top: var(--space-16);
+    padding: var(--space-12) 0 var(--space-8);
+  }
+
+  .footer-inner {
+    display: grid;
+    gap: var(--space-10);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 768px) {
+    .footer-inner {
+      grid-template-columns: 1.4fr 2fr;
+    }
+  }
+
+  .brand-name {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    margin: 0 0 var(--space-2);
+    color: var(--color-primary);
+  }
+
+  .tagline {
+    color: var(--color-text);
+    margin: 0 0 var(--space-3);
+  }
+
+  .boilerplate {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    max-width: 42ch;
+    margin: 0;
+  }
+
+  .footer-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+
+  .col-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0 0 var(--space-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .footer-cols ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .footer-cols li {
+    margin-bottom: var(--space-2);
+  }
+
+  .footer-cols a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+  }
+
+  .footer-cols a:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
+
+  .footer-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-10);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .footer-meta p {
+    margin: 0;
+  }
+</style>

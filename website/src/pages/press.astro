@@ -1,0 +1,86 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Press', href: '/press' },
+];
+---
+
+<BaseLayout
+  title="Press & media kit"
+  description="Facts, quotes, and downloadable assets for writing about PesaTrack."
+  canonical="/press"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Press &amp; media kit</h1>
+  <p class="lede">
+    Everything you need to write about PesaTrack accurately. Machine-readable
+    facts also live at <a href="/factsheet.json">/factsheet.json</a>.
+  </p>
+
+  <h2>One-liner</h2>
+  <blockquote>{SITE.tagline}</blockquote>
+
+  <h2>Short description (≤ 280 characters)</h2>
+  <blockquote>{SITE.description}</blockquote>
+
+  <h2>Boilerplate paragraph</h2>
+  <blockquote>{SITE.boilerplate}</blockquote>
+
+  <h2>Facts</h2>
+  <ul>
+    <li><strong>Name:</strong> {SITE.name}</li>
+    <li><strong>Publisher:</strong> {SITE.copyrightHolder}</li>
+    <li><strong>Country:</strong> {SITE.country}</li>
+    <li><strong>Platform:</strong> Android (Google Play)</li>
+    <li><strong>Price:</strong> Free</li>
+    <li><strong>Internet permission:</strong> Yes, exclusively for opt-in anonymous analytics (off by default). Transaction data never transmitted.</li>
+    <li><strong>Supported SMS senders:</strong> M-PESA, NCBA</li>
+    <li><strong>Language:</strong> English (Swahili on roadmap)</li>
+  </ul>
+
+  <h2>Assets</h2>
+  <p>
+    Logo, screenshots, and a media-ready fact sheet PDF: email
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> with
+    "PRESS" in the subject and we'll send a link.
+  </p>
+
+  <h2>Interview requests</h2>
+  <p>
+    We're happy to talk about the product on the record. Please include your
+    outlet, deadline, and a rough topic when you write. Same address:
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+
+  <h2>What we won't say</h2>
+  <p>
+    We will not project financial outcomes, endorse specific brokers or
+    investment products, or claim to make anyone rich. Any framing on the
+    product about savings or investing is illustration with visible
+    assumptions — see <a href="/about">About</a>.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+
+  blockquote {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-surface);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-lg);
+  }
+</style>

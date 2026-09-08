@@ -1,0 +1,71 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Card from '~/components/Card.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+const features = (await getCollection('features', ({ data }) => !data.deprecated))
+  .sort((a, b) => a.data.order - b.data.order);
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Features', href: '/features' },
+];
+---
+
+<BaseLayout
+  title="Features"
+  description="Every feature in PesaTrack — what it does, what it explicitly doesn't do, and which principle it serves."
+  canonical="/features"
+  jsonLd={[breadcrumbList(crumbs)]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Features</h1>
+  <p class="lede">
+    Each feature card tells you what it does, what it deliberately doesn't
+    do, and which product principle it exists to serve.
+  </p>
+
+  <div class="grid">
+    {
+      features.map((f) => (
+        <Card
+          href={`/features/${f.id.replace(/\.(md|mdx)$/, '')}`}
+          eyebrow={f.data.principle}
+          title={f.data.title}
+        >
+          <p>{f.data.dek}</p>
+        </Card>
+      ))
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+    margin-top: var(--space-8);
+  }
+
+  @media (min-width: 700px) {
+    .grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 1000px) {
+    .grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+</style>

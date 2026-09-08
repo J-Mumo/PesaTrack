@@ -1,0 +1,186 @@
+---
+/**
+ * Search — dynamic Pagefind-backed island for /blog and /faq.
+ *
+ * Loads the Pagefind bundle only when the user focuses the input, so the
+ * ~30 KB gzipped WASM never blocks first paint. If the bundle is missing
+ * (dev-mode preview), the input degrades to plain text and shows a hint.
+ *
+ * Pagefind indexes elements marked with `data-pagefind-body`. See:
+ *   - src/pages/blog/[slug].astro
+ *   - src/pages/faq.astro
+ */
+export interface Props {
+  placeholder?: string;
+}
+const { placeholder = 'Search…' } = Astro.props;
+---
+
+<div class="search" data-search>
+  <label class="search-label">
+    <span class="visually-hidden">Search</span>
+    <input
+      type="search"
+      class="search-input"
+      data-search-input
+      placeholder={placeholder}
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </label>
+  <div class="search-results" data-search-results role="region" aria-live="polite"></div>
+</div>
+
+<script>
+  type PagefindResult = {
+    id: string;
+    data: () => Promise<{
+      url: string;
+      excerpt: string;
+      meta?: Record<string, string> & { title?: string };
+    }>;
+  };
+  type Pagefind = { search: (q: string) => Promise<{ results: PagefindResult[] }> };
+
+  // Only load once per page.
+  let loader: Promise<Pagefind | null> | null = null;
+
+  async function loadPagefind(): Promise<Pagefind | null> {
+    if (loader) return loader;
+    loader = (async () => {
+      try {
+        // Pagefind writes to /_pagefind/ during build (see package.json build).
+        // The @vite-ignore is required because the URL is not statically resolvable.
+        const mod = (await import(
+          /* @vite-ignore */ '/_pagefind/pagefind.js'
+        )) as Pagefind & { init?: () => Promise<void> };
+        if (typeof mod.init === 'function') await mod.init();
+        return mod;
+      } catch {
+        return null;
+      }
+    })();
+    return loader;
+  }
+
+  function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    return ((...args: unknown[]) => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    }) as T;
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-search]').forEach((root) => {
+    const input = root.querySelector<HTMLInputElement>('[data-search-input]');
+    const results = root.querySelector<HTMLDivElement>('[data-search-results]');
+    if (!input || !results) return;
+
+    const run = debounce(async () => {
+      const q = input.value.trim();
+      if (q.length < 2) {
+        results.innerHTML = '';
+        return;
+      }
+      const pf = await loadPagefind();
+      if (!pf) {
+        results.innerHTML =
+          '<p class="search-hint">Search index unavailable. Try the full site in production.</p>';
+        return;
+      }
+      const { results: hits } = await pf.search(q);
+      const top = hits.slice(0, 8);
+      if (top.length === 0) {
+        results.innerHTML = '<p class="search-hint">No matches.</p>';
+        return;
+      }
+      const items = await Promise.all(top.map((r) => r.data()));
+      results.innerHTML = items
+        .map(
+          (d) =>
+            `<a class="search-hit" href="${d.url}"><strong>${
+              d.meta?.title ?? d.url
+            }</strong><span>${d.excerpt}</span></a>`
+        )
+        .join('');
+    }, 120);
+
+    input.addEventListener('input', run);
+    input.addEventListener('focus', () => loadPagefind(), { once: true });
+  });
+</script>
+
+<style is:global>
+  .search {
+    margin: var(--space-6) 0;
+  }
+
+  .search-label {
+    display: block;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-base);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .search-input:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .search-results {
+    margin-top: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .search-hit {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--color-text);
+  }
+
+  .search-hit:hover {
+    border-color: var(--color-accent);
+  }
+
+  .search-hit strong {
+    color: var(--color-primary);
+  }
+
+  .search-hit span {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .search-hint {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin: var(--space-2) 0 0;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

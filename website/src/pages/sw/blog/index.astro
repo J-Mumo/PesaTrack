@@ -1,0 +1,94 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Card from '~/components/Card.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+const posts = (
+  await getCollection('blog', ({ data }) => !data.draft && data.locale === 'sw')
+).sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
+
+const crumbs = [
+  { name: 'Nyumbani', href: '/sw' },
+  { name: 'Blogu', href: '/sw/blog' },
+];
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString('sw-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+---
+
+<BaseLayout
+  title="Blogu"
+  description="Maelezo kuhusu M-PESA, utamaduni wa bajeti, faragha, na jinsi PesaTrack inavyojengwa. Uelewa kabla ya kitendo."
+  canonical="/sw/blog"
+  lang="sw-KE"
+  alternates={[
+    { hreflang: 'en', href: '/blog' },
+    { hreflang: 'sw-KE', href: '/sw/blog' },
+    { hreflang: 'x-default', href: '/blog' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs)]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Blogu</h1>
+  <p class="lede">
+    Maelezo kuhusu M-PESA, utamaduni wa bajeti, faragha, na jinsi PesaTrack
+    inavyojengwa. Uelewa kabla ya kitendo.
+  </p>
+
+  <ul class="posts">
+    {
+      posts.map((p) => {
+        const slug = p.id.replace(/^sw\//, '').replace(/\.(md|mdx)$/, '');
+        return (
+          <li>
+            <Card
+              tag="article"
+              href={`/sw/blog/${slug}`}
+              eyebrow={`${formatDate(p.data.publishedAt)} · ${p.data.tags.join(', ')}`}
+              title={p.data.title}
+            >
+              <p>{p.data.dek}</p>
+            </Card>
+          </li>
+        );
+      })
+    }
+  </ul>
+
+  {
+    posts.length === 0 && (
+      <p class="empty">Hakuna posts bado. Rudi hivi karibuni.</p>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .posts {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-6) 0 0;
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 800px) {
+    .posts {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+    margin-top: var(--space-8);
+  }
+</style>

@@ -1,0 +1,96 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Callout from '~/components/Callout.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Security', href: '/security' },
+];
+---
+
+<BaseLayout
+  title="Security"
+  description="How PesaTrack protects your data — threat model, storage, permissions, and what we can't protect you from."
+  canonical="/security"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Security</h1>
+  <p class="lede">
+    Short version: your transaction data stays on the device, third-party
+    analytics are off by default, and the app can be locked with a PIN. Here's
+    the honest, unabridged version.
+  </p>
+
+  <h2>What we protect</h2>
+  <ul>
+    <li><strong>Confidentiality of transaction data.</strong> Your amounts,
+      recipients, categories, budgets, and notes live in a private Room
+      database inside the app's sandbox. Other apps on your phone can't
+      read it, and none of it is ever transmitted.</li>
+    <li><strong>Analytics are opt-in and anonymous.</strong> The app does
+      hold <code>INTERNET</code> for <em>opt-in</em> Firebase Analytics.
+      Off by default. When on, we never send SMS content, transaction
+      amounts, recipient names, category names, or note text.
+      See <a href="/privacy#analytics">Privacy § Analytics</a>.</li>
+    <li><strong>Casual access.</strong> The optional PIN lock plus biometric
+      unlock stops someone who picks up your unlocked phone from browsing
+      your finances.</li>
+  </ul>
+
+  <h2>What we cannot protect against</h2>
+  <Callout variant="warning" title="Be honest about threat model">
+    <p>
+      PesaTrack's PIN is designed to defeat <em>casual</em> access. It is not a
+      substitute for a strong device passcode. A determined attacker with
+      forensic tools and physical access to an unlocked device can, in
+      principle, read the app's database.
+    </p>
+    <p>
+      If your threat model includes that scenario, keep Android's disk
+      encryption on (it is by default on modern devices), use a strong device
+      passcode, and don't enable "remember device" on biometric.
+    </p>
+  </Callout>
+
+  <h2>Permissions we ask for</h2>
+  <ul>
+    <li><code>READ_SMS</code> / <code>RECEIVE_SMS</code> — to auto-detect M-PESA
+      and NCBA transactions. See <a href="/faq#does-pesatrack-read-all-sms">the FAQ</a>
+      for what we do and don't read.</li>
+    <li><code>POST_NOTIFICATIONS</code> — for the "new transaction" and
+      "uncategorised" notifications. Optional.</li>
+    <li><code>USE_BIOMETRIC</code> — only if you enable biometric unlock.</li>
+    <li><code>SCHEDULE_EXACT_ALARM</code> — for recurring reminders you set.</li>
+    <li><code>INTERNET</code> / <code>ACCESS_NETWORK_STATE</code> — exclusively
+      for opt-in Firebase Analytics. Off by default; no transaction data or PII
+      is ever transmitted.</li>
+  </ul>
+
+  <h2>What we deliberately don't ask for</h2>
+  <ul>
+    <li><strong>READ_CONTACTS.</strong> We resolve recipients from the SMS
+      itself, not from your address book.</li>
+    <li><strong>Location.</strong> We do not want it.</li>
+    <li><strong>Ad SDKs, cross-app IDs, third-party trackers.</strong> None.</li>
+  </ul>
+
+  <h2>Reporting a security issue</h2>
+  <p>
+    Email <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> with
+    "SECURITY" in the subject line. Please do not open a public GitHub issue
+    for a vulnerability that could be exploited before a fix ships.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+</style>

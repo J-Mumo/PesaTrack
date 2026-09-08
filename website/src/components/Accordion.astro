@@ -1,0 +1,75 @@
+---
+/**
+ * Accordion — native <details>/<summary>. Zero JS, keyboard-accessible.
+ * Used by /faq.
+ */
+export interface Props {
+  question: string;
+  anchor?: string;
+  open?: boolean;
+}
+const { question, anchor, open = false } = Astro.props;
+---
+
+<details class="accordion" id={anchor} open={open}>
+  <summary class="accordion-summary">
+    <span class="accordion-question">{question}</span>
+    <span class="accordion-icon" aria-hidden="true">+</span>
+  </summary>
+  <div class="accordion-body">
+    <slot />
+  </div>
+</details>
+
+<style>
+  .accordion {
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-4) 0;
+  }
+
+  .accordion-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+    cursor: pointer;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    list-style: none;
+  }
+
+  .accordion-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .accordion-question {
+    flex: 1;
+  }
+
+  .accordion-icon {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-alt);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-bold);
+    transition: transform var(--duration-fast) var(--easing-standard);
+  }
+
+  .accordion[open] .accordion-icon {
+    transform: rotate(45deg);
+  }
+
+  .accordion-body {
+    padding-top: var(--space-3);
+    color: var(--color-text-muted);
+  }
+
+  .accordion-body :global(p:last-child) {
+    margin-bottom: 0;
+  }
+</style>

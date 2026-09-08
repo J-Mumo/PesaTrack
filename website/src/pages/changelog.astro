@@ -1,0 +1,100 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+import { marked } from 'marked';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+// Read the source of truth at build time.
+// Per plans/website-full-plan.md §16.1, /changelog derives from _docs/releases.md.
+const releasesPath = path.resolve(process.cwd(), '..', '_docs', 'releases.md');
+const raw = fs.readFileSync(releasesPath, 'utf8');
+
+// marked handles GFM tables and headings. We don't need the emoji cleanup —
+// mojibake in the source (Windows encoding artefacts) will render as-is, which
+// is a signal to fix the source file, not to paper over it here.
+const html = marked.parse(raw, { gfm: true, breaks: false }) as string;
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Changelog', href: '/changelog' },
+];
+---
+
+<BaseLayout
+  title="Changelog"
+  description="Every Play Store release of PesaTrack — dates, version codes, and what changed."
+  canonical="/changelog"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+  <p class="source">
+    Source of truth:
+    <a href={`${SITE.githubUrl}/blob/main/_docs/releases.md`} rel="noopener">
+      _docs/releases.md
+    </a>
+  </p>
+  <article class="changelog" set:html={html} />
+</BaseLayout>
+
+<style>
+  .source {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-6);
+  }
+
+  .changelog :global(h2) {
+    margin-top: var(--space-10);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .changelog :global(h1:first-child) {
+    margin-top: 0;
+  }
+
+  .changelog :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--space-4) 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .changelog :global(th),
+  .changelog :global(td) {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .changelog :global(th) {
+    background: var(--color-surface-alt);
+  }
+
+  .changelog :global(code) {
+    background: var(--color-surface-alt);
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    font-size: 0.92em;
+  }
+
+  .changelog :global(pre) {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    overflow-x: auto;
+    font-size: var(--font-size-sm);
+  }
+
+  .changelog :global(blockquote) {
+    margin: var(--space-4) 0;
+    padding-left: var(--space-4);
+    border-left: 3px solid var(--color-accent);
+    color: var(--color-text-muted);
+  }
+</style>

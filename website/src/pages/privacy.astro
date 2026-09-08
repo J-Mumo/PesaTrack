@@ -1,0 +1,214 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Callout from '~/components/Callout.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const lastUpdated = 'September 3, 2026';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Privacy', href: '/privacy' },
+];
+---
+
+<BaseLayout
+  title="Privacy policy"
+  description="How PesaTrack handles your SMS, transaction data, and optional analytics. Plain-English privacy policy."
+  canonical="/privacy"
+  alternates={[
+    { hreflang: 'en', href: '/privacy' },
+    { hreflang: 'sw-KE', href: '/sw/privacy' },
+    { hreflang: 'x-default', href: '/privacy' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Privacy policy</h1>
+  <p class="subtitle">Last updated: {lastUpdated}</p>
+
+  <Callout variant="success" title="Key point">
+    <p>
+      Your transactions, SMS messages, amounts, and personal information stay
+      on your device. The only data that ever leaves your phone is
+      <em>anonymous usage analytics</em> — and only if you explicitly opt in.
+      You can turn this off at any time in <em>Settings → Privacy</em>.
+    </p>
+  </Callout>
+
+  <h2 id="what-pesatrack-does">1. What PesaTrack does</h2>
+  <p>
+    PesaTrack is a passive expense tracker for Android. It reads both incoming
+    and outgoing M-PESA and supported bank SMS messages, parses transaction
+    details (amount, recipient, date, transaction code), and saves them locally
+    on your device for categorisation, budgeting, and review.
+  </p>
+
+  <h2 id="sms-data">2. SMS data we access</h2>
+  <p>PesaTrack requests the following Android permissions:</p>
+  <ul>
+    <li><strong>RECEIVE_SMS</strong> — to detect M-PESA and supported bank SMS
+      messages (incoming and outgoing transactions) in real time</li>
+    <li><strong>READ_SMS</strong> — to import historical transaction SMS from
+      your inbox (user-initiated only)</li>
+  </ul>
+  <p>PesaTrack <strong>only reads SMS from specific senders</strong>:</p>
+  <ul>
+    <li>M-PESA (sender: "MPESA")</li>
+    <li>NCBA Bank (sender: "NCBA")</li>
+  </ul>
+  <p>
+    Personal SMS from contacts, promotional messages, and SMS from unsupported
+    senders are <strong>never read, accessed, or stored</strong>.
+  </p>
+
+  <h2 id="data-stored-on-device">3. What data is stored on your device</h2>
+  <p>From each qualifying transaction SMS, PesaTrack extracts and stores <strong>locally</strong>:</p>
+  <ul>
+    <li>Transaction amount (KES)</li>
+    <li>Recipient name and number/till/paybill</li>
+    <li>Transaction date and time</li>
+    <li>M-PESA transaction code (e.g. "ABC123XYZ")</li>
+    <li>Transaction cost (if present in the SMS)</li>
+    <li>Payment type (Send Money, Buy Goods, Pay Bill, etc.)</li>
+  </ul>
+  <p>
+    You may also manually enter expenses or import from Excel/PDF. Categories,
+    budgets, and settings are stored locally in a Room database and DataStore
+    preferences.
+  </p>
+
+  <h2 id="analytics">4. Anonymous usage analytics (opt-in)</h2>
+  <p>
+    Starting in version 1.5.0, PesaTrack can send <strong>anonymous usage
+    analytics</strong> so we can see which features help and which need work.
+    This is <strong>off by default</strong>. On first launch (or after updating
+    from an older version) you'll see a one-time prompt — say yes, dismiss it,
+    or change your mind later.
+  </p>
+
+  <p><strong>What we send when analytics are on:</strong></p>
+  <ul>
+    <li>Which screens you open (e.g. "home", "analytics", "budget")</li>
+    <li>Which features you tap (e.g. "import completed", "budget created")</li>
+    <li>App version, Android version, device model, and country</li>
+    <li>Crash and error signals</li>
+    <li>An anonymous, rotating installation ID from Firebase Analytics</li>
+  </ul>
+
+  <p><strong>What we never send, even with analytics on:</strong></p>
+  <ul>
+    <li>The content of any SMS</li>
+    <li>Transaction amounts, merchants, till/paybill numbers, or transaction codes</li>
+    <li>Category names, budget names, or note text you type in the app</li>
+    <li>Your name, phone number, email, or M-PESA number</li>
+    <li>Anything else that could identify you personally</li>
+  </ul>
+
+  <p>
+    Analytics are processed by <strong>Google Firebase Analytics</strong>. See
+    <a href="https://policies.google.com/privacy" rel="noopener">Google's
+    privacy policy</a> for how they handle this. We do not use Firebase for
+    advertising, personalisation, or any purpose beyond product improvement.
+  </p>
+
+  <p>
+    <strong>Turning analytics off:</strong> Open PesaTrack, tap Settings, and
+    toggle "Anonymous usage data" off. Collection stops immediately and the
+    anonymous installation ID is reset so the previous session's identifier
+    can't be associated with future data.
+  </p>
+
+  <h2 id="data-sharing">5. Data sharing</h2>
+  <p><strong>Your transaction data is never shared.</strong> The only data
+  that leaves your device is the anonymous analytics described in Section 4 —
+  and only if you opt in.</p>
+  <ul>
+    <li>Transaction data is never sent to any server or cloud service</li>
+    <li>Transaction data is never shared with any third party, ad network, or SDK</li>
+    <li>No data — transactional or analytical — is sold, rented, or licensed</li>
+  </ul>
+
+  <h3 id="user-initiated-sharing">5.5 User-initiated sharing</h3>
+  <p>Certain features let you voluntarily share information outside the app:</p>
+  <ul>
+    <li><strong>Feedback emails.</strong> "Contact &amp; Feedback" prepares a
+      draft email. Usage context (app version, milestones) may be pre-filled to
+      help us assist you. Review and remove anything before sending.</li>
+    <li><strong>Backup files.</strong> Database backups you create and export
+      may contain your expense data and settings. They stay on your device
+      unless you share them.</li>
+    <li><strong>CSV exports.</strong> Exports stay on-device unless you share
+      them via Android's share sheet.</li>
+  </ul>
+
+  <h3 id="google-play-services">5.6 Google Play services</h3>
+  <ul>
+    <li><strong>Firebase Analytics</strong> — for the opt-in analytics in Section 4</li>
+    <li><strong>Google Play In-App Review API</strong> — may prompt you to rate
+      the app within the Play review flow. No personal data is shared with
+      PesaTrack through this.</li>
+  </ul>
+
+  <h2 id="security">6. Data security</h2>
+  <p>
+    PesaTrack offers an optional PIN lock with biometric unlock to prevent
+    casual unauthorised access. The PIN is stored as a salted SHA-256 hash —
+    the raw PIN is never stored.
+  </p>
+  <p>
+    Your data inherits the security of your Android device (device encryption,
+    screen lock). PesaTrack does not implement additional database encryption;
+    the threat model is casual-access prevention, not forensic-level protection.
+    See <a href="/security">/security</a> for the full write-up.
+  </p>
+  <p>Analytics data (when enabled) is transmitted to Firebase over HTTPS/TLS.</p>
+
+  <h2 id="deletion">7. Your rights &amp; data deletion</h2>
+  <ul>
+    <li><strong>View:</strong> all expense data is visible in-app at all times</li>
+    <li><strong>Edit:</strong> re-categorise, exclude, or modify any expense</li>
+    <li><strong>Delete on-device data:</strong> Android Settings → Apps →
+      PesaTrack → Storage → Clear data</li>
+    <li><strong>Disable analytics:</strong> PesaTrack → Settings → Privacy</li>
+    <li><strong>Reset analytics ID:</strong> turning analytics off also resets
+      the anonymous Firebase installation ID</li>
+    <li><strong>Uninstall:</strong> removes all stored data permanently</li>
+  </ul>
+  <p>
+    Because analytics data is anonymous and not tied to your identity, we
+    cannot look up or delete specific analytics records on request. Turning
+    analytics off stops future collection and severs the link between past and
+    future sessions on your device.
+  </p>
+
+  <h2 id="children">8. Children's privacy</h2>
+  <p>
+    PesaTrack is not directed at children under 13. The app requires access to
+    financial SMS, which is inherently an adult use case.
+  </p>
+
+  <h2 id="changes">9. Changes to this policy</h2>
+  <p>
+    We may update this policy as the app evolves. Material changes will be
+    called out in-app on next launch. The <em>Last updated</em> date at the top
+    always reflects the current version.
+  </p>
+
+  <h2 id="contact">10. Contact</h2>
+  <p>
+    Questions or concerns? Email
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+</BaseLayout>
+
+<style>
+  .subtitle {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-8);
+  }
+</style>

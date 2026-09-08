@@ -1,0 +1,147 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Card from '~/components/Card.astro';
+import Search from '~/components/Search.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+const posts = (
+  await getCollection('blog', ({ data }) => !data.draft && (data.locale ?? 'en') === 'en')
+).sort((a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime());
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Blog', href: '/blog' },
+];
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+
+// Tag counts
+const tagCounts = new Map<string, number>();
+for (const p of posts) {
+  for (const t of p.data.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+}
+const tags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]);
+---
+
+<BaseLayout
+  title="Blog"
+  description="Notes on M-PESA, budgeting culture, privacy, and how PesaTrack is built. Awareness before action."
+  canonical="/blog"
+  alternates={[
+    { hreflang: 'en', href: '/blog' },
+    { hreflang: 'sw-KE', href: '/sw/blog' },
+    { hreflang: 'x-default', href: '/blog' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs)]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Blog</h1>
+  <p class="lede">
+    Notes on M-PESA, budgeting culture, privacy, and how PesaTrack is built.
+    Awareness before action.
+  </p>
+
+  <Search placeholder="Search posts…" />
+
+  {
+    tags.length > 0 && (
+      <p class="tags">
+        <span>Filter:</span>
+        {tags.map(([tag, count]) => (
+          <a href={`/tags/${tag}`} class="tag">
+            {tag} <span class="count">({count})</span>
+          </a>
+        ))}
+      </p>
+    )
+  }
+
+  <ul class="posts">
+    {
+      posts.map((p) => {
+        const slug = p.id.replace(/\.(md|mdx)$/, '');
+        return (
+          <li>
+            <Card
+              tag="article"
+              href={`/blog/${slug}`}
+              eyebrow={`${formatDate(p.data.publishedAt)} · ${p.data.tags.join(', ')}`}
+              title={p.data.title}
+            >
+              <p>{p.data.dek}</p>
+            </Card>
+          </li>
+        );
+      })
+    }
+  </ul>
+
+  {
+    posts.length === 0 && (
+      <p class="empty">No posts published yet. Check back soon.</p>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    margin: var(--space-6) 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.15em 0.6em;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .tag:hover {
+    border-color: var(--color-accent);
+    color: var(--color-primary);
+  }
+
+  .tag .count {
+    color: var(--color-text-muted);
+  }
+
+  .posts {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-6) 0 0;
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 800px) {
+    .posts {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .empty {
+    color: var(--color-text-muted);
+    margin-top: var(--space-8);
+  }
+</style>

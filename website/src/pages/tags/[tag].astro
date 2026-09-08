@@ -1,0 +1,90 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Card from '~/components/Card.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+export async function getStaticPaths() {
+  const posts = await getCollection(
+    'blog',
+    ({ data }) => !data.draft && (data.locale ?? 'en') === 'en'
+  );
+  const tagSet = new Set<string>();
+  for (const p of posts) for (const t of p.data.tags) tagSet.add(t);
+  return Array.from(tagSet).map((tag) => ({
+    params: { tag },
+    props: { tag, posts: posts.filter((p) => p.data.tags.includes(tag as never)) },
+  }));
+}
+
+const { tag, posts } = Astro.props;
+const sorted = posts.sort(
+  (a, b) => b.data.publishedAt.getTime() - a.data.publishedAt.getTime()
+);
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Blog', href: '/blog' },
+  { name: tag, href: `/tags/${tag}` },
+];
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
+---
+
+<BaseLayout
+  title={`Posts tagged "${tag}"`}
+  description={`Every PesaTrack blog post tagged ${tag}.`}
+  canonical={`/tags/${tag}`}
+  jsonLd={[breadcrumbList(crumbs)]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Posts tagged <em>{tag}</em></h1>
+  <p class="lede">
+    {sorted.length} post{sorted.length === 1 ? '' : 's'}. Back to
+    <a href="/blog">all posts</a>.
+  </p>
+
+  <ul class="posts">
+    {
+      sorted.map((p) => {
+        const slug = p.id.replace(/\.(md|mdx)$/, '');
+        return (
+          <li>
+            <Card
+              tag="article"
+              href={`/blog/${slug}`}
+              eyebrow={formatDate(p.data.publishedAt)}
+              title={p.data.title}
+            >
+              <p>{p.data.dek}</p>
+            </Card>
+          </li>
+        );
+      })
+    }
+  </ul>
+</BaseLayout>
+
+<style>
+  .lede {
+    color: var(--color-text-muted);
+  }
+
+  .posts {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-6) 0 0;
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 800px) {
+    .posts {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,10 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+
+export const prerender = true;
+---
+
+<BaseLayout title="Page not found" description="The page you were looking for could not be found." noindex prose>
+  <h1>Page not found</h1>
+  <p>Sorry — that page doesn't exist. Try the <a href="/">home page</a> or the <a href="/faq">FAQ</a>.</p>
+</BaseLayout>

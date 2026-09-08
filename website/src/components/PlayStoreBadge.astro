@@ -1,0 +1,61 @@
+---
+/**
+ * PlayStoreBadge — official-style Google Play install button.
+ * Real deployment should use the official Play badge asset per plan §5.
+ * This is a temporary CSS-only stand-in until we drop the SVG.
+ */
+import { SITE } from '~/data/site';
+export interface Props {
+  size?: 'md' | 'lg';
+}
+const { size = 'md' } = Astro.props;
+---
+
+<a href={SITE.playStoreUrl} class:list={['play-badge', `play-${size}`]} rel="noopener">
+  <span class="play-icon" aria-hidden="true">▶</span>
+  <span class="play-text">
+    <span class="play-eyebrow">GET IT ON</span>
+    <span class="play-title">Google Play</span>
+  </span>
+</a>
+
+<style>
+  .play-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: #111;
+    color: #fff;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    line-height: 1.1;
+  }
+
+  .play-badge:hover {
+    color: #fff;
+    background: #000;
+  }
+
+  .play-lg {
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .play-icon {
+    font-size: 1.6em;
+    color: var(--color-accent);
+  }
+
+  .play-eyebrow {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: #ccc;
+    letter-spacing: 0.05em;
+  }
+
+  .play-title {
+    display: block;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+  }
+</style>

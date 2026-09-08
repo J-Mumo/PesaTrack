@@ -1,0 +1,129 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Search from '~/components/Search.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+
+const all = (await getCollection('docs', ({ data }) => !data.draft)).sort(
+  (a, b) => a.data.order - b.data.order
+);
+
+const sections: Array<{ key: string; label: string; dek: string }> = [
+  {
+    key: 'getting-started',
+    label: 'Getting started',
+    dek: 'Install PesaTrack, grant SMS permission, first launch.',
+  },
+  {
+    key: 'using',
+    label: 'Using PesaTrack',
+    dek: 'Day-to-day workflows: categorisation, budgets, the month-starts-on setting.',
+  },
+  {
+    key: 'imports',
+    label: 'Imports',
+    dek: 'Backfilling history from PDF statements and Excel spreadsheets.',
+  },
+  {
+    key: 'privacy-security',
+    label: 'Privacy & security',
+    dek: 'Backups, PIN lock, biometric unlock — what protects what.',
+  },
+  {
+    key: 'troubleshooting',
+    label: 'Troubleshooting',
+    dek: 'Fixes for common issues before you email support.',
+  },
+];
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Docs', href: '/docs' },
+];
+---
+
+<BaseLayout
+  title="Docs"
+  description="User documentation for PesaTrack — install, use, import, back up, and troubleshoot the M-PESA expense tracker."
+  canonical="/docs"
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Docs</h1>
+  <p class="lede">
+    Task-oriented guides for PesaTrack. If a doc gets out of date, email
+    <a href="/support">support</a> — we treat that as a bug.
+  </p>
+
+  <Search placeholder="Search docs…" />
+
+  <div data-pagefind-body>
+  {
+    sections.map((section) => {
+      const items = all.filter((d) => d.data.section === section.key);
+      if (items.length === 0) return null;
+      return (
+        <section class="group">
+          <h2>{section.label}</h2>
+          <p class="section-dek">{section.dek}</p>
+          <ul>
+            {items.map((d) => {
+              const slug = d.id.replace(/\.(md|mdx)$/, '');
+              return (
+                <li>
+                  <a href={`/docs/${slug}`}>{d.data.title}</a>
+                  <span class="doc-dek"> — {d.data.dek}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      );
+    })
+  }
+  </div>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .group {
+    margin-top: var(--space-10);
+  }
+
+  .group h2 {
+    margin-top: 0;
+    margin-bottom: var(--space-2);
+  }
+
+  .section-dek {
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-4);
+  }
+
+  .group ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .group li {
+    padding-left: var(--space-4);
+    border-left: 3px solid var(--color-accent);
+  }
+
+  .doc-dek {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+</style>

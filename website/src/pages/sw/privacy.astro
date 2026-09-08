@@ -1,0 +1,232 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Callout from '~/components/Callout.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const lastUpdated = '3 Septemba, 2026';
+
+const crumbs = [
+  { name: 'Nyumbani', href: '/sw' },
+  { name: 'Faragha', href: '/sw/privacy' },
+];
+---
+
+<BaseLayout
+  title="Sera ya faragha"
+  description="Jinsi PesaTrack inavyoshughulikia SMS zako, data ya miamala, na uchambuzi wa hiari. Sera ya faragha kwa lugha rahisi."
+  canonical="/sw/privacy"
+  lang="sw-KE"
+  alternates={[
+    { hreflang: 'en', href: '/privacy' },
+    { hreflang: 'sw-KE', href: '/sw/privacy' },
+    { hreflang: 'x-default', href: '/privacy' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs)]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Sera ya faragha</h1>
+  <p class="subtitle">Ilisasishwa mwisho: {lastUpdated}</p>
+
+  <Callout variant="success" title="Jambo kuu">
+    <p>
+      Miamala yako, SMS, kiasi, na taarifa binafsi vinabaki kwenye kifaa chako.
+      Data pekee inayoondoka kwenye simu yako ni
+      <em>takwimu za matumizi zisizokuwa na utambulisho</em> — na hiyo tu kama
+      umechagua wewe mwenyewe. Unaweza kuizima wakati wowote katika
+      <em>Settings → Privacy</em>.
+    </p>
+  </Callout>
+
+  <p class="note">
+    <strong>Kumbuka:</strong> Tafsiri hii ya Kiswahili ni kwa urahisi wa
+    kusoma. Toleo la Kiingereza ndilo la kisheria: <a href="/privacy">/privacy</a>.
+  </p>
+
+  <h2 id="what-pesatrack-does">1. PesaTrack inafanya nini</h2>
+  <p>
+    PesaTrack ni kifuatiliaji cha matumizi ya Android. Inasoma SMS za miamala
+    ya M-PESA na benki zinazoungwa mkono (zinazoingia na kutoka), inatoa
+    taarifa za muamala (kiasi, mpokeaji, tarehe, kodi ya muamala), na
+    kuzihifadhi kwenye kifaa chako kwa ajili ya uainishaji, bajeti, na uhakiki.
+  </p>
+
+  <h2 id="sms-data">2. Data ya SMS tunayoipata</h2>
+  <p>PesaTrack inaomba ruhusa hizi za Android:</p>
+  <ul>
+    <li><strong>RECEIVE_SMS</strong> — kutambua SMS za M-PESA na benki
+      zinazoungwa mkono (miamala inayoingia na kutoka) kwa wakati halisi</li>
+    <li><strong>READ_SMS</strong> — kuingiza SMS za zamani za miamala kutoka
+      kwenye inbox yako (kwa maombi yako pekee)</li>
+  </ul>
+  <p>PesaTrack <strong>inasoma tu SMS kutoka kwa watumaji hawa</strong>:</p>
+  <ul>
+    <li>M-PESA (mtumaji: "MPESA")</li>
+    <li>NCBA Bank (mtumaji: "NCBA")</li>
+  </ul>
+  <p>
+    SMS binafsi kutoka kwa marafiki, matangazo, na SMS kutoka kwa watumaji
+    wengine <strong>hazisomwi, hazipatikani, wala kuhifadhiwa</strong>.
+  </p>
+
+  <h2 id="data-stored-on-device">3. Data inayohifadhiwa kwenye kifaa</h2>
+  <p>Kutoka kwa kila SMS ya muamala, PesaTrack inatoa na kuhifadhi <strong>ndani ya kifaa</strong>:</p>
+  <ul>
+    <li>Kiasi cha muamala (KES)</li>
+    <li>Jina la mpokeaji na nambari/till/paybill</li>
+    <li>Tarehe na saa ya muamala</li>
+    <li>Kodi ya muamala ya M-PESA (mfano "ABC123XYZ")</li>
+    <li>Ada ya muamala (ikiwepo kwenye SMS)</li>
+    <li>Aina ya malipo (Kutuma Pesa, Buy Goods, Pay Bill, n.k.)</li>
+  </ul>
+  <p>
+    Unaweza pia kuingiza matumizi kwa mkono au kupitia Excel/PDF. Kategoria,
+    bajeti, na mipangilio vinahifadhiwa ndani ya database ya Room na DataStore.
+  </p>
+
+  <h2 id="analytics">4. Takwimu zisizokuwa na utambulisho (kwa hiari)</h2>
+  <p>
+    Kuanzia toleo la 1.5.0, PesaTrack inaweza kutuma <strong>takwimu za
+    matumizi zisizokuwa na utambulisho</strong> ili tuone vipengele
+    vinavyosaidia na vinavyohitaji marekebisho. Hiki ni
+    <strong>kimezimwa kwa msingi</strong>. Ukifungua app mara ya kwanza (au
+    baada ya kusasisha kutoka toleo la zamani) utapata swali la mara moja —
+    sema ndiyo, kataa, au badilisha akili yako baadaye.
+  </p>
+
+  <p><strong>Tunachotuma unapoiwasha:</strong></p>
+  <ul>
+    <li>Skrini unazofungua (mfano "home", "analytics", "budget")</li>
+    <li>Vipengele unavyobonyeza (mfano "import completed", "budget created")</li>
+    <li>Toleo la app, toleo la Android, aina ya simu, na nchi</li>
+    <li>Ishara za crash na hitilafu</li>
+    <li>Kitambulisho cha ufungaji cha Firebase kisichokuwa na utambulisho na kinachobadilika</li>
+  </ul>
+
+  <p><strong>Tunachohatutumi kamwe, hata ukiwasha uchambuzi:</strong></p>
+  <ul>
+    <li>Maudhui ya SMS yoyote</li>
+    <li>Kiasi cha miamala, wafanyabiashara, nambari za till/paybill, au kodi za miamala</li>
+    <li>Majina ya kategoria, majina ya bajeti, au maandishi unayoandika kwenye app</li>
+    <li>Jina lako, nambari ya simu, barua pepe, au nambari yako ya M-PESA</li>
+    <li>Chochote kingine kinachoweza kukutambulisha binafsi</li>
+  </ul>
+
+  <p>
+    Takwimu zinashughulikiwa na <strong>Google Firebase Analytics</strong>. Ona
+    <a href="https://policies.google.com/privacy" rel="noopener">sera ya
+    faragha ya Google</a> kwa jinsi wanavyoshughulikia. Hatutumii Firebase kwa
+    matangazo, ubinafsishaji, au madhumuni mengine yoyote zaidi ya kuboresha
+    bidhaa.
+  </p>
+
+  <p>
+    <strong>Kuzima uchambuzi:</strong> Fungua PesaTrack, bonyeza Settings, na
+    zima "Anonymous usage data". Ukusanyaji unasimama mara moja na kitambulisho
+    kinawekwa upya ili kipindi cha awali kisiweze kuhusishwa na data ya baadaye.
+  </p>
+
+  <h2 id="data-sharing">5. Ushirikishaji wa data</h2>
+  <p><strong>Data yako ya miamala haishirikiwi kamwe.</strong> Data pekee
+  inayoondoka kwenye kifaa chako ni uchambuzi wa hiari uliotajwa katika
+  Sehemu ya 4 — na hiyo tu kama umechagua.</p>
+  <ul>
+    <li>Data ya miamala haiendelezwi kwa server yoyote au huduma ya cloud</li>
+    <li>Data ya miamala haishirikiwi na wahusika wa tatu, ad networks, au SDK</li>
+    <li>Hakuna data — ya miamala au ya uchambuzi — inayouzwa, kukodishwa, au kutolewa leseni</li>
+  </ul>
+
+  <h3 id="user-initiated-sharing">5.5 Ushirikishaji unaoanzishwa na mtumiaji</h3>
+  <p>Baadhi ya vipengele vinakuruhusu kushirikisha taarifa nje ya app kwa hiari:</p>
+  <ul>
+    <li><strong>Barua pepe za maoni.</strong> "Contact &amp; Feedback"
+      inaandaa rasimu ya barua pepe. Muktadha wa matumizi (toleo la app,
+      hatua muhimu) unaweza kujazwa ili kutusaidia kukusaidia. Kagua na uondoe
+      chochote kabla ya kutuma.</li>
+    <li><strong>Faili za backup.</strong> Backup unazounda na kutoa zinaweza
+      kuwa na data yako ya matumizi na mipangilio. Zinabaki kwenye kifaa
+      isipokuwa uzishirikishe.</li>
+    <li><strong>CSV exports.</strong> Exports zinabaki kwenye kifaa isipokuwa
+      uzishirikishe kupitia share sheet ya Android.</li>
+  </ul>
+
+  <h3 id="google-play-services">5.6 Huduma za Google Play</h3>
+  <ul>
+    <li><strong>Firebase Analytics</strong> — kwa uchambuzi wa hiari wa Sehemu ya 4</li>
+    <li><strong>Google Play In-App Review API</strong> — inaweza kukuomba
+      utoe alama kwenye Play. Hakuna data binafsi inayoshirikiwa na PesaTrack
+      kupitia hiyo.</li>
+  </ul>
+
+  <h2 id="security">6. Usalama wa data</h2>
+  <p>
+    PesaTrack inatoa PIN ya hiari yenye ufunguzi wa biometriki ili kuzuia
+    ufikiaji wa kawaida. PIN inahifadhiwa kama SHA-256 hash yenye salt — PIN
+    yenyewe kamwe haihifadhiwi.
+  </p>
+  <p>
+    Data yako inarithi usalama wa kifaa chako cha Android (usimbaji fiche wa
+    kifaa, screen lock). PesaTrack haitumii usimbaji fiche wa ziada wa
+    database; lengo ni kuzuia ufikiaji wa kawaida, si ulinzi wa kiwango cha
+    forensic. Ona <a href="/security">/security</a> kwa maelezo kamili.
+  </p>
+  <p>Data ya uchambuzi (ikiwashwa) inatumwa kwa Firebase kupitia HTTPS/TLS.</p>
+
+  <h2 id="deletion">7. Haki zako &amp; kufuta data</h2>
+  <ul>
+    <li><strong>Kuona:</strong> data yote ya matumizi inaonekana ndani ya app wakati wote</li>
+    <li><strong>Kuhariri:</strong> uainishe upya, ondoa, au badilisha muamala wowote</li>
+    <li><strong>Kufuta data ya kifaa:</strong> Android Settings → Apps →
+      PesaTrack → Storage → Clear data</li>
+    <li><strong>Kuzima uchambuzi:</strong> PesaTrack → Settings → Privacy</li>
+    <li><strong>Kuweka upya ID ya uchambuzi:</strong> kuzima uchambuzi pia
+      kunaweka upya Firebase installation ID</li>
+    <li><strong>Uninstall:</strong> inafuta data yote iliyohifadhiwa kabisa</li>
+  </ul>
+  <p>
+    Kwa sababu data ya uchambuzi haina utambulisho na haihusishwi na wewe,
+    hatuwezi kutafuta au kufuta rekodi maalum kwa ombi. Kuzima uchambuzi
+    kunasimamisha ukusanyaji wa baadaye na kunavunja uhusiano kati ya vipindi
+    vya awali na vya baadaye kwenye kifaa chako.
+  </p>
+
+  <h2 id="children">8. Faragha ya watoto</h2>
+  <p>
+    PesaTrack haijaelekezwa kwa watoto chini ya miaka 13. App inahitaji ufikiaji
+    wa SMS za kifedha, ambayo yenyewe ni kwa watu wazima.
+  </p>
+
+  <h2 id="changes">9. Mabadiliko ya sera</h2>
+  <p>
+    Tunaweza kusasisha sera hii kadri app inavyokua. Mabadiliko makubwa
+    yatatangazwa ndani ya app unapoifungua tena. Tarehe ya
+    <em>Ilisasishwa mwisho</em> juu daima inaonyesha toleo la sasa.
+  </p>
+
+  <h2 id="contact">10. Wasiliana nasi</h2>
+  <p>
+    Maswali au wasiwasi? Tuma barua pepe kwa
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+</BaseLayout>
+
+<style>
+  .subtitle {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-4);
+  }
+
+  .note {
+    background: var(--color-surface);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-8);
+  }
+</style>

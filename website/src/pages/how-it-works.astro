@@ -1,0 +1,179 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import PhoneMock from '~/components/PhoneMock.astro';
+import Button from '~/components/Button.astro';
+import { breadcrumbList, faqPage } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'How it works', href: '/how-it-works' },
+];
+
+// Inline FAQPage JSON-LD tuned for the "how does X work" queries.
+const howFaq = faqPage([
+  {
+    question: 'How does PesaTrack detect a new M-PESA transaction?',
+    answer:
+      "The Android SMS broadcast delivers every incoming SMS to a receiver in PesaTrack. If the sender is 'MPESA' or 'NCBA', the message body is passed to the matching parser, which extracts amount, recipient, date, and transaction code. The parsed row is inserted into a local Room database keyed by transaction ID, so duplicates are impossible.",
+  },
+  {
+    question: 'How does auto-categorisation decide what a purchase is?',
+    answer:
+      'Three passes in order: (1) explicit keyword rules (e.g. Uber → Transport), (2) learned recipient mappings — if you have categorised a recipient before, PesaTrack remembers, (3) payment-type heuristics as a fallback. Anything unmatched lands in UNCATEGORIZED with a low-priority notification.',
+  },
+  {
+    question: 'How does the budget "month starts on" setting work?',
+    answer:
+      'You choose the day your budget month starts on (e.g. the 25th if that is your payday). All budget totals, the Analytics Monthly charts, the savings-rate card, and CSV exports use the same offset-aware period. So if you set the 25th, "this month" runs from the 25th of last month to the 24th of the current month.',
+  },
+]);
+---
+
+<BaseLayout
+  title="How it works"
+  description="From an M-PESA SMS arriving on your phone to a categorised expense in a budget — the end-to-end flow, on-device."
+  canonical="/how-it-works"
+  alternates={[
+    { hreflang: 'en', href: '/how-it-works' },
+    { hreflang: 'sw-KE', href: '/sw/how-it-works' },
+    { hreflang: 'x-default', href: '/how-it-works' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs), howFaq]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>How PesaTrack works</h1>
+  <p class="lede">
+    From an M-PESA SMS arriving on your phone to a categorised expense inside
+    a budget — end to end, on the device.
+  </p>
+
+  <ol class="steps">
+    <li class="step">
+      <div class="step-body">
+        <h2>1. An SMS arrives</h2>
+        <p>
+          M-PESA or NCBA sends you the usual transaction SMS. Android's SMS
+          broadcast delivers it to every app with the receive permission — one
+          of those is PesaTrack.
+        </p>
+      </div>
+      <PhoneMock label="Incoming SMS" caption="Sender: MPESA" />
+    </li>
+
+    <li class="step reverse">
+      <div class="step-body">
+        <h2>2. The parser reads it — nothing else</h2>
+        <p>
+          PesaTrack's <code>SmsReceiver</code> checks the sender. Only
+          <code>MPESA</code> and <code>NCBA</code> are processed; every other
+          message is ignored at the receiver level. The matching parser
+          extracts amount, recipient, date, transaction code, and the
+          transaction cost.
+        </p>
+      </div>
+      <PhoneMock label="Parsed row" caption="KES 240 · Uber · MK7X4A2B" />
+    </li>
+
+    <li class="step">
+      <div class="step-body">
+        <h2>3. Auto-categorisation runs</h2>
+        <p>
+          Three passes, in order — keyword rules, learned recipient mappings,
+          then payment-type heuristics. If nothing matches, the row lands in
+          <code>UNCATEGORIZED</code> with a soft notification so you can tag
+          it when convenient.
+        </p>
+      </div>
+      <PhoneMock label="Category applied" caption="Transport" />
+    </li>
+
+    <li class="step reverse">
+      <div class="step-body">
+        <h2>4. Budgets and analytics update</h2>
+        <p>
+          The Budgets screen shows the remaining amount and days left. The
+          Analytics screen updates category totals, the trend line, the
+          savings-rate card, and the income-vs-spend overlay. All in real
+          time. No round-trip to a server.
+        </p>
+      </div>
+      <PhoneMock label="Budget updated" caption="KES 3,160 left · 12 days" />
+    </li>
+
+    <li class="step">
+      <div class="step-body">
+        <h2>5. Nothing leaves the device</h2>
+        <p>
+          The row lives in a local Room database. Analytics — if you opted in —
+          receives only anonymous events like "opened Analytics screen". No
+          amounts, no recipients, no category names, no note text. See
+          <a href="/privacy">Privacy</a>.
+        </p>
+      </div>
+      <PhoneMock label="Local storage" caption="Room DB · v15" />
+    </li>
+  </ol>
+
+  <section class="cta">
+    <h2>Try it</h2>
+    <p>
+      Install from Google Play, grant the SMS permission, and the next M-PESA
+      transaction is in the app.
+    </p>
+    <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+      Get on Google Play
+    </Button>
+  </section>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .steps {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-10) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .step {
+    display: grid;
+    gap: var(--space-6);
+    grid-template-columns: 1fr;
+    align-items: center;
+  }
+
+  @media (min-width: 800px) {
+    .step {
+      grid-template-columns: 1.4fr 1fr;
+    }
+    .step.reverse .step-body {
+      order: 2;
+    }
+  }
+
+  .step h2 {
+    margin-top: 0;
+  }
+
+  .cta {
+    background: var(--color-accent-soft);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    text-align: center;
+    margin-top: var(--space-12);
+  }
+
+  .cta h2 {
+    margin-top: 0;
+  }
+</style>

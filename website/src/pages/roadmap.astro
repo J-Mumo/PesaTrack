@@ -1,0 +1,143 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList } from '~/utils/jsonld';
+import { shippingNow, considering, notPlanned } from '~/data/roadmap';
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Roadmap', href: '/roadmap' },
+];
+---
+
+<BaseLayout
+  title="Roadmap"
+  description="What's shipping in PesaTrack now, what's being considered, and what we've decided not to build."
+  canonical="/roadmap"
+  jsonLd={[breadcrumbList(crumbs)]}
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Roadmap</h1>
+  <p class="lede">
+    Three honest columns. We don't put things in "shipping" until the code is
+    merged, and the "not planned" column is where we're most useful — clarity
+    about scope.
+  </p>
+
+  <div class="grid">
+    <section class="col">
+      <h2>Shipping now</h2>
+      <ul>
+        {
+          shippingNow.map((item) => (
+            <li>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="col">
+      <h2>Considering</h2>
+      <ul>
+        {
+          considering.map((item) => (
+            <li>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="col">
+      <h2 class="not-planned">Not planned</h2>
+      <ul>
+        {
+          notPlanned.map((item) => (
+            <li>
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+  </div>
+
+  <p class="footnote">
+    Want something on this list? Open a request on
+    <a href="https://github.com/J-Mumo/PesaTrack/issues/new" rel="noopener">GitHub</a>.
+    We read every one.
+  </p>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    max-width: 720px;
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: 1fr;
+    margin-top: var(--space-10);
+  }
+
+  @media (min-width: 900px) {
+    .grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .col h2 {
+    margin-top: 0;
+    padding-bottom: var(--space-3);
+    border-bottom: 2px solid var(--color-border);
+  }
+
+  .col.not-planned h2,
+  .col h2.not-planned {
+    color: var(--color-text-muted);
+  }
+
+  .col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .col li {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+  }
+
+  .col h3 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-lg);
+    color: var(--color-text);
+  }
+
+  .col p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  .footnote {
+    margin-top: var(--space-10);
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+</style>

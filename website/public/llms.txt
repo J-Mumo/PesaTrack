@@ -1,0 +1,49 @@
+# PesaTrack
+
+> A passive Android expense tracker for M-PESA and Kenyan bank SMS. Local-first, no cloud sync of transaction data, no ads, no third-party trackers unless you opt in.
+
+PesaTrack reads incoming M-PESA and NCBA bank SMS messages on your Android device, extracts the transaction amount, recipient, date, and transaction code, and stores them in a local Room database. Transaction data is never transmitted off-device. Users get automatic categorisation, budgets, analytics, and Excel/PDF statement import — all offline. Optional anonymous usage analytics (Firebase) is off by default.
+
+Made in Kenya. Free on Google Play.
+
+## Core pages
+
+- [Landing](/): What PesaTrack does, who it's for, and how to install it.
+- [How it works](/how-it-works): The SMS parsing pipeline and where data is stored.
+- [Privacy policy](/privacy): What's read, what's stored, what's never transmitted.
+- [Security](/security): Threat model, PIN lock, biometric flow.
+- [Features](/features): Full feature index (SMS tracking, budgets, analytics, income, imports, PIN lock).
+
+## Reference
+
+- [FAQ](/faq): Common questions grouped by topic (SMS permissions, privacy, budgets, imports, troubleshooting).
+- [Docs](/docs): Task-oriented user documentation — install, use, import, back up, troubleshoot.
+- [Changelog](/changelog): Version history — generated from `_docs/releases.md`.
+- [Roadmap](/roadmap): Shipping, considering, and not-planned lists.
+- [Press kit](/press): Logo, screenshots, boilerplate paragraph, factsheet.
+
+## Blog
+
+- [All posts](/blog)
+- [M-PESA fees deserve their own line](/blog/mpesa-fees-deserve-own-line): Why PesaTrack tracks transaction charges in a reserved category.
+- [PesaTrack and your SMS](/blog/pesatrack-and-your-sms): Exactly what we read, exactly what we don't.
+- [The "month starts on" setting](/blog/month-starts-on-setting): Aligning budgets to payday.
+
+## Kiswahili mirror
+
+- [Ukurasa mkuu](/sw): Toleo la Kiswahili la ukurasa wa mwanzo.
+- [Inavyofanya kazi](/sw/how-it-works)
+- [Faragha](/sw/privacy)
+- [Maswali](/sw/faq)
+- [Blogu ya Kiswahili](/sw/blog)
+
+## Optional
+
+- [About](/about): Mission, six product principles, why we don't do certain things.
+- [Support](/support): Contact email + GitHub issues.
+
+## Machine-readable
+
+- [factsheet.json](/factsheet.json): Canonical facts (current version, platform, supported SMS senders, cloud sync policy).
+- [llms-full.txt](/llms-full.txt): Concatenated Markdown of every canonical page.
+- [Sitemap](/sitemap-index.xml)

@@ -1,0 +1,98 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Accordion from '~/components/Accordion.astro';
+import Search from '~/components/Search.astro';
+import { breadcrumbList, faqPage } from '~/utils/jsonld';
+
+const all = (await getCollection('faq')).sort((a, b) => a.data.order - b.data.order);
+
+const groups: Array<{ key: string; label: string }> = [
+  { key: 'sms-permissions', label: 'SMS & permissions' },
+  { key: 'privacy-data', label: 'Privacy & data' },
+  { key: 'budgets-categories', label: 'Budgets & categories' },
+  { key: 'imports', label: 'Imports' },
+  { key: 'troubleshooting', label: 'Troubleshooting' },
+];
+
+// Pre-render each answer body to plain text (best-effort) for FAQ JSON-LD.
+const rendered = await Promise.all(
+  all.map(async (item) => {
+    const { Content } = await render(item);
+    return { item, Content };
+  })
+);
+
+// For JSON-LD, use the raw body text — Astro exposes it on the entry.
+const faqLd = faqPage(
+  all.map((item) => ({
+    question: item.data.question,
+    answer: item.body?.trim() ?? '',
+  }))
+);
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'FAQ', href: '/faq' },
+];
+---
+
+<BaseLayout
+  title="FAQ"
+  description="Common questions about PesaTrack — SMS permissions, privacy, budgets, imports, and troubleshooting."
+  canonical="/faq"
+  alternates={[
+    { hreflang: 'en', href: '/faq' },
+    { hreflang: 'sw-KE', href: '/sw/faq' },
+    { hreflang: 'x-default', href: '/faq' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs), faqLd]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Frequently asked questions</h1>
+  <p class="lede">
+    If your question isn't here, email
+    <a href="/support">support</a> or open a
+    <a href="https://github.com/J-Mumo/PesaTrack/issues/new" rel="noopener">GitHub issue</a>.
+  </p>
+
+  <Search placeholder="Search FAQs…" />
+
+  <div data-pagefind-body>
+
+  {
+    groups.map(({ key, label }) => {
+      const items = rendered.filter((r) => r.item.data.group === key);
+      if (items.length === 0) return null;
+      return (
+        <section class="group">
+          <h2>{label}</h2>
+          {items.map(({ item, Content }) => (
+            <Accordion question={item.data.question} anchor={item.data.anchor}>
+              <Content />
+            </Accordion>
+          ))}
+        </section>
+      );
+    })
+  }
+  </div>
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+
+  .group {
+    margin-top: var(--space-10);
+  }
+
+  .group h2 {
+    margin-top: 0;
+  }
+</style>

@@ -1,0 +1,162 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import { breadcrumbList, article } from '~/utils/jsonld';
+
+export async function getStaticPaths() {
+  const all = await getCollection('blog', ({ data }) => !data.draft);
+  const posts = all.filter((p) => (p.data.locale ?? 'en') === 'en');
+  const swBySource = new Map(
+    all
+      .filter((p) => p.data.locale === 'sw' && p.data.translationOf)
+      .map((p) => [p.data.translationOf as string, p.id.replace(/^sw\//, '').replace(/\.(md|mdx)$/, '')])
+  );
+  return posts.map((p) => {
+    const slug = p.id.replace(/\.(md|mdx)$/, '');
+    return {
+      params: { slug },
+      props: { post: p, swSlug: swBySource.get(slug) ?? null },
+    };
+  });
+}
+
+const { post, swSlug } = Astro.props;
+const { Content } = await render(post);
+const slug = post.id.replace(/\.(md|mdx)$/, '');
+const url = `/blog/${slug}`;
+
+const alternates = swSlug
+  ? [
+      { hreflang: 'en', href: url },
+      { hreflang: 'sw-KE', href: `/sw/blog/${swSlug}` },
+      { hreflang: 'x-default', href: url },
+    ]
+  : [];
+
+const crumbs = [
+  { name: 'Home', href: '/' },
+  { name: 'Blog', href: '/blog' },
+  { name: post.data.title, href: url },
+];
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString('en-KE', { year: 'numeric', month: 'long', day: 'numeric' });
+
+const articleLd = article({
+  title: post.data.title,
+  description: post.data.dek,
+  publishedAt: post.data.publishedAt,
+  updatedAt: post.data.updatedAt,
+  author: post.data.author,
+  url,
+});
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.dek}
+  canonical={url}
+  alternates={alternates}
+  jsonLd={[breadcrumbList(crumbs), articleLd]}
+  ogImage={`/og/${slug}.png`}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <article data-pagefind-body data-pagefind-meta={`tags:${post.data.tags.join(',')}`}>
+    <header class="post-header">
+      <p class="meta">
+        {formatDate(post.data.publishedAt)}
+        · {post.data.tags.join(', ')}
+        · {post.data.author}
+      </p>
+      <h1>{post.data.title}</h1>
+      <p class="dek">{post.data.dek}</p>
+    </header>
+
+    {
+      post.data.tldr && (
+        <aside class="tldr" aria-label="Summary">
+          <p class="tldr-label">TL;DR</p>
+          <p>{post.data.tldr}</p>
+        </aside>
+      )
+    }
+
+    <div class="body">
+      <Content />
+    </div>
+
+    <footer class="post-footer">
+      <p>
+        Written by {post.data.author}.
+        <a href="/blog">← All posts</a>
+      </p>
+    </footer>
+  </article>
+</BaseLayout>
+
+<style>
+  .post-header {
+    margin-bottom: var(--space-8);
+  }
+
+  .meta {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin: 0 0 var(--space-2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .dek {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+
+  .tldr {
+    background: var(--color-accent-soft);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    margin: var(--space-6) 0 var(--space-8);
+  }
+
+  .tldr-label {
+    margin: 0 0 var(--space-2);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .tldr p:last-child {
+    margin: 0;
+    white-space: pre-line;
+  }
+
+  .body :global(pre) {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    overflow-x: auto;
+    font-size: var(--font-size-sm);
+  }
+
+  .body :global(code) {
+    background: var(--color-surface-alt);
+    padding: 0.1em 0.35em;
+    border-radius: var(--radius-sm);
+    font-size: 0.92em;
+  }
+
+  .post-footer {
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+</style>

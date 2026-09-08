@@ -1,0 +1,8 @@
+packages:
+  - '.'
+
+# Allow build scripts only for the packages we've vetted.
+# esbuild + sharp are legitimate native/binary builds required by Astro.
+allowBuilds:
+  esbuild: true
+  sharp: true

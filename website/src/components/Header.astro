@@ -1,0 +1,215 @@
+---
+import { SITE, NAV } from '~/data/site';
+import {
+  hasCounterpart,
+  langFromPath,
+  MIRRORED_PATHS,
+  switchLang,
+  t,
+} from '~/i18n/strings';
+
+const pathname = Astro.url.pathname;
+const lang = langFromPath(pathname);
+const strings = t(lang);
+
+const prefix = lang === 'sw' ? '/sw' : '';
+
+// Map English NAV item hrefs to the Swahili copy in the strings dict.
+const navLabel: Record<string, string> = {
+  '/how-it-works': strings.nav.howItWorks,
+  '/features': strings.nav.features,
+  '/privacy': strings.nav.privacy,
+  '/faq': strings.nav.faq,
+  '/blog': strings.nav.blog,
+};
+
+// On Swahili, hide primary-nav items whose mirror doesn't exist yet — no
+// point linking to a 404. English shows everything.
+const primary = NAV.primary
+  .filter((item) => lang === 'en' || MIRRORED_PATHS.has(item.href))
+  .map((item) => ({
+    href: `${prefix}${item.href}`,
+    label: lang === 'sw' ? navLabel[item.href] ?? item.label : item.label,
+  }));
+
+const isActive = (href: string) =>
+  href === '/' || href === '/sw'
+    ? pathname === href
+    : pathname === href || pathname.startsWith(href + '/');
+
+// Only show the language switcher when the current page has a counterpart in
+// the other locale. Otherwise it would 404.
+const showLangSwitch = hasCounterpart(pathname);
+const otherLang = lang === 'sw' ? 'en' : 'sw';
+const otherLangHref = showLangSwitch ? switchLang(pathname, otherLang) : null;
+const otherLangLabel = otherLang === 'sw' ? strings.langSwitch.sw : strings.langSwitch.en;
+---
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href={lang === 'sw' ? '/sw' : '/'} class="brand" aria-label={`${SITE.name} home`}>
+      <span class="brand-mark" aria-hidden="true">₽</span>
+      <span class="brand-name">{SITE.name}</span>
+    </a>
+
+    <nav aria-label="Primary" class="primary-nav">
+      <ul>
+        {
+          primary.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                class:list={['nav-link', isActive(item.href) && 'is-active']}
+                aria-current={isActive(item.href) ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    {
+      showLangSwitch && otherLangHref && (
+        <a
+          href={otherLangHref}
+          class="lang-switch"
+          hreflang={otherLang === 'sw' ? 'sw-KE' : 'en'}
+          aria-label={`${strings.langSwitch.label}: ${otherLangLabel}`}
+        >
+          {otherLangLabel}
+        </a>
+      )
+    }
+
+    <a href={SITE.playStoreUrl} class="cta" rel="noopener">{strings.cta.getOnPlay}</a>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-decoration: none;
+    color: var(--color-text);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-lg);
+  }
+
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    border-radius: var(--radius-sm);
+    font-weight: var(--font-weight-bold);
+    font-size: 0.9rem;
+  }
+
+  .primary-nav {
+    display: none;
+    flex: 1;
+  }
+
+  @media (min-width: 768px) {
+    .primary-nav {
+      display: block;
+    }
+  }
+
+  .primary-nav ul {
+    display: flex;
+    gap: var(--space-6);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .primary-nav li {
+    margin: 0;
+  }
+
+  .nav-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    padding: var(--space-2) 0;
+    border-bottom: 2px solid transparent;
+    transition: color var(--duration-fast) var(--easing-standard);
+  }
+
+  .nav-link:hover {
+    color: var(--color-text);
+  }
+
+  .nav-link.is-active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+  }
+
+  .cta {
+    margin-left: auto;
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--easing-standard);
+  }
+
+  .cta:hover {
+    background: var(--color-primary-hover);
+    color: var(--color-text-inverse);
+  }
+
+  .lang-switch {
+    margin-left: auto;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    transition:
+      color var(--duration-fast) var(--easing-standard),
+      border-color var(--duration-fast) var(--easing-standard);
+  }
+
+  /* When the language switch is present it grabs the auto-margin, so the CTA
+     should sit flush next to it. */
+  .lang-switch + .cta {
+    margin-left: 0;
+  }
+
+  .lang-switch:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+  }
+</style>

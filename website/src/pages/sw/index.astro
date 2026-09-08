@@ -1,0 +1,256 @@
+---
+/**
+ * Landing page — Kiswahili mirror of /.
+ * See plans/website-full-plan.md §12 (M3 i18n).
+ */
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Button from '~/components/Button.astro';
+import Card from '~/components/Card.astro';
+import PhoneMock from '~/components/PhoneMock.astro';
+import { softwareApplication } from '~/utils/jsonld';
+import { SITE } from '~/data/site';
+
+const softwareLd = softwareApplication();
+
+const tagline = 'Fuatilia kila shilingi ya M-PESA. Kiotomatiki. Kwa faragha.';
+const description =
+  'PesaTrack ni kifuatiliaji cha matumizi ya M-PESA kwa Android. Inasoma SMS za miamala kwenye simu yako, inaziainisha kiotomatiki, na kukuonyesha unakotumia pesa yako.';
+
+const alternates = [
+  { hreflang: 'en', href: '/' },
+  { hreflang: 'sw-KE', href: '/sw' },
+  { hreflang: 'x-default', href: '/' },
+];
+---
+
+<BaseLayout
+  title={SITE.name}
+  description={description}
+  canonical="/sw"
+  lang="sw-KE"
+  alternates={alternates}
+  jsonLd={[softwareLd]}
+>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">M-PESA · SMS za Benki · Kenya</p>
+      <h1>{tagline}</h1>
+      <p class="lede">{description}</p>
+      <div class="cta-row">
+        <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+          Pakua kwenye Google Play
+        </Button>
+        <Button href="/sw/how-it-works" variant="secondary" size="lg">
+          Ona inavyofanya kazi
+        </Button>
+      </div>
+      <p class="tldr">
+        <strong>Kwa muhtasari:</strong> PesaTrack inasoma SMS za M-PESA na NCBA
+        kwenye simu yako ya Android, inaainisha matumizi, na kukuonyesha
+        bajeti na takwimu. Data ya miamala haiondoki kwenye kifaa chako.
+      </p>
+    </div>
+
+    <div class="hero-mock" aria-hidden="true">
+      <PhoneMock label="Mwezi huu" caption="KES 24,180 zimetumika · 42% ya mapato" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Utakachoona siku ya kwanza</h2>
+    <div class="triple">
+      <PhoneMock label="Matumizi" caption="Yameainishwa kutoka SMS" />
+      <PhoneMock label="Bajeti" caption="Zinaanza siku ya mshahara" />
+      <PhoneMock label="Takwimu" caption="Mienendo, kiwango cha kuweka akiba, mapato" />
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Kwa nini PesaTrack ni tofauti</h2>
+    <div class="grid-3">
+      <Card title="Uelewa, si wasiwasi">
+        <p>
+          Ukweli tu kuhusu matumizi yako — hakuna kukushurutisha, hakuna
+          "streaks", hakuna "umetumia zaidi". Angalizo moja tu kwa kila
+          kipindi cha matumizi.
+        </p>
+      </Card>
+      <Card title="Nambari za kweli">
+        <p>
+          Ada za miamala zinaonyeshwa peke yake. Utabiri unaonyesha mawazo
+          uliyotumia. Kama hatuna data, hatutungi.
+        </p>
+      </Card>
+      <Card title="Faragha kwa muundo">
+        <p>
+          Data ya miamala haiondoki kwenye kifaa. Uchambuzi wa hiari pekee —
+          umezimwa kwa msingi.
+        </p>
+      </Card>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Inachofuatilia leo</h2>
+    <ul class="tracks">
+      <li><strong>M-PESA</strong> — Kutuma Pesa, Buy Goods, Pay Bill, Kutoa, Kupokea, Kuweka, Airtime, Fuliza, M-Shwari</li>
+      <li><strong>NCBA</strong> — Malipo ya kadi, uhamishaji wa fedha, mikopo, wallet ya Loop</li>
+      <li><strong>Ingiza</strong> — Statement za PDF za M-PESA na Excel, kwenye kifaa</li>
+      <li><strong>Kwa mkono</strong> — kwa cash au kingine chochote</li>
+    </ul>
+    <p>
+      Benki zaidi ziko kwenye <a href="/roadmap">roadmap</a> mara SMS zao
+      zitakapokuwa thabiti.
+    </p>
+  </section>
+
+  <section class="section">
+    <h2>Maswali ya kawaida</h2>
+    <ul class="faq-preview">
+      <li><a href="/sw/faq#why-sms-permission">Kwa nini PesaTrack inahitaji ruhusa ya SMS?</a></li>
+      <li><a href="/sw/faq#does-pesatrack-read-all-sms">Je, inasoma SMS zangu zote?</a></li>
+      <li><a href="/sw/faq#does-pesatrack-send-data">Je, kuna kinachotoka kwenye simu yangu?</a></li>
+      <li><a href="/sw/faq#sms-not-detected">SMS mpya hazitambuliki — tatizo ni nini?</a></li>
+    </ul>
+    <p><a href="/sw/faq">Maswali yote →</a></p>
+  </section>
+
+  <section class="cta-section">
+    <h2>Pakua PesaTrack</h2>
+    <p class="lede">Bila malipo. Android. Bila akaunti.</p>
+    <Button href={SITE.playStoreUrl} variant="primary" size="lg">
+      Pakua kwenye Google Play
+    </Button>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: 1fr;
+    padding: var(--space-10) 0 var(--space-12);
+    align-items: center;
+  }
+
+  @media (min-width: 900px) {
+    .hero {
+      grid-template-columns: 1.4fr 1fr;
+    }
+  }
+
+  .eyebrow {
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-3);
+  }
+
+  .hero h1 {
+    font-size: var(--font-size-5xl);
+    line-height: 1.1;
+    margin: 0 0 var(--space-5);
+  }
+
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-6);
+    max-width: 620px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+
+  .tldr {
+    background: var(--color-surface);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    max-width: 620px;
+  }
+
+  .section {
+    padding: var(--space-12) 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .section h2 {
+    margin-top: 0;
+    margin-bottom: var(--space-8);
+  }
+
+  .triple {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 700px) {
+    .triple {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .grid-3 {
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 700px) {
+    .grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .tracks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 720px;
+  }
+
+  .tracks li {
+    padding-left: var(--space-4);
+    border-left: 3px solid var(--color-accent);
+  }
+
+  .faq-preview {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 720px;
+  }
+
+  .cta-section {
+    background: var(--color-accent-soft);
+    border-radius: var(--radius-lg);
+    padding: var(--space-12) var(--space-8);
+    text-align: center;
+    margin: var(--space-12) 0;
+  }
+
+  .cta-section h2 {
+    margin-top: 0;
+  }
+
+  .cta-section .lede {
+    margin-left: auto;
+    margin-right: auto;
+  }
+</style>

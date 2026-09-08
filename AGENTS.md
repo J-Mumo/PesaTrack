@@ -215,6 +215,40 @@ After implementing any feature, bug fix, or structural change, the agent **MUST*
 - [ ] New screen/route → Update Navigation + Presentation Layer sections
 - [ ] Architecture change → Update System Architecture diagram
 
+## Website Sync Check
+
+When an Android change alters user-visible behaviour, the public website may need to change too. The site lives at [website/](website/) and its source of truth for this rule is [plans/website-full-plan.md §16.1](plans/website-full-plan.md).
+
+Every app PR that touches user-visible behaviour must answer, in the PR description, **one** of:
+
+- "Site update required — filed as `#<issue>` / included in this PR."
+- "Site update NOT required because &lt;reason&gt;."
+
+Silence is not acceptable.
+
+**Trigger table — if your change is in the left column, review the pages on the right:**
+
+| App change | Website surfaces likely to need updating |
+|---|---|
+| New supported SMS sender (bank, wallet) | [website/src/pages/how-it-works.astro](website/src/pages/how-it-works.astro), [website/src/content/features/sms-tracking.md](website/src/content/features/sms-tracking.md), [website/src/pages/privacy.astro](website/src/pages/privacy.astro) §2, [website/src/pages/factsheet.json.ts](website/src/pages/factsheet.json.ts) (`supportedSenders`) |
+| New screen or major feature | Add a new feature MD in [website/src/content/features/](website/src/content/features/), update `/features` index, screenshots, boilerplate paragraph if positioning changes |
+| Renamed feature / setting | Every page referring to the old name, `/faq`, `/docs`, `/changelog` |
+| Privacy-policy-relevant behaviour (permission, data collected, transmission) | [website/src/pages/privacy.astro](website/src/pages/privacy.astro), [website/src/pages/security.astro](website/src/pages/security.astro), [website/src/pages/how-it-works.astro](website/src/pages/how-it-works.astro), boilerplate in [website/src/data/site.ts](website/src/data/site.ts), [website/src/pages/factsheet.json.ts](website/src/pages/factsheet.json.ts) |
+| New Android permission requested | `/privacy`, `/how-it-works`, `/faq`, `factsheet.json` |
+| Version release (`versionCode` / `versionName` bump, `_docs/releases.md` row added) | `/changelog` (auto), `factsheet.json.currentVersion` (auto — reads `_docs/releases.md`) — **verify the build succeeds** |
+| Onboarding / copy change with principle implications | Corresponding site copy, `/about` "why we don't do X" |
+| Deprecation / removed feature | Remove or mark deprecated the `/features/<slug>` page; update `/faq`, `/docs` |
+| Category / taxonomy change (e.g. category 606 semantics) | Blog posts that cite the old semantics; add "last verified" or update |
+| New Play Store listing screenshot | Mirror in [website/src/pages/press.astro](website/src/pages/press.astro) and `/` hero |
+
+**Website-sync checklist for any Android change:**
+
+- [ ] Trigger table reviewed
+- [ ] Site pages updated in the same PR OR a follow-up issue filed
+- [ ] `pnpm --dir website build` succeeds locally if site files changed
+- [ ] Kiswahili mirror (`/sw/*`) updated if the change touches one of the four mirrored pages: `/`, `/how-it-works`, `/privacy`, `/faq`
+- [ ] `factsheet.json` still accurate — spot-check `currentVersion`, `supportedSenders`, `features.internetPermission`
+
 ---
 
 ---

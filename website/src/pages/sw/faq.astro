@@ -1,0 +1,143 @@
+---
+import BaseLayout from '~/layouts/BaseLayout.astro';
+import Breadcrumbs from '~/components/Breadcrumbs.astro';
+import Accordion from '~/components/Accordion.astro';
+import { breadcrumbList, faqPage } from '~/utils/jsonld';
+
+/**
+ * Kiswahili FAQ — curated subset (top awareness / privacy / permissions
+ * questions). Users can click through to the English FAQ for the full set,
+ * which is honestly-scoped for M3.
+ */
+
+interface FaqItem {
+  q: string;
+  anchor: string;
+  a: string;
+}
+
+const groups: Array<{ label: string; items: FaqItem[] }> = [
+  {
+    label: 'SMS na ruhusa',
+    items: [
+      {
+        anchor: 'why-sms-permission',
+        q: 'Kwa nini PesaTrack inahitaji ruhusa ya SMS?',
+        a:
+          'PesaTrack ni kifuatiliaji cha pasipo kufanya kitu — hakuna kubonyeza wala kuingiza kwa mkono. Ili kufuatilia matumizi ya M-PESA kiotomatiki, inahitaji kusoma SMS za miamala anazokutumia Safaricom (na benki zinazoungwa mkono). Ruhusa hii ndiyo inayofanya bidhaa iwepo.',
+      },
+      {
+        anchor: 'does-pesatrack-read-all-sms',
+        q: 'Je, PesaTrack inasoma SMS zangu zote?',
+        a:
+          'Hapana. Broadcast wa Android inatoa SMS zote kwa apps zenye ruhusa, lakini SmsReceiver wa PesaTrack unaangalia mtumaji kwanza. Ni SMS kutoka MPESA na NCBA pekee ndizo zinazoshughulikiwa. SMS zingine zote zinapuuzwa mara moja na hazihifadhiwi.',
+      },
+      {
+        anchor: 'sms-not-detected',
+        q: 'SMS mpya hazitambuliki — tatizo ni nini?',
+        a:
+          'Sababu za kawaida: (1) ruhusa ya SMS haijatolewa au imefutwa baada ya kusasisha Android, (2) mfumo wa SMS umebadilika (uandike kwa support@pesatrack.co.ke), (3) simu inazuia broadcast za nyuma — angalia mipangilio ya "battery optimisation" kwa PesaTrack.',
+      },
+    ],
+  },
+  {
+    label: 'Faragha na data',
+    items: [
+      {
+        anchor: 'does-pesatrack-send-data',
+        q: 'Je, kuna kinachotoka kwenye simu yangu?',
+        a:
+          'Data ya miamala haitoki kamwe. Kuanzia toleo la 1.5.0, PesaTrack inaweza kutuma takwimu za matumizi zisizokuwa na utambulisho (mfano "amefungua skrini ya Analytics") kwa Firebase Analytics — na hiyo tu kama umewasha kwa hiari kwenye Settings → Privacy. Kimezimwa kwa msingi. Kiasi, wapokeaji, na maandishi vyako kamwe havitumwi.',
+      },
+      {
+        anchor: 'analytics-trackers',
+        q: 'PesaTrack inatumia trackers au matangazo?',
+        a:
+          'Hakuna matangazo, hakuna SDK za wahusika wa tatu za matangazo, hakuna trackers ya cross-app. Firebase Analytics inatumika tu kwa uchambuzi wa hiari (Sehemu ya 4 ya sera ya faragha). Hakuna kingine kinachoshirikiwa.',
+      },
+      {
+        anchor: 'data-on-uninstall',
+        q: 'Nikifuta app, data yangu inakwenda wapi?',
+        a:
+          'Inafutwa kabisa. Data yote imehifadhiwa katika Room database ya ndani; kufuta app kunaifuta yote. Kama unataka kubaki na kumbukumbu, tumia backup/export kabla ya kufuta.',
+      },
+    ],
+  },
+  {
+    label: 'Bajeti na kategoria',
+    items: [
+      {
+        anchor: 'month-starts-on',
+        q: 'Mwezi wa bajeti unaanza tarehe gani?',
+        a:
+          'Wewe unachagua. Kwenye Settings, weka "month starts on" kuwa tarehe ya mshahara wako (mfano 25). Bajeti zote, chati za mwezi kwenye Analytics, na CSV exports zitatumia kipindi hicho. Hii inasaidia bajeti ikaelewa jinsi unavyoishi kifedha, si tarehe ya kalenda.',
+      },
+      {
+        anchor: 'recategorise',
+        q: 'Naweza kubadilisha kategoria ya muamala?',
+        a:
+          'Ndiyo. Bofya muamala wowote, chagua kategoria mpya. PesaTrack itakumbuka mpokeaji huyo kwa siku zijazo (uhusiano uliojifunza) — hivyo huhitaji kuainisha kila mara.',
+      },
+    ],
+  },
+];
+
+const faqLd = faqPage(
+  groups.flatMap((g) => g.items.map((i) => ({ question: i.q, answer: i.a })))
+);
+
+const crumbs = [
+  { name: 'Nyumbani', href: '/sw' },
+  { name: 'Maswali', href: '/sw/faq' },
+];
+---
+
+<BaseLayout
+  title="Maswali yanayoulizwa mara kwa mara"
+  description="Maswali ya kawaida kuhusu PesaTrack — ruhusa za SMS, faragha, bajeti, na utatuzi."
+  canonical="/sw/faq"
+  lang="sw-KE"
+  alternates={[
+    { hreflang: 'en', href: '/faq' },
+    { hreflang: 'sw-KE', href: '/sw/faq' },
+    { hreflang: 'x-default', href: '/faq' },
+  ]}
+  jsonLd={[breadcrumbList(crumbs), faqLd]}
+  prose
+>
+  <Breadcrumbs crumbs={crumbs} />
+
+  <h1>Maswali yanayoulizwa mara kwa mara</h1>
+  <p class="lede">
+    Swali lako halijaonekana hapa? Angalia orodha kamili ya Kiingereza kwenye
+    <a href="/faq">/faq</a>, au tuma barua pepe kwa <a href="/support">support</a>.
+  </p>
+
+  {
+    groups.map((group) => (
+      <section class="group">
+        <h2>{group.label}</h2>
+        {group.items.map((item) => (
+          <Accordion question={item.q} anchor={item.anchor}>
+            <p>{item.a}</p>
+          </Accordion>
+        ))}
+      </section>
+    ))
+  }
+</BaseLayout>
+
+<style>
+  .lede {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+  }
+
+  .group {
+    margin-top: var(--space-10);
+  }
+
+  .group h2 {
+    margin-top: 0;
+  }
+</style>

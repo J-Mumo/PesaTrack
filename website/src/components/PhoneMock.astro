@@ -1,0 +1,116 @@
+---
+/**
+ * PhoneMock — SVG phone frame with a colored screen area.
+ * Placeholder for real screenshots (per plan §10, real screenshots
+ * come from a fixed demo dataset — deferred until we automate).
+ *
+ * Usage:
+ *   <PhoneMock label="Home screen" />
+ *   <PhoneMock label="Analytics">
+ *     <p>Placeholder body text visible on the "screen"</p>
+ *   </PhoneMock>
+ */
+export interface Props {
+  label: string;
+  /** ISO-ish caption e.g. "Home · Sep 2026" shown under the mock. */
+  caption?: string;
+}
+const { label, caption } = Astro.props;
+---
+
+<figure class="phone-figure">
+  <div class="phone" role="img" aria-label={label}>
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+      <div class="phone-status">
+        <span>PesaTrack</span>
+        <span>KES</span>
+      </div>
+      <div class="phone-content">
+        <slot>
+          <p class="placeholder">{label}</p>
+          <p class="placeholder-sub">Screenshot placeholder — see plan §10</p>
+        </slot>
+      </div>
+    </div>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .phone-figure {
+    margin: 0;
+    display: inline-block;
+  }
+
+  .phone {
+    width: 240px;
+    height: 480px;
+    background: #111;
+    border-radius: 28px;
+    padding: 10px;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .phone-notch {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 18px;
+    background: #111;
+    border-radius: 0 0 12px 12px;
+    z-index: 2;
+  }
+
+  .phone-screen {
+    background: var(--color-bg);
+    height: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .phone-status {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-6) var(--space-4) var(--space-3);
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .phone-content {
+    padding: var(--space-4);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .placeholder {
+    color: var(--color-text);
+    font-weight: var(--font-weight-semibold);
+    margin: 0 0 var(--space-2);
+  }
+
+  .placeholder-sub {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    margin: 0;
+  }
+
+  figcaption {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-3);
+  }
+</style>
