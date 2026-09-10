@@ -4,6 +4,14 @@ node_modules/
 # Environment variables
 .env
 
+# Docker Compose local override — NEVER commit
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Play service-account JSON (used by real /billing/verify) — NEVER commit
+play_service_account.json
+play_service_account*.json
+
 # Logs
 logs/
 *.log

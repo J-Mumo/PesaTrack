@@ -3,7 +3,12 @@
 
 'use strict';
 
-require('dotenv/config');
+// Load .env from the backend root (one directory above src/), regardless
+// of process cwd. Makes `node src/index.js` work from any directory and
+// keeps prod containers robust to WORKDIR changes.
+require('dotenv').config({
+  path: require('node:path').join(__dirname, '..', '.env'),
+});
 
 const express = require('express');
 const cors = require('cors');
