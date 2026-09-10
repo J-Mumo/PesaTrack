@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.5.2** | 14 | 2026-09-10 | Production | 🟡 Pending upload |
+| **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.5.2 |
 | **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.4.1 |
 | **1.3.2** | 9 | 2026-06-02 | Production | ✅ Published |
 | **1.3.1** | 8 | 2026-05-29 | Production | 🟡 Pending upload |
@@ -22,7 +23,77 @@
 
 ---
 
-## v1.4.1 (versionCode 11) — 2026-06-24
+## v1.5.2 (versionCode 14) — 2026-09-10
+
+**Focus:** Two-and-a-half months of incremental features and fixes since 1.4.1, plus the opt-in analytics groundwork. Version jumps 1.4.1 → 1.5.2 because Phases 1-3 of the analytics migration were internally versioned 1.5.0 and 1.5.1 during development; only 1.5.2 is being uploaded. Consolidates 16 android/ commits (`348887d..HEAD`).
+
+### ✨ New Features
+
+- **Opt-in anonymous usage analytics (Firebase Analytics, Phases 1-3)** — The first cloud dependency PesaTrack has ever shipped, gated by explicit user consent and default-OFF at the manifest level. New Settings → Privacy toggle plus a consent sheet on first launch. Collection is off at boot (manifest `firebase_analytics_collection_enabled=false` + Consent Mode `analytics_storage` denied); flipping the toggle calls both `setAnalyticsCollectionEnabled(true)` AND `setConsent(ANALYTICS_STORAGE = GRANTED)`. Ad-related consents stay DENIED forever — PesaTrack does not and will not run ads. Revoking calls `resetAnalyticsData()` to invalidate the pseudonymous App Instance ID. Debug builds always use `NoOpTelemetryClient` regardless of consent, so developer devices never contaminate production metrics.
+
+  - **Phase 1 — foundation** — vendor-agnostic `TelemetryClient` interface with `FirebaseTelemetryClient` (release) and `NoOpTelemetryClient` (debug). Consent sheet, Settings toggle, updated Privacy Policy ([`docs/privacy-policy.html`](../docs/privacy-policy.html) §4-5), rewritten About copy. Events: `app_opened`, `telemetry_enabled`, `telemetry_disabled`, `consent_sheet_shown`, `consent_sheet_dismissed`.
+  - **Phase 2 — engagement taxonomy** — `screen_viewed` (route base only, nav args stripped), `sms_parsed`, `expense_categorized_manual` / `_batch`, `expense_manual_added`, `import_started` / `_completed` / `_failed`, `budget_saved`, `category_created` / `_deleted`, `category_rule_created` / `_deleted`, `notification_opened`. New `countBucket(n)` helper prevents exact-count leakage (`1 / 2-5 / 6-10 / 11-25 / 26-50 / 51-100 / 100+`).
+  - **Phase 3 — coverage across the rest of the app** — 24 additional events for income (`income_categorized_manual` / `_excluded_toggled` / `_deleted`), settings (`settings_bank_tracking` / `_individual_bank` / `_biometric` / `_lock_timeout` / `_month_start_day` / `_categories_reset`), data management (`data_exported`, `database_backed_up` / `_restored`, `all_data_cleared`), category & merchant edits (`category_edited`, `category_rule_edited`, `merchant_recategorized`), permissions (`permission_requested` / `_granted` / `_denied` with `source=onboarding|app`), onboarding (`onboarding_started` / `_completed`), PIN (`pin_setup_completed` / `_disabled` / `_unlock_failed` — never sends attempt count), analytics tab switching, and expense delete. New bucketing helpers `timeoutBucket(seconds)` and `monthStartDayBucket(day)`.
+
+  **Privacy contract enforced by the allow-list in `TelemetryEvents.kt`**: every event name, param key, and value enum is a `const val`. No transaction amounts, no merchant names, no SMS text, no user-entered strings — only primitives from a fixed enum set. `TelemetryClient` short-circuits every event when consent is off.
+
+- **Analytics → Category × Month pivot grid** — New "Grid" tab on the Analytics screen showing a scrollable matrix of categories × recent months. CSV export button on the grid emits a `category_x_month.csv` file matching the on-screen layout. Home screen also gets a compact 3-month trend preview card that deep-links to the grid.
+
+- **Free-text expense search** — Search bar on the Expenses screen filters by merchant, category, amount, and date fragments. Live search — no submit button.
+
+- **Batch re-categorize by paybill/account** — On the Merchants screen, long-press or "Reassign" on any merchant reassigns every historical row for that paybill/account to a new category in one operation. Fires `merchant_recategorized` with a bucketed count.
+
+- **Pochi la Biashara M-PESA support** — `MpesaSmsParser` now recognises Pochi la Biashara payment SMS format ("You have paid Ksh… to POCHI NAME"). Auto-categorized like any other merchant payment; the Pochi name is preserved as the merchant.
+
+- **Target Android 16 (API 36)** — `compileSdk` and `targetSdk` bumped to 36 to meet Google Play's 31 August 2026 target-API-level deadline. No behaviour changes.
+
+### 🐛 Bug Fixes
+
+- **Firebase consent bug (critical)** — `setEnabled(true)` was calling `setAnalyticsCollectionEnabled(true)` but not `setConsent(ANALYTICS_STORAGE=GRANTED)`. With the manifest defaults denying analytics storage, Firebase refused to talk to servers even after opt-in — DebugView stayed empty, no App Instance ID, no events uploaded. Fix in [FirebaseTelemetryClient.kt](../android/app/src/main/java/com/pesatrack/services/telemetry/FirebaseTelemetryClient.kt) now grants/denies consent in lockstep with the collection toggle.
+- **Savings rate = investment / income (honest numbers)** — The Insights "Savings rate" card was previously `(income - spend) / income`, which conflated cash-on-hand with genuinely saved money. Replaced with `investment_total / income_total` so the card only rewards money actually moved into savings/investment categories, matching the mission principle of "save and invest by default". Assumptions block on the card was updated to show the new formula.
+- **Analytics grid empty on Home deep-link + narrow cells clipped amount** — Home → grid preview → "See all" launched the Analytics grid tab with the wrong initial period, showing an empty grid. Fixed the initial-period propagation. Widened category cells so amounts up to 7 digits fit without ellipsis.
+- **Income delete affordance + Home "received / invested" wording** — Income screen long-press now offers Delete alongside "Mark as Not income". Home monthly summary previously said "KES X received · Y% saved" — reworded to "KES X received · KES Y invested" with the invested number pulling from the same investment_total feeding the savings-rate card.
+- **Home / Income / Paybill display + NCBA test coverage** — Fixed paybill-name display on Home and Income cards (was showing raw paybill number when the aggregator lookup succeeded). Added regression tests for NCBA card-approval and generic-debit SMS.
+- **Aggregator paybill auto-categorization** — Paybills routed through aggregators (e.g. Cellulant) were falling through to `UNCATEGORIZED` because the aggregator paybill number matched but the merchant lookup used the wrong key. Fixed lookup order.
+- **Notification cleared when Categorize action tapped** — Tapping the notification's "Categorize" button opened `CategorizeScreen` but left the notification in the shade. Now dismissed on tap alongside "Ignore".
+
+### 📦 Technical
+
+- **New telemetry package** [`com.pesatrack.services.telemetry`](../android/app/src/main/java/com/pesatrack/services/telemetry/) — 4 files: `TelemetryClient.kt` (interface), `FirebaseTelemetryClient.kt` (release), `NoOpTelemetryClient.kt` (debug), `TelemetryEvents.kt` (allow-list of every event name, param key, value enum, plus bucketing helpers `countBucket` / `timeoutBucket` / `monthStartDayBucket`).
+- **Hilt module** [`di/TelemetryModule.kt`](../android/app/src/main/java/com/pesatrack/di/TelemetryModule.kt) — `@Provides` chooses NoOp for `BuildConfig.DEBUG`, Firebase otherwise.
+- **New consent surface** [`presentation/components/TelemetryConsentSheet.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/TelemetryConsentSheet.kt).
+- **Firebase BOM 33.7.0** added to `android/app/build.gradle.kts`; Google Services plugin 4.4.2 applied conditionally on `google-services.json` presence. `google-services.json` is gitignored — see `android/app/google-services.json` (place locally; do not commit).
+- **Manifest defaults** in [`AndroidManifest.xml`](../android/app/src/main/AndroidManifest.xml): `INTERNET` + `ACCESS_NETWORK_STATE` permissions declared. Four `google_analytics_default_allow_*` `<meta-data>` values default to `false`. `firebase_analytics_collection_enabled=false` at boot.
+- **Version bump**: `versionCode 11 → 14`, `versionName "1.4.1" → "1.5.2"`.
+- **~35 files changed**, 1,891 insertions / 63 deletions across ViewModels, MainActivity, SmsReceiver, SettingsScreen, About, and the four new telemetry files.
+
+### 🔐 Privacy & Data Safety
+
+This release requires updating the **Play Console Data Safety declaration** before rollout. Key answers:
+
+- **Data collected**: yes.
+- **App activity → App interactions**: Yes / Yes shared / Optional / for Analytics + App functionality / encrypted in transit / user can request deletion.
+- **Device or other IDs**: Yes (Firebase App Instance ID) / Yes shared / Optional / for Analytics.
+- **Financial info / Personal info / Messages / Contacts / Location**: No (all remain local-only).
+- **Internet access**: Yes.
+
+Privacy policy at [`docs/privacy-policy.html`](../docs/privacy-policy.html) already updated with §4 "Anonymous Usage Analytics (Opt-In)" and §5 "Google Play Services".
+
+### 🏪 Play Store Release Notes
+
+```
+What's New:
+• You can now optionally help improve PesaTrack by sharing anonymous, opt-in usage analytics. Off by default — turn it on in Settings → Privacy if you'd like to help
+• New Analytics → Grid tab: see spend by category across the last several months, and export it as CSV
+• Search expenses by merchant, category, amount, or date on the Expenses screen
+• Merchants screen can now re-categorize every past transaction for a paybill or till in one tap
+• "Savings rate" on Insights now measures money actually invested, not just left over
+• Support for Pochi la Biashara M-PESA payments, plus fixes for aggregator paybills, NCBA card-approval SMS, and Home / Income screen paybill names
+• Now targeting Android 16 (API 36) for Play Store compliance
+```
+
+---
+
 
 **Focus:** Patch release on top of v1.4.0 — four polish items that landed after v1.4.0's release commit. Closes the loop on income tracking (self-transfer noise, scroll regression) and finishes the "month starts on" alignment across the rest of the app (Analytics Monthly charts, CSV export).
 
