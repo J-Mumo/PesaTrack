@@ -1,0 +1,13 @@
+# Add this block to ~/proxy/Caddyfile on the Hetzner host, then
+#   docker compose -f ~/proxy/docker-compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# See plans/ai-pro-phase1-spec.md §4.3
+# Follows the same pattern as StockUp / MaliScope on this host —
+# see C:\Eng\StockUp\deploy\README.md §4.
+
+pesatrack-api.jmumo.com {
+    encode zstd gzip
+    # The container is named pesatrack-api-web-1 by docker compose
+    # (project name "pesatrack-api" + service "web" + replica 1).
+    reverse_proxy pesatrack-api-web-1:3000
+}

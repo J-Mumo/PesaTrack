@@ -1,43 +1,42 @@
 {
-  "name": "pesatrack-backend",
-  "version": "1.0.0",
-  "description": "PesaTrack M-PESA Integration Backend",
+  "name": "pesatrack-api",
+  "version": "0.1.0",
+  "description": "PesaTrack AI Pro backend — Play Billing verification, entitlement store, AI provider proxy",
   "main": "src/index.js",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest",
+    "test": "node --test test/**/*.test.js",
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "db:push": "prisma db push",
     "postinstall": "prisma generate"
   },
   "keywords": [
-    "mpesa",
-    "daraja",
-    "expense-tracker"
+    "pesatrack",
+    "ai",
+    "play-billing",
+    "openai"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@libsql/client": "^0.17.0",
-    "@prisma/adapter-libsql": "^7.4.2",
-    "@prisma/client": "^7.4.2",
-    "axios": "^1.6.5",
+    "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.1",
-    "express": "^4.18.2",
-    "joi": "^17.12.1",
-    "morgan": "^1.10.0",
-    "prisma": "^7.4.2"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "googleapis": "^144.0.0",
+    "openai": "^4.68.0",
+    "prisma": "^5.22.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "nodemon": "^3.1.7"
   }
 }

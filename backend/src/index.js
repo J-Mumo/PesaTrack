@@ -1,88 +1,72 @@
-require('dotenv').config();
+// PesaTrack API — Phase 1 bootstrap
+// See plans/ai-pro-phase1-spec.md §4
+
+'use strict';
+
+require('dotenv/config');
 
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 
-const { connectDatabase } = require('./services/databaseService');
-const paymentRoutes = require('./routes/payment');
-const callbackRoutes = require('./routes/callback');
+const config = require('./config');
+const { requestId } = require('./middleware/requestId');
+const { httpLogger, log } = require('./middleware/logger');
+const { errorHandler, notFoundHandler } = require('./middleware/errors');
+
+const healthRoutes = require('./routes/health');
+const billingRoutes = require('./routes/billing');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(morgan('dev'));
+// --- Core middleware ---
+app.disable('x-powered-by');
+app.set('trust proxy', 1); // behind Caddy on Hetzner
+app.use(requestId);
+app.use(cors({
+  origin: (origin, cb) => {
+    // Native Android client sends no Origin — allow.
+    if (!origin) return cb(null, true);
+    if (origin === config.allowedOriginWeb) return cb(null, true);
+    return cb(new Error('CORS: origin not allowed'));
+  },
+  credentials: false,
+  maxAge: 600,
+}));
+app.use(express.json({ limit: '256kb' }));
+app.use(httpLogger);
 
-// Routes
-app.use('/api/payment', paymentRoutes);
-app.use('/api/callback', callbackRoutes);
+// --- Routes ---
+app.use('/health', healthRoutes);
+app.use('/billing', billingRoutes);
+app.use('/ai', aiRoutes);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    environment: process.env.MPESA_ENV || 'sandbox',
-    database: 'connected'
-  });
-});
+// --- Error handlers (last) ---
+app.use(notFoundHandler);
+app.use(errorHandler);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.message || 'Internal Server Error'
-  });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Endpoint not found'
-  });
-});
-
-// Start server with database connection
-async function startServer() {
-  try {
-    // Connect to database
-    const dbConnected = await connectDatabase();
-    
-    if (!dbConnected) {
-      console.warn('⚠️ Starting server without database connection');
-    }
-
-    const darajaConfig = require('./config/daraja');
-
-    app.listen(PORT, () => {
-      const env = darajaConfig.environment;
-      const isProduction = env === 'production';
-
-      console.log(`🚀 PesaTrack Backend running on port ${PORT}`);
-      console.log(`📱 Daraja Environment: ${env.toUpperCase()}`);
-      console.log(`🏦 BusinessShortCode: ${darajaConfig.shortcode}`);
-      console.log(`🏪 PartyB (Till/Store): ${darajaConfig.partyB}`);
-      console.log(`💳 Transaction Type: ${darajaConfig.transactionType}`);
-      console.log(`🔗 API Base: ${darajaConfig.baseUrl}`);
-      console.log(`📞 Callback: ${darajaConfig.callbackUrl || '⚠️  NOT SET'}`);
-      
-      if (isProduction) {
-        console.log('🟢 Running in PRODUCTION mode — real M-PESA transactions');
-      } else {
-        console.log('🟡 Running in SANDBOX mode — test transactions only');
-      }
+// --- Boot ---
+if (require.main === module) {
+  const server = app.listen(config.port, () => {
+    log.info({
+      msg: 'pesatrack-api listening',
+      port: config.port,
+      env: config.nodeEnv,
+      service: config.serviceName,
+      version: config.serviceVersion,
+      devFakeBilling: config.devFakeBilling,
+      enableAiEndpoints: config.enableAiEndpoints,
+      enableAiEcho: config.enableAiEcho,
     });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-}
+  });
 
-startServer();
+  const shutdown = (signal) => {
+    log.info({ msg: 'shutdown signal', signal });
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
 
 module.exports = app;

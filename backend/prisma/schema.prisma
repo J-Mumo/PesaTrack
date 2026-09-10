@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// PesaTrack AI Pro backend — Prisma schema (v0.1.0)
+// See plans/ai-pro-phase1-spec.md §4.5
 
 generator client {
   provider = "prisma-client-js"
@@ -7,49 +7,65 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-/// M-PESA Transaction model
-/// Stores both pending and completed transactions from STK Push
-model Transaction {
-  id                  String    @id @default(uuid())
-  checkoutRequestId   String    @unique @map("checkout_request_id")
-  merchantRequestId   String?   @map("merchant_request_id")
-  phoneNumber         String    @map("phone_number")
-  amount              Float     
-  paymentType         String    @map("payment_type")
-  recipient           String?
-  accountReference    String?   @map("account_reference")
-  transactionDesc     String?   @map("transaction_desc")
-  categoryId          Int?      @map("category_id")
-  notes               String?
-  status              String    @default("PENDING")
-  mpesaReceiptNumber  String?   @map("mpesa_receipt_number")
-  transactionDate     DateTime? @map("transaction_date")
-  failureReason       String?   @map("failure_reason")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  completedAt         DateTime? @map("completed_at")
+/// A user's Google Play Billing purchase — the sole identity anchor.
+/// No User table by design: the purchase token IS the identity.
+/// No PII is ever stored here.
+model Entitlement {
+  id String @id @default(cuid())
 
-  metadata TransactionMetadata[]
+  /// SHA-256(purchaseToken) — never the raw token. See services/playBilling.js hashToken().
+  /// Unique so we can upsert by hash without ever indexing the raw token in the DB.
+  purchaseTokenHash String @unique @map("purchase_token_hash")
 
-  @@index([status])
-  @@index([phoneNumber])
-  @@index([createdAt])
-  @@map("transactions")
+  /// "pesatrack_pro_monthly" | "pesatrack_pro_annual"
+  productId String @map("product_id")
+
+  /// Should always be "com.pesatrack" — rejected otherwise at verify time.
+  packageName String @map("package_name")
+
+  /// Play Developer API response fields (normalized).
+  expiryTimeMillis BigInt  @map("expiry_time_millis")
+  autoRenewing     Boolean @map("auto_renewing")
+
+  /// 0 = pending, 1 = received, 2 = free trial, 3 = pending deferred upgrade/downgrade.
+  paymentState Int @map("payment_state")
+
+  /// Non-null when this purchase supersedes an earlier one (upgrade/downgrade chain).
+  linkedPurchaseTokenHash String? @map("linked_purchase_token_hash")
+
+  /// Ops.
+  lastVerifiedAt DateTime @default(now()) @map("last_verified_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([expiryTimeMillis])
+  @@map("entitlements")
 }
 
-/// Transaction metadata for extensible key-value data
-model TransactionMetadata {
-  id            Int         @id @default(autoincrement())
-  transactionId String      @map("transaction_id")
-  key           String
-  value         String?
-  createdAt     DateTime    @default(now()) @map("created_at")
+/// Bounded, PII-free audit trail. Used for post-incident forensics and metrics.
+/// Never contains raw tokens, digest bodies, prompts, or LLM outputs.
+model AuditEvent {
+  id String @id @default(cuid())
 
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  /// "billing.verified" | "billing.expired" | "billing.rejected"
+  /// | "ai.echo_called" | "ai.endpoint_called" | "ai.fallback"
+  /// | "rate_limit.hit" | "circuit_breaker.tripped"
+  type String
 
-  @@index([transactionId])
-  @@map("transaction_metadata")
+  /// SHA-256(purchaseToken).slice(0,16) — same derivation as logs.
+  purchaseTokenHash String @map("purchase_token_hash")
+
+  /// Bounded JSON: endpoint name, latency_ms, outcome, fallback_reason.
+  /// Enforced at write-site — never contains user text or digest content.
+  metadata Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([type, createdAt])
+  @@index([purchaseTokenHash, createdAt])
+  @@map("audit_events")
 }
