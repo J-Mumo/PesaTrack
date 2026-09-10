@@ -62,6 +62,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Bundle native debug symbols into the AAB so Play Console can
+            // symbolicate native crashes and ANRs (e.g. from Firebase's
+            // native libraries). Symbols are stripped from the delivered APK
+            // — this only affects the AAB metadata Play uses server-side.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
         debug {
             isMinifyEnabled = false
