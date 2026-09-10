@@ -15,15 +15,19 @@ WORKDIR /app
 # pnpm via corepack — matches packageManager pin in package.json.
 RUN corepack enable
 
+# Build context is the repo root so we can also see ../_docs/releases.md
+# (read by src/pages/changelog.astro at build time).
 # Install deps with a frozen lockfile.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY website/package.json website/pnpm-lock.yaml website/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Public site URL used by astro.config.mjs for canonical URLs + sitemap.
 ARG SITE=https://pesatrack.jmumo.com
 ENV SITE=${SITE}
 
-COPY . .
+# Copy the whole website source, plus the shared _docs/ folder read at build time.
+COPY website/ ./
+COPY _docs/ ../_docs/
 RUN pnpm run build
 
 # ---------------------------------------------------------------------------
@@ -31,4 +35,4 @@ RUN pnpm run build
 # ---------------------------------------------------------------------------
 FROM caddy:2-alpine AS runtime
 COPY --from=build /app/dist /usr/share/caddy
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY website/Caddyfile /etc/caddy/Caddyfile

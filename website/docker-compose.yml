@@ -11,7 +11,10 @@ name: pesatrack
 services:
   web:
     build:
-      context: .
+      # Context is the repo root so the Astro build can read ../_docs/releases.md
+      # (source of truth for the /changelog page).
+      context: ..
+      dockerfile: website/Dockerfile
       args:
         # Override at build time if the public URL ever changes.
         SITE: https://pesatrack.jmumo.com

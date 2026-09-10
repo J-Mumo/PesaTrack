@@ -1,31 +1,38 @@
-# Exclude Android project (not needed for backend)
-android/
+# Repo-root .dockerignore for the website build.
+# Compose context is the repo root (see website/docker-compose.yml) and the
+# Dockerfile lives at website/Dockerfile. It needs website/ + _docs/ visible.
 
-# Exclude docs and plans
-_docs/
-plans/
-
-# Git
+# --- VCS / editor ---
 .git/
+.github/
 .gitignore
-
-# IDE
 .vscode/
 .idea/
+.roo/
 
-# Node modules (will be installed in Docker)
-backend/node_modules/
+# --- Not needed by the marketing site ---
+android/
+backend/
+scripts/
+docs/
+plans/
+railway.json
+AGENTS.md
+README.md
+Dockerfile
 
-# Database files
-*.db
-*.db-journal
+# --- Build artefacts + local env inside website/ ---
+website/node_modules/
+website/dist/
+website/.astro/
+website/.env
+website/.env.*
+!website/.env.example
+website/*.log
+website/pa11y-report/
+website/lighthouse-report/
 
-# Environment files (will be set via Railway dashboard)
-backend/.env
-
-# OS files
+# --- OS junk ---
 .DS_Store
 Thumbs.db
 
-# Generated Prisma client (will be generated in Docker)
-backend/src/generated/
