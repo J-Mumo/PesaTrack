@@ -1,0 +1,25 @@
+# PesaTrack marketing site — Astro static, served by Caddy behind the shared proxy.
+#
+# Bring up:   docker compose up -d --build
+# Public URL: https://pesatrack.jmumo.com  (TLS via ~/proxy)
+#
+# No database, no runtime env; anything site-specific is baked in at build time
+# (see Dockerfile ARG SITE). Redeploy = rebuild.
+
+name: pesatrack
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        # Override at build time if the public URL ever changes.
+        SITE: https://pesatrack.jmumo.com
+    image: pesatrack-web:latest
+    restart: unless-stopped
+    networks:
+      - web
+
+networks:
+  web:
+    external: true

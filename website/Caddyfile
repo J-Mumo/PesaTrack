@@ -1,0 +1,15 @@
+# Static site served over plain HTTP inside the Docker network. Public TLS is
+# terminated upstream by the shared Caddy proxy at ~/proxy on the host.
+:80 {
+    root * /usr/share/caddy
+    encode zstd gzip
+
+    # Long-cache immutable Astro build assets. index.html stays fresh.
+    @assets path /_astro/* /_pagefind/*
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+
+    # Astro's `build.format: 'file'` produces about.html not about/index.html,
+    # so a plain file_server works for every route. Fall through to 404.html.
+    try_files {path} {path}.html {path}/index.html /404.html
+    file_server
+}
