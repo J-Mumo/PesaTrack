@@ -1,5 +1,22 @@
 # PesaTrack Pro — Launch Plan
 
+> **Status:** ⚠️ **Partially superseded — historical reference for Pro v1 template-based positioning** (2026-09-11).
+> **Superseded by:** [`plans/ai-pro-plan.md`](ai-pro-plan.md), which pivots the Pro-tier anchor value from template-based Insights to **AI-generated Coach Insights + Ask Your Money chat**, backed by an OpenAI proxy on Hetzner.
+>
+> **Still valid from this document:**
+> - The free-vs-Pro feature split scaffolding (which features stay free)
+> - Play Billing direct as the billing rail (confirmed in the new plan)
+> - No-server-identity design (still true for Pro billing; the new AI backend authenticates *purchases*, not *users*)
+>
+> **No longer valid from this document:**
+> - "Pro v1 needs no INTERNET permission." The AI Pro tier requires INTERNET and adds `pesatrack-api.jmumo.com` to the network security config.
+> - The template-based `RecommendationEngine` was demoted from Pro anchor to *free-tier* Insights feed (that content is what non-Pro users see; Pro users see AI-generated content in the same UX slot).
+> - Any statement in §Technical Architecture about "no server-side infrastructure." A Hetzner backend now exists per [`plans/ai-pro-plan.md §6`](ai-pro-plan.md#6-architecture).
+
+**Do not use this document as the live Pro plan.** Refer to [`plans/ai-pro-plan.md`](ai-pro-plan.md).
+
+---
+
 ## Overview
 
 PesaTrack Pro is a premium tier that transforms PesaTrack from a passive expense tracker into a **personal financial coach**. The free tier remains fully functional for tracking, budgeting, and basic analytics. Pro adds intelligence: actionable recommendations, deep insights, proactive alerts, and power-user tools.

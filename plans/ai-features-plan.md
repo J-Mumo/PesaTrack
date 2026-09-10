@@ -1,8 +1,28 @@
 # PesaTrack AI Features Plan
 
 > **Created:** 2026-03-22
-> **Status:** Planning
-> **Constraints:** No large on-device model downloads (ruled out Gemini Nano's 2-4 GB), offline-first design, `minSdk 26`, zero/minimal APK size increase preferred.
+> **Status:** ⚠️ **Superseded — historical reference only** (2026-09-11).
+> Replaced by [`plans/ai-pro-plan.md`](ai-pro-plan.md), which reframes AI as the paid Pro-tier anchor (OpenAI backend on Hetzner) rather than a free-tier enhancement.
+> **Constraints (at time of writing):** No large on-device model downloads (ruled out Gemini Nano's 2-4 GB), offline-first design, `minSdk 26`, zero/minimal APK size increase preferred.
+
+## Status of the items in this plan (as of 2026-09-11)
+
+| # (from §6) | Feature | Original status | Current disposition |
+|---|---|---|---|
+| 1 | Anomaly Detection | Phase A (statistical, offline) | ❌ **Rejected 2026-09-11.** Not-to-be-done. Effort redirected to Pro AI tier. |
+| 2 | Recurring Expense Detection | Phase A (statistical, offline) | ✅ **Shipped** — see [`android/app/src/main/java/com/pesatrack/services/RecurringExpenseService.kt`](../android/app/src/main/java/com/pesatrack/services/RecurringExpenseService.kt), [`RecurringReminderWorker.kt`](../android/app/src/main/java/com/pesatrack/services/RecurringReminderWorker.kt) |
+| 3 | Smart Budget Suggestions | Phase A (statistical, offline) | ❌ **Rejected 2026-09-11.** Partial pace/burn-down/quiet-leak cards already shipped in Analytics; further work not-to-be-done. |
+| 4 | Enhanced Rules Engine (fuzzy + heuristics) | Phase A (offline) | ❌ **Rejected 2026-09-11.** Not-to-be-done. Existing `KeywordRulesEngine` + user rules + AI unknown-merchant categorization (Pro, Phase 5) will handle the residue. |
+| 5 | Predictive Cashflow | Phase A (statistical, offline) | ✅ **Shipped** — `BudgetForecast` model + forecast projection chart + burn-down card |
+| 6 | Cloud AI Categorization | Phase B (opt-in Gemini) | ⚠️ **Attempted & removed (v1)**, then **revived as Pro-tier feature P6** in the new plan. Removal note in [`_docs/implementation-status.md`](../_docs/implementation-status.md) L432-435. New design: OpenAI, backend-proxied, Pro-only. See [`ai-pro-plan.md §5.P6`](ai-pro-plan.md#p6-smart-categorization-for-unknowns-phase-5). |
+| 7 | NLP Spending Summaries | Phase B (opt-in cloud) | ⚠️ **Reincarnated** as Pro-tier **Coach Insights (P1)** in the new plan. Same idea, better privacy/guardrail architecture. |
+| 8 | Conversational Query | Phase B (opt-in cloud) | ⚠️ **Reincarnated** as Pro-tier **Ask Your Money (P2)** in the new plan. Read-only advisory scope. |
+
+**Do not use this document as the live plan.** Refer to [`plans/ai-pro-plan.md`](ai-pro-plan.md) for the current strategy, and [`plans/ai-pro-phase1-spec.md`](ai-pro-phase1-spec.md) / [`plans/ai-pro-phase2-spec.md`](ai-pro-phase2-spec.md) for implementation specs.
+
+---
+
+_Original document begins below._
 
 ---
 
