@@ -35,7 +35,7 @@ Deliver the first user-visible Pro AI feature: a single narrative Coach Insight 
 
 ### Non-goals
 
-- No chat (that's Phase 4 / Ask Your Money)
+- No chat (that's Phase 3 / Ask Your Money — see [`plans/ai-pro-phase3-spec.md`](ai-pro-phase3-spec.md))
 - No multi-card feed (single card per day)
 - No push notifications (Phase 1 telemetry showed users prefer opening the app to being pinged; also the notification cadence rule from AGENTS.md applies)
 - No historic Insight browser (v2)

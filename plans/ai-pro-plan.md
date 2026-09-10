@@ -11,7 +11,7 @@
 2. [Confirmed Decisions](#2-confirmed-decisions)
 3. [What "Smarter Spending Advice" Actually Means](#3-what-smarter-spending-advice-actually-means)
 4. [Free vs Pro Split](#4-free-vs-pro-split)
-5. [The Six Pro AI Features](#5-the-six-pro-ai-features)
+5. [The Three Pro AI Features](#5-the-three-pro-ai-features)
 6. [Architecture](#6-architecture)
 7. [Data Digest &amp; Privacy Contract](#7-data-digest--privacy-contract)
 8. [LLM Guardrails](#8-llm-guardrails)
@@ -48,10 +48,14 @@ This is defensible against the free tier because advice is a genuinely different
 | 4 | Chat scope | **Read-only advisory.** AI never mutates data. User acts on suggestions. | 2026-09-11 |
 | 5 | Free-tier AI teaser | **None.** Clean paywall, single discoverable Pro CTA. | 2026-09-11 |
 | 6 | Backend | **Hetzner CPX21 multi-app VM** at `2.28.75.21`, subdomain `pesatrack-api.jmumo.com`, on the shared `web` Docker network + Caddy proxy per [`C:\Eng\StockUp\deploy\README.md`](../../StockUp/deploy/README.md). | 2026-09-11 |
-| 7 | Ask Your Money scope | **Q&A + short-term memory** (last 10 turns). Default from author recommendation — user has ability to override. | 2026-09-11 (tentative — flagged in §15) |
+| 7 | Ask Your Money scope | **Q&A + short-term memory** (last 10 turns). Read-only advisory — AI never mutates data. | 2026-09-11 |
 | 8 | Actual model | `gpt-4.1-mini` or current OpenAI mini-class workhorse at ship time. Pinned by exact model ID (never `-latest`). | 2026-09-11 |
+| 9 | **Home FAB placement** | **Home FAB is replaced by the AI (Ask Your Money) button.** "Add Expense" continues to live on the Expenses tab only. Free users tapping the Home FAB land on the Pro upsell / free-trial screen (single discoverable Pro CTA per row 5). | 2026-09-11 |
+| 10 | **What-If handling** | **Folded into Ask Your Money as a chat capability.** When the user asks a what-if question, the LLM returns a structured `chart` block alongside its text, rendered inline in the chat bubble as a mini Vico chart. No separate What-If screen. | 2026-09-11 |
+| 11 | **Free trial length** | **14 days.** Rationale: the anchor feature is a *daily* Coach Insight, so 14 days = 14 real samples of the value. | 2026-09-11 |
+| 12 | **Pro feature set at launch** | **3 features:** P1 Coach Insights, P2 Ask Your Money (with What-If + inline charts), P6 Smart Categorize Unknowns. P3 folded into P2, P4 (Goal Planner) parked pending user demand, P5 (Recipient Coach) cut — its value absorbed by P1's use of `top_recipients_this_period` in the digest. | 2026-09-11 |
 
-**Not yet decided** (see §15): exact Pro pricing in KES, annual free-trial length, precise Ask-Your-Money memory-window turn count, chat streaming vs single-shot.
+**Not yet decided** (see §15): exact Pro pricing in KES (currently suggested KES 299/mo / KES 2,400/yr), chat streaming vs single-shot response, precise per-turn context-window token cap.
 
 ---
 
@@ -59,17 +63,19 @@ This is defensible against the free tier because advice is a genuinely different
 
 Broken down into concrete jobs-to-be-done, ranked by how often users ask them in feedback:
 
-| # | User question | Today's answer (free) | Pro answer |
-|---|---|---|---|
-| 1 | "Am I doing OK this month?" | Numbers + pace card | Narrative: what's normal, what changed, one thing to try |
-| 2 | "Why is X so high?" | User has to dig | Coach explains: "12 Java House visits, avg KES 700, up 163% vs March" |
-| 3 | "How do I save KES 20k?" | Not answered | Goal plan: cut Y by Z%, redirect to savings; here's the trade-off |
-| 4 | "What if I stopped doing X?" | Not answered | What-if simulator: 12-month projection with visible assumptions |
-| 5 | "Where's my money leaking?" | Quiet Leak Card (heuristic) | Ranked list with recipient-level context + one nudge each |
-| 6 | "What should I invest?" | Not answered | Illustration only — "You could redirect KES X/mo; at 10% p.a. that's KES Y in 5yrs" (assumptions shown, no specific securities) |
-| 7 | "This new merchant — what is it?" | Uncategorized | AI categorization for unknowns (rules engine handles knowns) |
+| # | User question | Today's answer (free) | Pro answer | Delivered by |
+|---|---|---|---|---|
+| 1 | "Am I doing OK this month?" | Numbers + pace card | Narrative: what's normal, what changed, one thing to try | **P1 Coach Insights** |
+| 2 | "Why is X so high?" | User has to dig | Coach explains: "12 Java House visits, avg KES 700, up 163% vs March" | **P2 Ask Your Money** (and P1 when the digest surfaces the spike) |
+| 3 | "How do I save KES 20k?" | Not answered | Goal plan: cut Y by Z%, redirect to savings; here's the trade-off | ⛸️ **Parked** — formerly P4 Goal Planner, deferred until user demand |
+| 4 | "What if I stopped doing X?" | Not answered | Projection with visible assumptions + inline compound-growth chart | **P2 Ask Your Money** (What-If folded in as a chat capability with structured chart output) |
+| 5 | "Where's my money leaking?" | Quiet Leak Card (heuristic) | Recipient-level context surfaced in daily card | **P1 Coach Insights** (absorbs the former discrete P5 Recipient Coach) |
+| 6 | "What should I invest?" | Not answered | Illustration only — "You could redirect KES X/mo; at 10% p.a. that's KES Y in 5yrs" (assumptions shown, no specific securities) | **P2 Ask Your Money** (as part of What-If chart output) |
+| 7 | "This new merchant — what is it?" | Uncategorized | AI categorization for unknowns (rules engine handles knowns) | **P6 Smart Categorize Unknowns** |
 
 Every job above is a **read-only advisory** job. The AI never acts on the user's behalf — it suggests, user acts. This keeps the surface area small and the liability contained.
+
+**Note on the collapse to 3 features:** The 2026-09-11 review cut the roadmap from 6 to 3 discrete Pro AI features. Rationale is in §13. The *jobs* still get answered — just through fewer surfaces.
 
 ---
 
@@ -86,21 +92,26 @@ Every job above is a **read-only advisory** job. The AI never acts on the user's
 
 **Pro-only (new — this plan):**
 
-| Feature | Anchors which product principle | Rough effort |
-|---|---|---|
-| **P1. Coach Insights** — 1 AI-generated narrative card/day on Home replacing today's template summaries for Pro users | Awareness before action; Save & invest by default | M (Phase 2) |
-| **P2. Ask Your Money** — chat, grounded in aggregated data, Q&A + short-term memory | Awareness; Honest numbers | L (Phase 4) |
-| **P3. What-If Simulator** — "if I cut X by Y% → save Z/mo → invested at r% → …" with visible assumptions | Save & invest by default | M (Phase 3) |
-| **P4. Goal Planner** — user sets a savings goal, AI drafts a plan from their actual spend patterns | Save & invest by default | M (Phase 5) |
-| **P5. Recipient-level Coach** — tap any recipient → "You spent X here, up Y% vs baseline, here's context" | Awareness | S (Phase 3) |
-| **P6. Smart Categorization (unknowns only)** — cloud fallback for merchants the rules engine can't classify | (utility) | S (Phase 5) |
+| # | Feature | Anchors which product principle | Effort | Ships in |
+|---|---|---|---|---|
+| **P1** | **Coach Insights** — 1 AI-generated narrative card/day on Home replacing today's template summaries for Pro users. Absorbs recipient-level context via `top_recipients_this_period` in the digest. | Awareness before action; Save & invest by default | M | Phase 2 |
+| **P2** | **Ask Your Money** — chat surface reachable from the **new Home FAB (replaces "Add Expense" FAB)**. Q&A + 10-turn short-term memory. **Includes What-If capability**: when the user asks a hypothetical, the LLM returns a structured `chart` block that the client renders inline in the chat bubble as a Vico mini-chart. Free users tapping the Home FAB land on a Pro upsell / free-trial screen. | Awareness; Save & invest by default; Honest numbers | L | Phase 3 |
+| **P6** | **Smart Categorize Unknowns** — cloud fallback for merchants the rules engine can't classify. No new UI. Silent fallback to `UNCATEGORIZED` when offline or rate-limited. | (utility) | S | Phase 4 |
+
+**Parked / cut (2026-09-11):**
+
+| Formerly | Disposition |
+|---|---|
+| P3 "What-If Simulator" | Folded into P2 as a chat capability. See row above. |
+| P4 "Goal Planner" | Parked pending user-demand signal. Not deleted — revive-ready if support tickets or in-app feedback show demand. |
+| P5 "Recipient-level Coach" | Cut. Value absorbed by P1 (Coach Insights already references top recipients via the digest). No dedicated tap-a-recipient surface. |
 
 **Deferred from `pro-launch-plan.md` (Pro v1 template-based features — still valid but demoted from anchor):**
 The template-based "Actionable Spending Recommendations" and "Deep Insights and Financial Coaching" sections of `pro-launch-plan.md` are now the *free-tier* Insights feed (already shipped). Pro replaces them with AI-generated versions of the same UX slots for Pro users. Same UI, better content.
 
 ---
 
-## 5. The Six Pro AI Features
+## 5. The Three Pro AI Features
 
 ### P1. Coach Insights (Phase 2 — anchor)
 
@@ -110,31 +121,37 @@ The template-based "Actionable Spending Recommendations" and "Deep Insights and 
 
 **What it's grounded in:** The `DataDigest` (§7). No individual transactions, no raw SMS.
 
-### P2. Ask Your Money (Phase 4 — highest effort, ships last of the anchors)
+**Absorbs from the parked P5:** The digest includes `top_recipients_this_period`, so when a recipient is anomalously high or up sharply, the daily insight can call it out by name (rehydrated on-device from the recipient ID). We get the recipient-level insight without a separate tap-and-coach surface.
 
-**User-visible surface:** New tab on the Analytics screen (or new bottom-nav entry, TBD in phase 4 spec). Chat UI with the user's typed question and streamed assistant response. Last 10 turns kept in context; older turns evicted.
+**Full spec:** [`plans/ai-pro-phase2-spec.md`](ai-pro-phase2-spec.md).
 
-**Scope:** Read-only advisory — the AI can *suggest* the user open a screen or make a change; it cannot execute anything.
+---
+
+### P2. Ask Your Money (Phase 3)
+
+**User-visible surface:** The Home screen's **FAB is replaced** by an AI icon. Tap opens a full-screen chat.
+
+- **Pro users:** chat UI with the user's typed question and a streamed assistant response. Last 10 turns kept in context; older turns evicted. Fresh `DataDigest` on every turn.
+- **Free users:** the AI FAB opens a **Pro upsell / free-trial landing screen** instead. This is the single discoverable Pro CTA per §2 row 5. No content preview — clean paywall.
+- **Add Expense** continues to live on the Expenses tab (its own FAB there is unchanged). Users lose the Home shortcut but the Expenses tab is one tap away.
+
+**Scope:** Read-only advisory. AI can *suggest* the user open a screen or make a change; it cannot execute anything.
+
+**What-If capability (folded in from the cut P3):** For hypothetical questions ("what if I cut Uber by 30%?", "what if I saved KES 5,000 instead"), the LLM returns a structured `chart` block alongside its text. The client renders this inline in the chat bubble as a mini Vico chart (compound-growth curve, or monthly-delta bar chart depending on the answer type). Assumptions are shown as an expander directly beneath the chart, per the mandatory-assumption rule (§8.2).
 
 **Grounding:** Fresh `DataDigest` each turn (recomputed on-device) plus the last 10 turns of dialogue. No transaction bodies.
 
-### P3. What-If Simulator (Phase 3)
+**Full spec:** [`plans/ai-pro-phase3-spec.md`](ai-pro-phase3-spec.md).
 
-**User-visible surface:** Off Analytics or Budget screen — "What if…?" button. User picks a category and a change (e.g. "cut by 30%"). AI returns a projected month-end delta, an annualized figure, and an **illustration-only** compound-growth line if the user invested the delta at a chosen return rate. Assumptions block mandatory.
+---
 
-### P4. Goal Planner (Phase 5)
+### P6. Smart Categorization for Unknowns (Phase 4)
 
-**User-visible surface:** New "Goals" section in Settings or Analytics. User sets a KES target + timeframe. AI drafts a plan grounded in their real spending: which categories to trim, expected monthly saving, feasibility flag (e.g. "This goal requires cutting rent, which our data flags as recurring — likely infeasible without a lifestyle change").
-
-### P5. Recipient-level Coach (Phase 3 — cheap add-on)
-
-**User-visible surface:** Long-press or tap on any recipient in Expenses / Merchants → "Coach" action. AI returns 2–3 sentences: current-period spend, delta vs 3-month baseline, ranked context (e.g. "You spent more at this merchant this month than at any grocery store"). Optional single nudge.
-
-### P6. Smart Categorization for Unknowns (Phase 5)
-
-**User-visible surface:** No new UI. When a new SMS arrives and both the user-rules engine and `KeywordRulesEngine` return `UNCATEGORIZED`, an in-flight call to `/ai/categorize` returns a category ID. Falls back silently to `UNCATEGORIZED` if offline or rate-limited.
+**User-visible surface:** No new UI. When a new SMS arrives and both the user-rules engine and `KeywordRulesEngine` return `UNCATEGORIZED`, an in-flight call to `/ai/categorize` returns a category ID. Falls back silently to `UNCATEGORIZED` if offline, rate-limited, or the user is not Pro-entitled.
 
 **Why bring this back after removal:** The removal noted in `_docs/implementation-status.md` (Gemini-based, free-tier, hit token caps) is what forced us to abandon it. With OpenAI paid backend + Pro-tier gating, cost per user is bounded and rate caps are structural, not surprise. The failure mode that killed it in v1 is now solved.
+
+**Full spec:** written at the start of Phase 4 — not required to unblock Phases 1–3.
 
 ---
 
@@ -147,11 +164,10 @@ The template-based "Actionable Spending Recommendations" and "Deep Insights and 
 │  │  Existing Free Layer          │   │  Pro AI Layer                │             │
 │  │  • KeywordRulesEngine         │   │  • CoachInsightService       │             │
 │  │  • Recurring detection        │   │  • AskYourMoneyService       │             │
-│  │  • Budget forecast            │   │  • WhatIfSimulator           │             │
-│  │  • Template summaries         │   │  • GoalPlanner               │             │
-│  │  • Firebase analytics (opt-in)│   │  • SmartCategorizeUnknown    │             │
-│  └──────────────────────────────┘   │  • RecipientCoach            │             │
-│                                     └──────────────┬───────────────┘             │
+│  │  • Budget forecast            │   │    (chat + what-if + charts) │             │
+│  │  • Template summaries         │   │  • SmartCategorizeUnknown    │             │
+│  │  • Firebase analytics (opt-in)│   └──────────────┬───────────────┘             │
+│  └──────────────────────────────┘                  │                              │
 │                                                    │                              │
 │                    ┌───────────────────────────────┴──────────┐                  │
 │                    │  DataDigestBuilder                       │                  │
@@ -177,11 +193,10 @@ The template-based "Actionable Spending Recommendations" and "Deep Insights and 
         │                                                                          │
         │  ┌──────────────────────────────────────────────────────────────────┐   │
         │  │  POST /ai/coach-insight     ← daily narrative from digest        │   │
-        │  │  POST /ai/ask               ← chat, streaming, digest + history  │   │
-        │  │  POST /ai/what-if           ← constrained simulation             │   │
-        │  │  POST /ai/goal-plan         ← constrained plan generator         │   │
+        │  │  POST /ai/ask               ← chat, streaming, digest + history, │   │
+        │  │                                emits optional chart block for    │   │
+        │  │                                what-if queries                   │   │
         │  │  POST /ai/categorize        ← unknown merchant → category ID     │   │
-        │  │  POST /ai/recipient-coach   ← recipient-level advice             │   │
         │  │  POST /billing/verify       ← Play Billing token verification    │   │
         │  │  GET  /billing/entitlement  ← current Pro state for the caller   │   │
         │  └──────────────────────────────────────────────────────────────────┘   │
@@ -344,14 +359,11 @@ Match ⇒ reject with fallback code, log, alert.
 
 ### 8.5 Rate limits
 
-| Endpoint | Per-user daily cap | Per-user burst |
-|---|---|---|
-| `/ai/coach-insight` | 3 | 1/min (usually 1/day) |
-| `/ai/ask` | 200 | 6/min |
-| `/ai/what-if` | 30 | 3/min |
-| `/ai/goal-plan` | 10 | 2/min |
-| `/ai/recipient-coach` | 100 | 6/min |
-| `/ai/categorize` | 500 (statement-import burst headroom) | 20/min |
+| Endpoint | Per-user daily cap | Per-user burst | Notes |
+|---|---|---|---|
+| `/ai/coach-insight` | 3 | 1/min | Usually 1/day; extra headroom for pull-to-refresh |
+| `/ai/ask` | 200 (chat turns, includes what-if) | 6/min | Cap raised from earlier 6-feature plan to absorb what-if load |
+| `/ai/categorize` | 500 | 20/min | Statement-import burst headroom |
 
 Global circuit breaker: if OpenAI 5xx rate exceeds 5% over a 1-minute window, backend flips to "fallback" mode for all endpoints for 5 minutes. Post-mortem alert.
 
@@ -367,7 +379,7 @@ A single user's statement import triggered enough categorization calls to hit Ge
 
 ### Why OpenAI wins for this product
 
-1. **Structured Outputs strict mode.** All six Pro endpoints define JSON schemas. OpenAI *guarantees* schema conformance in strict mode. Gemini and Groq both offer JSON output but neither is as reliable at forced schema adherence, and our guardrails (assumption disclosure, deny-list) key off schema fields.
+1. **Structured Outputs strict mode.** All Pro endpoints define JSON schemas. OpenAI *guarantees* schema conformance in strict mode. Gemini and Groq both offer JSON output but neither is as reliable at forced schema adherence, and our guardrails (assumption disclosure, deny-list) key off schema fields.
 2. **Instruction-following for tone.** The mini-class models hold to a strict style guide better than Llama-family and Gemini Flash in practice. Tone matters more here than benchmark scores because the differentiator *is* the tone.
 3. **Predictable paid-tier reliability.** No surprise daily caps, per-model rate limits scale with usage tier automatically, highest sustained uptime among the four. Fewer "AI Coach is down" support tickets.
 4. **Cost is not a differentiator at this scale.** OpenAI is more expensive per token but still trivial per Pro user (see §10). Not worth chasing pennies at the cost of reliability.
@@ -384,35 +396,32 @@ Concrete deliverable: a `AiProvider` interface in the backend (Phase 1) with `Op
 
 **Primary:** `gpt-4.1-mini` (or the current OpenAI "mini" workhorse at ship time), pinned by exact model ID — never `-latest`. Rationale:
 
-- Sufficient reasoning for the six endpoints (none require frontier-class reasoning)
+- Sufficient reasoning for all three Pro endpoints (none require frontier-class reasoning)
 - ~1/10 the cost of frontier models
 - Fast enough for chat streaming
 - Strict Structured Outputs support
 
-Escalation path if `-mini` proves insufficient for a specific endpoint (e.g. Goal Planner is nuanced): route only that endpoint to `gpt-4.1` (full) with cost tracked separately. Do not escalate globally.
+Escalation path if `-mini` proves insufficient for a specific endpoint (e.g. a nuanced Ask Your Money what-if turn where the mini model produces unhelpful assumptions): route only that endpoint to `gpt-4.1` (full) with cost tracked separately. Do not escalate globally.
 
 ---
 
 ## 10. Cost Model
 
-Per Pro user per month, assuming a moderate use pattern.
+Per Pro user per month, assuming a moderate use pattern (recomputed 2026-09-11 for the 3-feature set).
 
-| Endpoint | Calls/mo | ~In tokens | ~Out tokens |
-|---|---:|---:|---:|
-| Coach Insight | 30 | 500 | 400 |
-| Ask (chat turns) | 10 | 1500 | 500 |
-| What-If | 3 | 800 | 600 |
-| Goal Plan | 1 | 1000 | 800 |
-| Recipient Coach | 15 | 400 | 200 |
-| Categorize (unknowns) | 20 | 200 | 20 |
-| **Total per user/mo** |   | **~48K** | **~19K** |
+| Endpoint | Calls/mo | ~In tokens | ~Out tokens | Notes |
+|---|---:|---:|---:|---|
+| Coach Insight | 30 | 500 | 400 | 1/day |
+| Ask (chat turns, incl. what-if) | 20 | 2000 | 800 | Higher per-turn cost than the earlier 6-feature plan because what-if turns include chart-block output |
+| Categorize (unknowns) | 20 | 200 | 20 | Statement-import bursts amortized |
+| **Total per user/mo** |   | **~59K** | **~28K** |   |
 
 At OpenAI `gpt-4.1-mini`-class pricing (illustrative, ~$0.15/1M in, $0.60/1M out — verify at implementation):
-- Input: ~$0.007
-- Output: ~$0.011
-- **~$0.02 per user/month ≈ KES 2.60**
+- Input: ~$0.009
+- Output: ~$0.017
+- **~$0.03 per user/month ≈ KES 3.30**
 
-Power user at 10× usage: ~KES 26/user/month. Any monthly Pro price ≥ KES 200 has ≥ 87% gross margin at the extreme; ≥ 98% at typical usage. Hetzner CPX21 (~€6/month, already sunk cost for StockUp) hosts the backend at zero marginal.
+Power user at 10× usage: ~KES 33/user/month. Any monthly Pro price ≥ KES 200 has ≥ 83% gross margin at the extreme; ≥ 98% at typical usage. Hetzner CPX21 (~€6/month, already sunk cost for StockUp) hosts the backend at zero marginal.
 
 **Hard monthly cap:** Set an OpenAI dashboard alert at 3× projected spend (based on active Pro seat count). Circuit-breaker + engineering alert on breach.
 
@@ -420,17 +429,18 @@ Power user at 10× usage: ~KES 26/user/month. Any monthly Pro price ≥ KES 200 
 
 ## 11. Rollout Phases
 
-**Phase 0 — REJECTED.** Originally proposed free-tier upgrades (anomaly detection, fuzzy matching, P75 budget suggestions). Rejected 2026-09-11 by owner to focus effort on the Pro tier. Items moved to `plans/ai-features-plan.md` "Won't Do" section.
+**Phase 0 — REJECTED.** Originally proposed free-tier upgrades (anomaly detection, fuzzy matching, P75 budget suggestions). Rejected 2026-09-11 by owner to focus effort on the Pro tier. Items moved to `plans/ai-features-plan.md` status header.
 
 **Phase 1 — Pro plumbing (no user-visible AI).** Play Billing integration, entitlement store, `DataDigestBuilder`, backend scaffolding on Hetzner, `AiProvider` interface with `OpenAiProvider`, INTERNET permission + privacy policy update. Ships behind a hidden feature flag. **Spec:** [`plans/ai-pro-phase1-spec.md`](ai-pro-phase1-spec.md).
 
 **Phase 2 — Coach Insights (P1).** The anchor. AI-generated Home card for Pro users, replacing template summary. Full prompt, schema, fallback path. **Spec:** [`plans/ai-pro-phase2-spec.md`](ai-pro-phase2-spec.md).
 
-**Phase 3 — Recipient Coach (P5) + What-If Simulator (P3).** High-value quick wins after P1. Both share the digest & guardrail infra from Phases 1–2.
+**Phase 3 — Ask Your Money (P2, includes What-If).** Full chat surface, reachable from the new Home FAB (replacing the previous Add-Expense FAB per §2 row 9). Free users tapping the FAB land on a Pro upsell / free-trial screen. What-If is folded in as a chat capability with inline mini-charts. Highest effort of the three Pro features. **Spec:** [`plans/ai-pro-phase3-spec.md`](ai-pro-phase3-spec.md).
 
-**Phase 4 — Ask Your Money (P2).** Full chat surface. Ships after 1–3 prove the digest+guardrail architecture works. Highest effort of the six.
+**Phase 4 — Smart Categorize Unknowns (P6).** Silent utility. No new UI. Ships after Phase 3 proves the digest+guardrail architecture at chat scale. Spec written when Phase 3 lands.
 
-**Phase 5 — Goal Planner (P4) + Smart Categorize Unknowns (P6).** Round out the Pro tier.
+**Parked (revive-on-demand):**
+- Goal Planner (formerly P4). Not scheduled. Revived by observable user demand (support tickets, in-app feedback).
 
 Each phase ships to closed testing → open testing → production and its metrics get 2 weeks of observation before starting the next.
 
@@ -442,12 +452,10 @@ Per AGENTS.md product-principle #6 ("features must have observable success"):
 
 | Feature | Success signal | Anti-metric (kill switch) |
 |---|---|---|
-| Coach Insights | % of Pro users who read the daily card ≥ 3 days/wk | AI-content flagged "not useful" > 30% |
-| Ask Your Money | Median chat sessions/week ≥ 2; D30 retention lift vs non-chat Pro users | > 5% of responses fall back to template |
-| What-If | % of simulations that end with the user opening Budget screen ≥ 25% | User complaints about "confusing math" |
-| Goal Planner | % of goals still on-track at month 1 ≥ 50% | Goals set → abandoned within 24h > 40% |
-| Recipient Coach | Tap-through rate on recipient rows ≥ 15% | (none, low downside) |
-| Categorize (unknowns) | % of unknown SMS successfully categorized ≥ 70% | Category-correction rate > 30% |
+| Coach Insights (P1) | % of Pro users who read the daily card ≥ 3 days/wk | AI-content flagged "not useful" > 30% |
+| Ask Your Money (P2, chat) | Median chat sessions/week ≥ 2; D30 retention lift vs non-chat Pro users | > 5% of responses fall back to template |
+| Ask Your Money (P2, what-if) | % of what-if turns that end with the user opening Budget/Expenses screen ≥ 25% | User complaints about "confusing math" or chart misreads |
+| Categorize unknowns (P6) | % of unknown SMS successfully categorized ≥ 70% | Category-correction rate > 30% |
 | **Overall Pro** | Free → trial conversion, trial → paid conversion, monthly churn | Refund rate > 5%; support ticket rate > baseline × 2 |
 
 Kill-switch triggers:
@@ -465,6 +473,11 @@ Recorded so we don't relitigate.
 - **Phase 0 free-tier improvements** (anomaly detection, fuzzy matching in `KeywordRulesEngine`, P75 budget suggestions). Owner chose to focus effort on Pro tier. Not "wrong" ideas — just deprioritized.
 - **RevenueCat / paywall abstraction library.** Play Billing direct is simpler and avoids an ongoing 2% cut.
 - **Free-tier AI teaser** (weekly free Coach Insight for non-Pro users). Owner opted for a clean paywall.
+- **P5 “Recipient-level Coach” as a discrete feature.** Owner didn't see the tap-a-recipient-for-coaching surface as valuable. The underlying value — recipient-level insight — is instead absorbed into P1 Coach Insights via the digest's `top_recipients_this_period` field.
+- **Home FAB stays as “Add Expense”.** Rejected in favor of replacing the Home FAB with the Ask Your Money entry point (Add Expense continues to live on the Expenses tab).
+
+### Parked 2026-09-11 (revive-on-demand)
+- **P4 Goal Planner.** Deferred until user-demand signal justifies the surface (support tickets, in-app feedback). Not deleted — the design in earlier drafts of this plan remains a starting point when we revive.
 
 ### Rejected on architectural grounds (not up for reconsideration)
 - **On-device LLMs** (Gemini Nano, MediaPipe LLM, Llama on-device). Still 2–4 GB downloads, still device-fragmentation-hostile at `minSdk 26`.
@@ -502,16 +515,18 @@ The user can answer questions they couldn't answer before ("why is my food spend
 
 ## 15. Open Decisions (Remaining)
 
-| # | Decision | Suggested default | Deadline |
+| # | Decision | Status | Value |
 |---|---|---|---|
-| A | Exact monthly Pro price in KES | KES 299/mo, KES 2,400/yr (33% off; roughly 8 months) | Before Phase 1 code |
-| B | Free trial length | 7 days at first launch, revisit after 3 months of data | Before Phase 1 code |
-| C | Ask Your Money memory window | Last 10 turns (author rec); may drop to 6 if token cost surprises | Phase 4 |
-| D | Chat streaming vs single-shot response | Streaming (better UX, standard SSE) | Phase 4 |
-| E | Where the Pro settings screen lives | Settings → "PesaTrack Pro" | Phase 1 |
-| F | Restore-purchase UX (user reinstalls app) | Auto-restore on first launch via BillingClient.queryPurchasesAsync + surfaced in Settings | Phase 1 |
-| G | Whether to expose an in-app "AI is degraded" status when circuit breaker trips | Yes, small text-only banner in Settings > PesaTrack Pro, no home-screen intrusion | Phase 2 |
-| H | Whether Pro is available in currencies other than KES at launch | No — KE-only at launch. Play Console geo-restricted. | Before Phase 1 code |
+| A | Exact monthly Pro price in KES | Suggested, awaiting owner lock | KES 299/mo, KES 2,400/yr (33% off; roughly 8 months) |
+| B | Free trial length | ✅ **Locked 2026-09-11** | **14 days** |
+| C | Ask Your Money memory window | ✅ **Locked 2026-09-11** | Last 10 turns |
+| D | Chat streaming vs single-shot response | Suggested default, revisit in Phase 3 | Streaming (SSE) for chat; single-shot JSON for what-if turns since chart block must be complete |
+| E | Where the Pro settings screen lives | Suggested default | Settings → "PesaTrack Pro" AND the Home FAB (both surfaces — primary discovery via FAB per row 9 of §2) |
+| F | Restore-purchase UX (user reinstalls app) | Suggested default | Auto-restore on first launch via `BillingClient.queryPurchasesAsync` + surfaced in Settings |
+| G | In-app "AI is degraded" status when circuit breaker trips | Suggested default | Small text-only banner in Settings > PesaTrack Pro, no home-screen intrusion |
+| H | Pro available outside KES at launch | Suggested default | No — KE-only at launch. Play Console geo-restricted. |
+
+Deadlines removed — remaining suggested defaults become locked when their phase spec ships or the owner explicitly signs off.
 
 ---
 
@@ -519,6 +534,7 @@ The user can answer questions they couldn't answer before ("why is my food spend
 
 - [`plans/ai-pro-phase1-spec.md`](ai-pro-phase1-spec.md) — Phase 1 detailed spec (Pro plumbing)
 - [`plans/ai-pro-phase2-spec.md`](ai-pro-phase2-spec.md) — Phase 2 detailed spec (Coach Insights)
+- [`plans/ai-pro-phase3-spec.md`](ai-pro-phase3-spec.md) — Phase 3 detailed spec (Ask Your Money + What-If + Home FAB replacement)
 - [`plans/pro-launch-plan.md`](pro-launch-plan.md) — Historical (Pro v1, template-based, superseded by this plan)
 - [`plans/ai-features-plan.md`](ai-features-plan.md) — Historical (2026-03-22 planning doc, superseded by this plan)
 - [`plans/product-principles.md`](product-principles.md) — Long-form principles source

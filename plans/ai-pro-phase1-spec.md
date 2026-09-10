@@ -156,7 +156,7 @@ Standard Retrofit + Moshi. One custom interceptor:
 
 - `ProAuthInterceptor` — attaches `Authorization: Bearer <purchase_token>` header on every `/ai/*` call. Reads from `ProEntitlementRepository`. Short-circuits with HTTP 401 (client-side synthesized) if not entitled — never dispatches the request.
 
-Timeout: 30s connect, 60s read (chat streaming will need SSE handling in Phase 4 — out of scope here).
+Timeout: 30s connect, 60s read (chat streaming will need SSE handling in Phase 3 (Ask Your Money) — out of scope here).
 
 ### 3.5 Feature flag `pro_ai_enabled`
 
@@ -592,8 +592,8 @@ Two SKUs to create in Play Console → Monetize → Subscriptions:
 
 | SKU ID | Name | Base plan | Price | Free trial |
 |---|---|---|---|---|
-| `pesatrack_pro_monthly` | PesaTrack Pro (Monthly) | `monthly-autorenew` | KES 299 | 7 days |
-| `pesatrack_pro_annual` | PesaTrack Pro (Annual) | `annual-autorenew` | KES 2,400 | 7 days |
+| `pesatrack_pro_monthly` | PesaTrack Pro (Monthly) | `monthly-autorenew` | KES 299 | 14 days |
+| `pesatrack_pro_annual` | PesaTrack Pro (Annual) | `annual-autorenew` | KES 2,400 | 14 days |
 
 (Prices are the suggested defaults from `ai-pro-plan.md` §15; owner confirms before creation.)
 
