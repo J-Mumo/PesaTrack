@@ -37,6 +37,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
 COPY package.json ./
 COPY src ./src
+# schema.prisma writes the generated client to ../src/generated/prisma (i.e.
+# /app/src/generated/prisma). That path is gitignored, so it's absent from the
+# runtime build context — we copy it from the deps stage instead.
+COPY --from=deps /app/src/generated ./src/generated
 # Non-root user for defense-in-depth.
 RUN groupadd --system app \
   && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app \
