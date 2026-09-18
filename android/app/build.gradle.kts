@@ -30,8 +30,8 @@ android {
         applicationId = "com.pesatrack"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.5.2"
+        versionCode = 16
+        versionName = "1.5.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

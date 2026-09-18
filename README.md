@@ -1,62 +1,33 @@
 # PesaTrack
 
-M-PESA expense tracking app for Android. Track your expenses with automatic categorization when making payments through the app, or by detecting M-PESA SMS messages.
+Passive, local-first M-PESA and Kenyan bank expense tracking for Android. PesaTrack reads supported transaction SMS messages on-device, extracts transaction details, and helps users categorize spending, set budgets, and understand their own financial activity.
 
 ## Features
 
-- **STK Push Payments**: Initiate M-PESA payments directly from the app with pre-selected expense categories
-- **SMS Parsing**: Automatically detect and categorize expenses from M-PESA confirmation SMS
-- **Expense Tracking**: View all expenses with monthly summaries
-- **Category Management**: 8 default categories (Food, Transport, Shopping, Bills, Entertainment, Health, Rent, Other)
-- **Local Storage**: All data stored locally on device
+- **SMS Parsing**: Detect and categorize supported M-PESA and bank transactions
+- **Expense and Income Tracking**: Review locally stored records and period summaries
+- **Budgets and Analytics**: Set category budgets and understand spending patterns
+- **Local Imports and Exports**: Import SMS, M-PESA PDF statements, or Excel files and export CSV
+- **Privacy Controls**: Local Room storage, optional PIN lock, and opt-in anonymous usage analytics
+
+The shipped Android app does **not** initiate or process payments, hold or transfer funds, offer loans or credit, connect users to lenders, trade investments, manage investment portfolios, or call the repository's backend. Investment figures shown in reviews are mathematical illustrations with visible assumptions, not recommendations for any security, fund, broker, or provider.
 
 ## Project Structure
 
 ```
 PesaTrack/
 ├── android/                 # Android app (Kotlin + Jetpack Compose)
-├── backend/                 # Node.js backend for M-PESA integration
+├── backend/                 # Separate service; not consumed by the Android app
+├── website/                 # Public Astro website
 ├── plans/                   # Architecture documentation
 └── _docs/                   # Project documentation
 ```
 
 ## Quick Start
 
-### 1. Backend Setup
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env with your Daraja credentials
-npm run dev
-```
-
-### 2. Expose Backend (for testing)
-
-```bash
-ngrok http 3000
-# Update .env MPESA_CALLBACK_URL with ngrok URL
-```
-
-### 3. Android Setup
-
 1. Open `android/` in Android Studio
-2. Update `API_BASE_URL` if using physical device
-3. Build and run
-
-## Getting Daraja API Credentials
-
-1. Go to [developer.safaricom.co.ke](https://developer.safaricom.co.ke)
-2. Create an account
-3. Create a new app with "Lipa Na M-PESA Online" API
-4. Copy Consumer Key and Consumer Secret to `.env`
-
-### Sandbox Testing
-
-- Use phone number: **254708374149**
-- Shortcode: **174379** (default sandbox)
-- Passkey: Pre-configured in `.env.example`
+2. Use JDK 17 and configure the Android SDK in `android/local.properties`
+3. Build with the Gradle wrapper: `cd android; .\gradlew.bat assembleDebug`
 
 ## Architecture
 
@@ -65,29 +36,26 @@ ngrok http 3000
 - **Jetpack Compose** for UI
 - **Room** for local database
 - **Hilt** for dependency injection
-- **Retrofit** for networking
+- **Coroutines + Flow** for asynchronous state
 
 ### Backend
-- **Node.js + Express**
-- **Daraja API** for M-PESA integration
-- **SSE** for real-time payment updates
+- Separate Node.js service not referenced or called by the Play Store Android app
+- Legacy Daraja/STK Push code is archived and not part of the shipped user flow
 
 ## User Flows
 
-### Flow 1: App-initiated Payment (STK Push)
+### Passive SMS tracking
 
 ```
-User opens app → Enters payment details → Selects category → 
-Taps Pay → STK Push sent → User enters PIN → 
-Callback received → Expense saved with category
+User transacts outside PesaTrack → Supported transaction SMS arrives →
+PesaTrack parses it on-device → User reviews or categorizes the record
 ```
 
-### Flow 2: SMS Parsing (External Payments)
+### Local import or manual entry
 
 ```
-User pays via M-PESA menu → SMS received → 
-App parses SMS → Notification shown → 
-User categorizes expense → Expense saved
+User selects an SMS date range, M-PESA statement, or Excel file →
+PesaTrack parses it on-device → User reviews imported records
 ```
 
 ## License

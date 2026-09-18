@@ -23,6 +23,17 @@
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Explicitly remove the advertising ID permission that firebase-analytics
+         pulls in transitively via play-services-ads-identifier. PesaTrack does
+         NOT collect or use the advertising ID (privacy principle #4 in
+         AGENTS.md). Google Play requires an explicit declaration when this
+         permission is present, so we strip it at manifest merge time. In the
+         Play Console → App content → Advertising ID, declare "No, my app does
+         not use advertising ID." -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+
     <application
         android:name=".PesaTrackApp"
         android:allowBackup="true"

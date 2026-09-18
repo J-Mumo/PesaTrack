@@ -8,7 +8,9 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.5.2** | 14 | 2026-09-10 | Production | 🟡 Pending upload |
+| **1.5.3** | 16 | 2026-09-12 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.5.3** | 15 | 2026-09-12 | Production | 🟡 Pending upload |
+| **1.5.2** | 14 | 2026-09-10 | Production | 🚫 Superseded by 1.5.3 |
 | **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.5.2 |
 | **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.4.1 |
 | **1.3.2** | 9 | 2026-06-02 | Production | ✅ Published |
@@ -20,6 +22,22 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.5.3 (versionCode 15 / 16) — 2026-09-12
+
+**Focus:** Play Console compliance fix. No user-visible behavior change. Two versionCodes because two tracks needed a fresh upload — see Notes.
+
+### 🛠 Fixes
+
+- **Removed the `com.google.android.gms.permission.AD_ID` permission from the release manifest.** Firebase Analytics (via its transitive dependency on `play-services-ads-identifier:18.0.0`) auto-adds this permission at manifest-merge time. Play Console flagged it as an "Incomplete advertising ID declaration" at release-review time. PesaTrack does not collect or use the advertising ID (privacy principle #4 — Privacy is non-negotiable), so we strip the permission via `tools:node="remove"` in `AndroidManifest.xml` and declare "No, my app does not use advertising ID" in Play Console → App content → Advertising ID. Analytics event delivery is unaffected; the ad-identifier client was never used and pseudonymous App Instance ID is unchanged.
+
+### 📎 Notes
+
+- Manifest-only change; no code paths, screens, permissions requested at runtime, or third-party dependencies were altered.
+- **Why two versionCodes for the same versionName**: after uploading versionCode 15 to the Production track, Play Console still refused the "No" advertising-ID declaration because the Closed Testing — PesaTrack Alpha track was still serving the old v1.5.2 (versionCode 14) AAB, which still had `AD_ID`. The advertising-ID scan is *app-wide across all active tracks*, not release-scoped, so both tracks must be on a clean manifest for the declaration to be accepted. Rebuilt as versionCode 16 (identical code + manifest as 15) and uploaded to Closed Testing so both tracks are clean.
+- Website sync check (AGENTS.md §Website Sync Check): **not required.** No trigger row matches — no new SMS sender, no new screen/feature, no permission requested at runtime, no privacy-policy-relevant behavior change (the AD_ID permission was never actually used by app code; removing it aligns the manifest with the already-published privacy policy). `factsheet.json.currentVersion` auto-updates from this file.
 
 ---
 

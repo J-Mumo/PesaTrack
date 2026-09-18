@@ -1,6 +1,6 @@
 # PesaTrack Android App
 
-Android expense tracking app with M-PESA integration.
+Passive, local-first M-PESA and Kenyan bank expense tracking for Android.
 
 ## Tech Stack
 
@@ -9,7 +9,7 @@ Android expense tracking app with M-PESA integration.
 - **Architecture**: MVVM + Clean Architecture
 - **DI**: Hilt
 - **Database**: Room
-- **Networking**: Retrofit
+- **Async**: Coroutines + Flow
 
 ## Project Structure
 
@@ -23,9 +23,6 @@ app/src/main/java/com/pesatrack/
 │   │   ├── dao/                 # Data access objects
 │   │   ├── entities/            # Database entities
 │   │   └── PesaTrackDatabase.kt
-│   ├── remote/
-│   │   ├── api/                 # Retrofit API
-│   │   └── dto/                 # Data transfer objects
 │   └── repository/              # Repository implementations
 ├── domain/models/               # Domain models
 ├── presentation/
@@ -35,7 +32,6 @@ app/src/main/java/com/pesatrack/
 │   ├── components/              # Reusable UI components
 │   └── screens/                 # App screens
 │       ├── home/
-│       ├── payment/
 │       ├── expenses/
 │       └── categorize/
 ├── services/
@@ -57,11 +53,7 @@ app/src/main/java/com/pesatrack/
 
 1. Open the `android` folder in Android Studio
 2. Sync Gradle files
-3. Connect backend URL:
-   - For emulator: Builder automatically uses `10.0.2.2:3000`
-   - For physical device: Update `API_BASE_URL` in `app/build.gradle.kts`
-
-4. Run on device or emulator
+3. Run on a device or emulator
 
 ### Manual Debug Build
 
@@ -82,48 +74,29 @@ To manually generate a debug build for testing on a physical device:
 
 ### Permissions
 
-The app requests these permissions:
+The app declares these permissions:
 
-- **INTERNET**: For API communication
-- **READ_SMS / RECEIVE_SMS**: For detecting external M-PESA transactions
+- **INTERNET / ACCESS_NETWORK_STATE**: For opt-in anonymous Firebase usage analytics only; financial records and raw SMS are not transmitted
+- **READ_SMS / RECEIVE_SMS**: For parsing supported M-PESA and bank transactions on-device
 - **POST_NOTIFICATIONS**: For expense categorization prompts
 
 ## Features
 
-### 1. STK Push Payments
+### 1. Passive SMS parsing
 
-Initiate M-PESA payments with pre-selected categories:
-
-1. Select payment type (Send Money, Buy Goods, Pay Bill)
-2. Enter amount and recipient
-3. Select expense category
-4. Submit payment
-5. Enter M-PESA PIN when prompted
-6. Expense is saved automatically
-
-### 2. SMS Parsing (Fallback)
-
-For payments made directly in M-PESA:
+For transactions made outside PesaTrack:
 
 1. App detects M-PESA confirmation SMS
 2. Parses transaction details
 3. Prompts user to categorize
 4. Saves expense with category
 
-### 3. Expense Tracking
+### 2. Expense and income tracking
 
 - View all expenses
 - Monthly summary
 - Category-based organization
 - Edit categories for uncategorized expenses
-
-## Testing
-
-### Sandbox Testing
-
-1. Run backend with Daraja sandbox credentials
-2. Use test phone number: 254708374149
-3. STK Push will simulate payment flow
 
 ### SMS Parsing Testing
 
@@ -132,9 +105,8 @@ Send yourself a test SMS matching M-PESA format:
 ABC123XYZ Confirmed. Ksh1,000.00 sent to John Doe 0712345678 on 15/1/24 at 12:34 PM. New M-PESA balance is Ksh5,000.00.
 ```
 
-## Production Deployment
+## Financial-service scope
 
-1. Update `API_BASE_URL` in release build config
-2. Generate signed APK/AAB
-3. Ensure backend is deployed with valid callback URL
-4. Apply for Daraja production access
+PesaTrack does not initiate or process payments, hold or transfer funds, provide loans or credit, connect users to lenders, trade securities or cryptocurrency, or manage investment portfolios. The backend in the repository is not consumed by the Android app.
+
+Investment and savings entries are categories for the user's own records. Review screens may display a mathematical future-value illustration with its assumed rate and time horizon. The app does not recommend a specific security, broker, fund, or guaranteed return.
