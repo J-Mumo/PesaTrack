@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    PesaTrack network security config.
+
+    The only host contacted directly by app code is the AI Pro backend
+    at pesatrack-api.jmumo.com (introduced in v1.6.0 for the PesaTrack Pro
+    subscription verification + AI Coach endpoints). Firebase Analytics
+    uses Google's endpoints via play-services, which follow the platform
+    defaults.
+
+    Contract:
+      - No cleartext traffic anywhere, ever.
+      - No user-installed CA certificates trusted for the AI Pro backend.
+      - No debug overrides (no <debug-overrides>) — the same policy applies
+        to release and debug builds so we catch cert misconfigurations
+        during development instead of at release time.
+
+    See plans/ai-pro-phase1-spec.md §3.3.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">pesatrack-api.jmumo.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

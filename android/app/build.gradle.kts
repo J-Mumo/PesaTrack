@@ -168,6 +168,23 @@ dependencies {
     // Google Play In-App Review API (Stage 1B)
     implementation("com.google.android.play:review-ktx:2.0.2")
 
+    // Google Play Billing — subscriptions for PesaTrack Pro (AI Pro Phase 1).
+    // v7.x deprecates SkuDetails in favor of ProductDetails; ktx wraps
+    // callbacks as coroutine-friendly suspending calls.
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+
+    // HTTP client for pesatrack-api.jmumo.com (AI Pro Phase 1).
+    // OkHttp handles TLS + connection pooling; Retrofit + Moshi handle
+    // (de)serialization. Codegen via KSP keeps reflection off the hot path.
+    // Only the AI Pro backend is contacted — see res/xml/network_security_config.xml.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.moshi:moshi:1.15.1")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
+
     // Firebase Analytics — Phase 1 telemetry (opt-in only).
     // The BOM keeps Firebase library versions aligned. Analytics is a no-op
     // when google-services.json is absent, and is guarded at runtime by
