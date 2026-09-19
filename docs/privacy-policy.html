@@ -73,14 +73,15 @@
 <body>
     <div class="container">
         <h1>🔒 PesaTrack Privacy Policy</h1>
-        <p class="subtitle">Last updated: September 3, 2026</p>
+        <p class="subtitle">Last updated: September 19, 2026</p>
 
         <div class="highlight">
             <strong>Key point:</strong> Your transactions, SMS messages, amounts,
-            and personal information stay on your device. The only data that ever
-            leaves your phone is <em>anonymous usage analytics</em> — and only if
-            you explicitly opt in. You can turn this off at any time in
-            <em>Settings → Privacy</em>.
+            and personal information stay on your device. Two things can leave
+            your phone, and only if you opt in to them: <em>anonymous usage
+            analytics</em> (Settings → Privacy) and, from v1.6.0,
+            <em>subscription verification for PesaTrack Pro</em> (only if you buy
+            a plan; see §5.7).
         </div>
 
         <h2>1. What PesaTrack Does</h2>
@@ -184,6 +185,71 @@
             within the Google Play review flow. No personal data is shared with PesaTrack through
             this process.</li>
         </ul>
+
+        <h2>5.7 Subscription Billing (PesaTrack Pro, from v1.6.0)</h2>
+        <p>Starting in version 1.6.0 you can optionally subscribe to <strong>PesaTrack
+        Pro</strong>. The subscription itself runs through Google Play; PesaTrack also
+        talks to a small backend of ours at <code>pesatrack-api.jmumo.com</code> so we
+        can verify the purchase and check that it's still active. This section describes
+        exactly what leaves your device <em>if</em> you subscribe. If you never open the
+        Pro screen or complete a purchase, nothing in this section happens.</p>
+
+        <p><strong>What we send when you subscribe:</strong></p>
+        <ul>
+            <li>Your <strong>Google Play purchase token</strong> — a token Google Play generates
+            for the specific purchase. We send it once to <code>POST /billing/verify</code> so
+            the backend can confirm the purchase against Google's Play Developer API.</li>
+            <li>The subscription <strong>product ID</strong> you selected (e.g.
+            <code>pesatrack_pro_monthly</code>).</li>
+        </ul>
+
+        <p><strong>What the backend stores about you:</strong></p>
+        <ul>
+            <li>A <strong>SHA-256 hash</strong> of the purchase token — never the raw token
+            itself. That hash is the entire identity anchor: there is no user account, no
+            username, no email, no phone, no device ID stored server-side. The hash is used
+            to look up your entitlement on later requests via the
+            <code>Authorization: Bearer</code> header.</li>
+            <li>The normalized entitlement metadata Google Play returns for your purchase —
+            <em>product ID</em>, <em>expiry timestamp</em>, <em>auto-renewing flag</em>, and
+            <em>payment state</em>. These fields let us tell your app whether the subscription
+            is still live without round-tripping to Google on every AI call.</li>
+            <li>A bounded audit trail (event type, hashed token, and a small metadata JSON
+            with product ID, auto-renewing flag, payment state) so we can debug billing bugs.
+            No request bodies, no free-form text, never anything that identifies you
+            personally.</li>
+        </ul>
+
+        <p><strong>What the backend never stores:</strong></p>
+        <ul>
+            <li>The raw purchase token.</li>
+            <li>Your Google account email, name, or profile.</li>
+            <li>Anything from your transaction data — SMS content, amounts, recipient names,
+            transaction IDs, category labels — none of it is sent to
+            <code>pesatrack-api.jmumo.com</code> at any point.</li>
+        </ul>
+
+        <p><strong>Transport and server:</strong></p>
+        <ul>
+            <li>All traffic to <code>pesatrack-api.jmumo.com</code> is HTTPS/TLS only. The
+            app's network security config pins that host to system trust anchors and
+            disallows cleartext, in both release and debug builds.</li>
+            <li>Server logs record only the first 16 hex chars of the token hash for triage —
+            never the full hash, never the raw token, never the request body.</li>
+            <li>The server runs on our own Hetzner Cloud VM (EU region) behind Caddy. Backups
+            of the entitlement database are stored on the same host and never leave it.</li>
+        </ul>
+
+        <p><strong>Payments and refunds are handled entirely by Google Play.</strong> We
+        never see your payment method or your Google account. Cancel or request a refund
+        the same way you would for any Play Store subscription; your entitlement lasts
+        until the end of the paid period.</p>
+
+        <p><strong>AI features (Phase 2, next release cycle):</strong> when the AI coaching
+        endpoints land, this section will be updated to describe exactly what is in the
+        anonymized monthly digest — period label, per-category totals, and anonymized
+        recipient IDs (<code>r1..rN</code>). Until then, no digest is sent, no LLM call is
+        made, and no coaching endpoint is enabled server-side.</p>
 
         <h2>6. Data Security</h2>
         <p>PesaTrack offers an optional PIN lock with biometric unlock (fingerprint/face) to

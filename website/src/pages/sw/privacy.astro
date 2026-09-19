@@ -5,7 +5,7 @@ import Callout from '~/components/Callout.astro';
 import { breadcrumbList } from '~/utils/jsonld';
 import { SITE } from '~/data/site';
 
-const lastUpdated = '3 Septemba, 2026';
+const lastUpdated = '19 Septemba, 2026';
 
 const crumbs = [
   { name: 'Nyumbani', href: '/sw' },
@@ -34,10 +34,11 @@ const crumbs = [
   <Callout variant="success" title="Jambo kuu">
     <p>
       Miamala yako, SMS, kiasi, na taarifa binafsi vinabaki kwenye kifaa chako.
-      Data pekee inayoondoka kwenye simu yako ni
-      <em>takwimu za matumizi zisizokuwa na utambulisho</em> — na hiyo tu kama
-      umechagua wewe mwenyewe. Unaweza kuizima wakati wowote katika
-      <em>Settings → Privacy</em>.
+      Vitu viwili tu vinaweza kuondoka kwenye simu yako, na tu kama utachagua
+      wewe mwenyewe: <em>takwimu za matumizi zisizokuwa na utambulisho</em>
+      (Settings → Privacy), na kuanzia toleo 1.6.0,
+      <em>uthibitisho wa uanachama wa PesaTrack Pro</em> (tu kama utanunua
+      mpango — angalia §5.7).
     </p>
   </Callout>
 
@@ -160,6 +161,86 @@ const crumbs = [
       utoe alama kwenye Play. Hakuna data binafsi inayoshirikiwa na PesaTrack
       kupitia hiyo.</li>
   </ul>
+
+  <h3 id="billing">5.7 Uthibitisho wa uanachama (PesaTrack Pro, kuanzia toleo 1.6.0)</h3>
+  <p>
+    Kuanzia toleo la 1.6.0, unaweza kununua uanachama wa hiari wa
+    <strong>PesaTrack Pro</strong>. Ununuzi wenyewe unafanyika kwenye
+    Google Play; PesaTrack pia inaongea na seva yetu ndogo katika
+    <code>pesatrack-api.jmumo.com</code> ili tuthibitishe ununuzi na
+    kuangalia kama bado uko hai. Sehemu hii inaeleza <em>hasa</em> ni nini
+    kinaondoka kwenye kifaa chako <em>kama</em> utajiunga. Kama
+    hufunguzi skrini ya Pro wala hukamilishi ununuzi, hakuna kitu chochote
+    katika sehemu hii kinatokea.
+  </p>
+
+  <p><strong>Kile tunachotuma kama utajiunga:</strong></p>
+  <ul>
+    <li><strong>Purchase token yako ya Google Play</strong> — tokeni ambayo
+      Google Play inatoa kwa ununuzi mahususi. Tunaituma mara moja tu kwa
+      <code>POST /billing/verify</code> ili seva ithibitishe ununuzi kupitia
+      Play Developer API ya Google.</li>
+    <li><strong>Product ID</strong> ya mpango uliochagua
+      (mfano <code>pesatrack_pro_monthly</code>).</li>
+  </ul>
+
+  <p><strong>Kile seva inahifadhi kukuhusu:</strong></p>
+  <ul>
+    <li><strong>SHA-256 hash</strong> ya purchase token — kamwe si tokeni
+      halisi. Hash hiyo ndio kitambulisho pekee: hakuna akaunti ya mtumiaji,
+      hakuna jina la mtumiaji, hakuna barua pepe, hakuna nambari ya simu,
+      hakuna kitambulisho cha kifaa kinachohifadhiwa upande wa seva. Hash
+      hutumika kupata uanachama wako kwenye maombi ya baadae kupitia kichwa
+      cha <code>Authorization: Bearer</code>.</li>
+    <li>Data ya uanachama iliyorekebishwa ambayo Google Play inarudisha kwa
+      ununuzi wako — <em>product ID</em>, <em>tarehe ya kwisha</em>,
+      <em>alama ya kujirudia (auto-renewing)</em>, na <em>hali ya malipo</em>.
+      Sehemu hizi zinaturuhusu kuiambia programu yako kama uanachama bado uko
+      hai bila kuulizana na Google kila wakati.</li>
+    <li>Kumbukumbu ndogo ya ukaguzi (aina ya tukio, hash ya tokeni, na
+      metadata ndogo ya JSON yenye product ID, hali ya kujirudia, na hali ya
+      malipo) ili tuweze kutatua matatizo ya bili. Hakuna maombi kamili,
+      hakuna maandishi ya wazi, kamwe hakuna kitu kinachokutambulisha
+      binafsi.</li>
+  </ul>
+
+  <p><strong>Kile seva kamwe haihifadhi:</strong></p>
+  <ul>
+    <li>Purchase token halisi.</li>
+    <li>Barua pepe, jina, au wasifu wa akaunti yako ya Google.</li>
+    <li>Chochote kutoka data yako ya miamala — maudhui ya SMS, kiasi, majina
+      ya wapokeaji, transaction IDs, majina ya kategoria — chochote kati ya
+      hivi kamwe hakiendi <code>pesatrack-api.jmumo.com</code>.</li>
+  </ul>
+
+  <p><strong>Usafiri na seva:</strong></p>
+  <ul>
+    <li>Muunganiko wote na <code>pesatrack-api.jmumo.com</code> ni HTTPS/TLS
+      tu. Network security config ya programu inaweka mwenyeji huyo kwenye
+      vyeti vya mfumo tu na inakataza cleartext, kwa release na debug
+      builds.</li>
+    <li>Log za seva zinaandika herufi 16 za kwanza tu za hash ya tokeni kwa
+      utatuzi — kamwe hash kamili, kamwe token halisi, kamwe body ya
+      ombi.</li>
+    <li>Seva inaendeshwa kwenye Hetzner Cloud VM yetu (eneo la Ulaya)
+      nyuma ya Caddy. Backup za database ya uanachama zinahifadhiwa kwenye
+      mwenyeji huohuo na kamwe hazitoki.</li>
+  </ul>
+
+  <p><strong>Malipo na urejeshaji vinasimamiwa kabisa na Google Play.</strong>
+    Sisi kamwe hatuoni njia yako ya malipo wala akaunti yako ya Google.
+    Ghairi au omba urejeshaji kama vile ungefanya kwa uanachama wowote wa
+    Play Store; uanachama wako unadumu hadi mwisho wa kipindi kilicholipiwa.
+  </p>
+
+  <p><strong>Vipengele vya AI (Awamu ya 2, mzunguko wa toleo linalofuata):</strong>
+    endpoint za coaching za AI zikija, sehemu hii itasasishwa kueleza hasa
+    kile kilichopo kwenye digest ya kila mwezi isiyokuwa na utambulisho —
+    lebo ya kipindi, jumla za kila kategoria, na anonymised recipient IDs
+    (<code>r1..rN</code>). Hadi hapo, hakuna digest inayotumwa, hakuna wito
+    wa LLM unaofanywa, na hakuna coaching endpoint iliyowashwa upande wa
+    seva.
+  </p>
 
   <h2 id="security">6. Usalama wa data</h2>
   <p>
