@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.pesatrack.services.pro.ProState
 import com.pesatrack.services.pro.ProStateJson
+import com.pesatrack.services.pro.ProStateStore
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : ProStateStore {
 
     companion object {
         private const val QUALIFIED_SESSION_GAP_MS = 5 * 60 * 1000L
@@ -884,13 +885,13 @@ class AppPreferences @Inject constructor(
      * (self-heals silently rather than wedging Pro-gated code paths on cold
      * start). See plans/ai-pro-phase1-spec.md §3.2.
      */
-    val proState: Flow<ProState> = context.dataStore.data.map { prefs ->
+    override val proState: Flow<ProState> = context.dataStore.data.map { prefs ->
         val raw = prefs[KEY_PRO_STATE] ?: return@map ProState.DEFAULT
         ProStateJson.parse(raw) ?: ProState.DEFAULT
     }
 
     /** Snapshot read of the current [ProState]. Convenience over `.first()`. */
-    suspend fun getProState(): ProState {
+    override suspend fun getProState(): ProState {
         val raw = context.dataStore.data.first()[KEY_PRO_STATE] ?: return ProState.DEFAULT
         return ProStateJson.parse(raw) ?: ProState.DEFAULT
     }
@@ -901,7 +902,7 @@ class AppPreferences @Inject constructor(
      * here so we can't observe torn intermediate values (e.g.
      * `purchaseToken` present but `expiresAtEpochMs` still null).
      */
-    suspend fun setProState(state: ProState) {
+    override suspend fun setProState(state: ProState) {
         val json = ProStateJson.serialize(state)
         context.dataStore.edit { prefs ->
             prefs[KEY_PRO_STATE] = json

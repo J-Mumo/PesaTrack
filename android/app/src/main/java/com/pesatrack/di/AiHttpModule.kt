@@ -30,12 +30,11 @@ import javax.inject.Singleton
  *
  * Timeouts follow §3.4 of the plan: 30 s connect, 60 s read/write.
  *
- * The [PurchaseTokenProvider] binding is the [PurchaseTokenProvider.None]
- * default until Slice A4's `ProEntitlementRepository` replaces it with a
- * live cache. No changes to this module are required at that point —
- * Slice A4 will register its own `@Provides` in a repository-scoped
- * module and mark this one for override, or simply publish an
- * `@Inject`ed repository that satisfies the interface.
+ * The [PurchaseTokenProvider] binding lives in [ProBillingModule]
+ * (`@Binds PurchaseTokenProvider → ProTokenCache`) and is written to by
+ * `ProEntitlementRepository` whenever the persisted `ProState` changes.
+ * That separation is what breaks the Hilt cycle the interceptor would
+ * otherwise trigger — see `ProTokenCache`'s KDoc.
  *
  * See plans/ai-pro-phase1-spec.md §3.4.
  */
@@ -65,16 +64,6 @@ object AiHttpModule {
     fun provideMoshi(): Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
         .build()
-
-    /**
-     * Slice-A3 default token source. Slice A4's `ProEntitlementRepository`
-     * will replace this binding with a `@Volatile`-backed live cache
-     * mirroring the persisted `ProState`.
-     */
-    @Provides
-    @Singleton
-    fun providePurchaseTokenProvider(): PurchaseTokenProvider =
-        PurchaseTokenProvider.None
 
     @Provides
     @Singleton
