@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pesatrack.services.pro.ProProduct
+import com.pesatrack.services.telemetry.TelemetryEvents
 import java.util.Date
 
 /**
@@ -72,12 +73,20 @@ import java.util.Date
 @Composable
 fun PesaTrackProScreen(
     onNavigateBack: () -> Unit,
+    entrySource: String = TelemetryEvents.SOURCE_SETTINGS,
     viewModel: PesaTrackProViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val activity = context as? Activity
+
+    // Fire pro_screen_viewed once per screen appearance. Deliberately keyed
+    // on Unit rather than entrySource so a config-change recomposition
+    // doesn't double-log.
+    LaunchedEffect(Unit) {
+        viewModel.onScreenViewed(entrySource)
+    }
 
     // Surface every OutcomeMessage as a snackbar, then clear it.
     LaunchedEffect(uiState.outcomeMessage) {

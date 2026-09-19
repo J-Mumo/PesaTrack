@@ -221,6 +221,23 @@ class AppPreferences @Inject constructor(
          * `isEntitled = false` and every optional field null.
          */
         private val KEY_PRO_STATE = stringPreferencesKey("pro_state_json_v1")
+
+        /**
+         * Feature-flag ship gate for the AI-Pro calling code paths (Phase 2's
+         * `/ai/coach` etc.). Kept independent from the entitlement state so
+         * we can ship Phase 1 to production with the flag OFF, activate it
+         * for closed-testing entitled users, and roll out to production once
+         * verified.
+         *
+         * **Not derived from entitlement automatically.** The value is a
+         * manual switch — a live Pro subscription does not force this to
+         * `true`, and a lost entitlement does not force it to `false`.
+         * Callers that gate on AI functionality read this flag AND the
+         * entitlement state together.
+         *
+         * See plans/ai-pro-phase1-spec.md §3.5.
+         */
+        private val KEY_PRO_AI_ENABLED = booleanPreferencesKey("pro_ai_enabled")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -906,6 +923,34 @@ class AppPreferences @Inject constructor(
         val json = ProStateJson.serialize(state)
         context.dataStore.edit { prefs ->
             prefs[KEY_PRO_STATE] = json
+        }
+    }
+
+    // ==================== AI Pro feature flag ====================
+
+    /**
+     * Hot flow of the AI Pro feature flag ([KEY_PRO_AI_ENABLED]). Default
+     * `false` — the AI-calling code paths ship dark and light up only when
+     * this is flipped. See KDoc on [KEY_PRO_AI_ENABLED] for why it's not
+     * auto-derived from entitlement state.
+     */
+    val proAiEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PRO_AI_ENABLED] ?: false
+    }
+
+    /** Snapshot read of the AI Pro feature flag. */
+    suspend fun isProAiEnabled(): Boolean =
+        context.dataStore.data.first()[KEY_PRO_AI_ENABLED] ?: false
+
+    /**
+     * Set the AI Pro feature flag. In Phase 1 this has no callers in
+     * shipping code — the intent is to flip it manually from a debug UX
+     * (or a future closed-testing rollout mechanism) once the AI endpoints
+     * are ready to accept traffic.
+     */
+    suspend fun setProAiEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PRO_AI_ENABLED] = enabled
         }
     }
 }

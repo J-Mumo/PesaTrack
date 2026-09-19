@@ -269,6 +269,68 @@ object TelemetryEvents {
     /** User deleted an expense row. No params. */
     const val EXPENSE_DELETED = "expense_deleted"
 
+    // ==================== Phase 4 (AI Pro Phase 1): subscription lifecycle ====================
+    // See plans/ai-pro-phase1-spec.md §3.6. All seven events follow the same
+    // no-PII rule as the rest of the file — product_id is one of two hardcoded
+    // short labels ("monthly"|"annual"), reasons are bucketed, is_trial is a
+    // boolean-as-string. Zero prices, zero merchant text, zero SMS content,
+    // zero purchase-token substrings.
+
+    /**
+     * User navigated to `PesaTrackProScreen`.
+     * Params: [PARAM_SOURCE] — [SOURCE_SETTINGS] or [SOURCE_DEEPLINK].
+     */
+    const val PRO_SCREEN_VIEWED = "pro_screen_viewed"
+
+    /**
+     * User tapped a Subscribe button and we started the Play Billing flow.
+     * Fires *before* the sheet is launched — pairs with either
+     * `pro_purchase_completed` or `pro_purchase_failed`.
+     * Params: [PARAM_PRODUCT_ID] — [PRODUCT_MONTHLY] or [PRODUCT_ANNUAL].
+     */
+    const val PRO_PURCHASE_STARTED = "pro_purchase_started"
+
+    /**
+     * Play confirmed + backend verified + entitlement persisted. Fires from
+     * `ProEntitlementRepository.verifyPurchase()` success path so it also
+     * covers cross-device restore (each restored subscription that verifies
+     * fires once).
+     * Params: [PARAM_PRODUCT_ID], [PARAM_IS_TRIAL] — `"true"` or `"false"`.
+     */
+    const val PRO_PURCHASE_COMPLETED = "pro_purchase_completed"
+
+    /**
+     * Purchase attempt did not become a persisted entitlement. Fires from
+     * `PesaTrackProViewModel.subscribe()` on any non-Ok `PurchaseOutcome`.
+     * Params: [PARAM_PRODUCT_ID], [PARAM_REASON] — one of
+     * [REASON_USER_CANCEL], [REASON_NETWORK], [REASON_BILLING_ERROR],
+     * [REASON_VERIFY_FAILED]. No raw Play response codes are sent.
+     */
+    const val PRO_PURCHASE_FAILED = "pro_purchase_failed"
+
+    /** User tapped the "Restore purchase" button. No params — a follow-up
+     *  restore-completed event isn't tracked separately today; the
+     *  `pro_purchase_completed` fires once per restored subscription. */
+    const val PRO_RESTORE_TAPPED = "pro_restore_tapped"
+
+    /**
+     * The persisted `ProState` transitioned to entitled (via
+     * `verifyPurchase()` — the only code path that establishes a fresh
+     * entitlement).
+     * Params: [PARAM_PRODUCT_ID].
+     */
+    const val PRO_ENTITLEMENT_GAINED = "pro_entitlement_gained"
+
+    /**
+     * The persisted `ProState` was cleared (server-side revocation,
+     * expiry-with-no-renewal, or refund). Fires from
+     * `ProEntitlementRepository.clearEntitlement()`.
+     * Params: [PARAM_REASON] — one of `"expired"`, `"refunded"`, `"revoked"`
+     *   (the value from `EntitlementLostReason.telemetryValue` — see
+     *   `services/pro/ProEntitlementRepository.kt`).
+     */
+    const val PRO_ENTITLEMENT_LOST = "pro_entitlement_lost"
+
     // ==================== Parameter keys ====================
     const val PARAM_SCREEN = "screen"
     const val PARAM_SOURCE = "source"
@@ -279,6 +341,11 @@ object TelemetryEvents {
     const val PARAM_BANK = "bank"
     const val PARAM_SUCCESS = "success"
     const val PARAM_TAB = "tab"
+
+    // AI Pro Phase 1 additions.
+    const val PARAM_PRODUCT_ID = "product_id"
+    const val PARAM_IS_TRIAL = "is_trial"
+    const val PARAM_REASON = "reason"
 
     // ==================== Parameter value enums ====================
     const val KIND_EXPENSE = "expense"
@@ -291,6 +358,9 @@ object TelemetryEvents {
     const val SOURCE_STATEMENT = "statement_pdf"
     const val SOURCE_ONBOARDING = "onboarding"
     const val SOURCE_APP = "app"
+    // AI Pro Phase 1 additions.
+    const val SOURCE_SETTINGS = "settings"
+    const val SOURCE_DEEPLINK = "deeplink"
 
     const val SCOPE_OVERALL = "overall"
     const val SCOPE_CATEGORY = "category"
@@ -311,6 +381,20 @@ object TelemetryEvents {
     const val TAB_CHARTS = "charts"
     const val TAB_MONTHLY = "monthly"
     const val TAB_YEARLY = "yearly"
+
+    // AI Pro Phase 1: product_id short labels. Match the @Json(name=...) on
+    // `services/pro/ProProduct` — the on-disk / telemetry wire format is
+    // decoupled from the Kotlin enum identifier so a rename can't silently
+    // break older installs OR older telemetry dashboards.
+    const val PRODUCT_MONTHLY = "monthly"
+    const val PRODUCT_ANNUAL = "annual"
+
+    // AI Pro Phase 1: purchase-failure reason buckets. The full mapping from
+    // `PurchaseOutcome` variant → bucket lives in `PesaTrackProViewModel.subscribe()`.
+    const val REASON_USER_CANCEL = "user_cancel"
+    const val REASON_NETWORK = "network"
+    const val REASON_BILLING_ERROR = "billing_error"
+    const val REASON_VERIFY_FAILED = "verify_failed"
 
     /**
      * Bucketize a raw count to avoid leaking exact volumes.

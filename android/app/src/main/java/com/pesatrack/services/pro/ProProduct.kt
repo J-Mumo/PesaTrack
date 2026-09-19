@@ -25,6 +25,21 @@ enum class ProProduct(val productId: String) {
     @Json(name = "annual")
     ANNUAL("pesatrack_pro_annual");
 
+    /**
+     * Short label used inside telemetry event params
+     * (`pro_purchase_*.product_id`, `pro_entitlement_gained.product_id`).
+     * Matches the `@Json(name = ...)` short name — deliberately decoupled
+     * from the Kotlin enum identifier so renaming the constant cannot
+     * silently break older telemetry dashboards.
+     *
+     * See plans/ai-pro-phase1-spec.md §3.6.
+     */
+    val telemetryValue: String
+        get() = when (this) {
+            MONTHLY -> "monthly"
+            ANNUAL -> "annual"
+        }
+
     companion object {
         private val byProductId: Map<String, ProProduct> =
             entries.associateBy(ProProduct::productId)

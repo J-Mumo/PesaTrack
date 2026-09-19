@@ -10,6 +10,8 @@ import com.pesatrack.services.pro.ProProduct
 import com.pesatrack.services.pro.ProPurchaseFlow
 import com.pesatrack.services.pro.PurchaseOutcome
 import com.pesatrack.services.pro.RestoreOutcome
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,13 +30,23 @@ import javax.inject.Inject
  * [ProPurchaseFlow] (Slice A5a); this class is a thin bridge that turns
  * screen intents into flow calls and outcomes back into UI state.
  *
- * See plans/ai-pro-phase1-spec.md §3.1.
+ * Also owns the *user-action* half of the Pro telemetry:
+ * [TelemetryEvents.PRO_PURCHASE_STARTED], [TelemetryEvents.PRO_PURCHASE_FAILED]
+ * (with a `reason` bucket derived from the `PurchaseOutcome` variant), and
+ * [TelemetryEvents.PRO_RESTORE_TAPPED]. The state-transition half
+ * (`pro_purchase_completed`, `pro_entitlement_gained`,
+ * `pro_entitlement_lost`) lives in [ProEntitlementRepository] because
+ * cross-device restores fire the same state transitions without going
+ * through this VM.
+ *
+ * See plans/ai-pro-phase1-spec.md §3.1 and §3.6.
  */
 @HiltViewModel
 class PesaTrackProViewModel @Inject constructor(
     private val playBilling: PlayBillingClient,
     private val purchaseFlow: ProPurchaseFlow,
     private val entitlements: ProEntitlementRepository,
+    private val telemetryClient: TelemetryClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PesaTrackProUiState())
@@ -91,8 +103,34 @@ class PesaTrackProViewModel @Inject constructor(
      */
     fun subscribe(activity: Activity, product: ProProduct) {
         viewModelScope.launch {
+            telemetryClient.logEvent(
+                TelemetryEvents.PRO_PURCHASE_STARTED,
+                mapOf(TelemetryEvents.PARAM_PRODUCT_ID to product.telemetryValue),
+            )
             _uiState.value = _uiState.value.copy(purchaseInFlight = true)
             val outcome = purchaseFlow.launchPurchase(activity, product)
+
+            // Emit pro_purchase_failed with a bucketed reason. The
+            // pro_purchase_completed + pro_entitlement_gained events for the
+            // Ok branch fire from ProEntitlementRepository.verifyPurchase()
+            // so cross-device restore also gets counted.
+            val failureReason: String? = when (outcome) {
+                is PurchaseOutcome.Ok -> null
+                PurchaseOutcome.UserCancelled -> TelemetryEvents.REASON_USER_CANCEL
+                is PurchaseOutcome.NetworkError -> TelemetryEvents.REASON_NETWORK
+                is PurchaseOutcome.BillingFailed -> TelemetryEvents.REASON_BILLING_ERROR
+                is PurchaseOutcome.VerifyFailed -> TelemetryEvents.REASON_VERIFY_FAILED
+            }
+            if (failureReason != null) {
+                telemetryClient.logEvent(
+                    TelemetryEvents.PRO_PURCHASE_FAILED,
+                    mapOf(
+                        TelemetryEvents.PARAM_PRODUCT_ID to product.telemetryValue,
+                        TelemetryEvents.PARAM_REASON to failureReason,
+                    ),
+                )
+            }
+
             _uiState.value = _uiState.value.copy(
                 purchaseInFlight = false,
                 outcomeMessage = outcome.toMessage(product),
@@ -106,6 +144,7 @@ class PesaTrackProViewModel @Inject constructor(
      */
     fun restore() {
         viewModelScope.launch {
+            telemetryClient.logEvent(TelemetryEvents.PRO_RESTORE_TAPPED)
             _uiState.value = _uiState.value.copy(restoreInFlight = true)
             val outcome = purchaseFlow.restorePurchases()
             _uiState.value = _uiState.value.copy(
@@ -113,6 +152,18 @@ class PesaTrackProViewModel @Inject constructor(
                 outcomeMessage = outcome.toMessage(),
             )
         }
+    }
+
+    /**
+     * Fired once by the composable when the screen first appears. [source]
+     * distinguishes navigation-to-Pro from Settings vs a future deeplink
+     * caller (Phase 2's AI Coach entry-point can pass [TelemetryEvents.SOURCE_DEEPLINK]).
+     */
+    fun onScreenViewed(source: String) {
+        telemetryClient.logEvent(
+            TelemetryEvents.PRO_SCREEN_VIEWED,
+            mapOf(TelemetryEvents.PARAM_SOURCE to source),
+        )
     }
 
     /** Called after the snackbar dismisses. */

@@ -2,6 +2,8 @@ package com.pesatrack.services.pro
 
 import com.pesatrack.services.ai.PesaTrackAiClient
 import com.pesatrack.services.ai.VerifyRequestDto
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,6 +30,10 @@ import javax.inject.Singleton
  *  - Owns the honest-numbers checks on liveness — a persisted
  *    `isEntitled = true` with an expired `expiresAtEpochMs` is treated as
  *    expired at read time here, not at every call site.
+ *  - Owns the state-transition telemetry ([TelemetryEvents.PRO_PURCHASE_COMPLETED],
+ *    [TelemetryEvents.PRO_ENTITLEMENT_GAINED], [TelemetryEvents.PRO_ENTITLEMENT_LOST])
+ *    — user-action events (screen view, subscribe tap, failure buckets)
+ *    stay in the ViewModel because they need the outcome/reason mapping.
  *
  * See plans/ai-pro-phase1-spec.md §6.
  *
@@ -39,6 +45,7 @@ class ProEntitlementRepository @Inject constructor(
     private val store: ProStateStore,
     private val aiClient: PesaTrackAiClient,
     private val tokenCache: ProTokenCache,
+    private val telemetryClient: TelemetryClient,
 ) {
 
     /**
@@ -112,6 +119,26 @@ class ProEntitlementRepository @Inject constructor(
             autoRenewing = body.autoRenewing,
         )
         store.setProState(newState)
+
+        // State-transition telemetry. Fires from verifyPurchase() only —
+        // the only code path that establishes a fresh entitlement — so
+        // cross-device restore fires exactly once per restored subscription.
+        // is_trial is emitted as the string "true" / "false" so Firebase's
+        // dashboard bucketing stays consistent with other boolean-like params
+        // in the allow-list.
+        val emittedProduct = newState.tier ?: product
+        telemetryClient.logEvent(
+            TelemetryEvents.PRO_PURCHASE_COMPLETED,
+            mapOf(
+                TelemetryEvents.PARAM_PRODUCT_ID to emittedProduct.telemetryValue,
+                TelemetryEvents.PARAM_IS_TRIAL to body.isTrialPeriod.toString(),
+            ),
+        )
+        telemetryClient.logEvent(
+            TelemetryEvents.PRO_ENTITLEMENT_GAINED,
+            mapOf(TelemetryEvents.PARAM_PRODUCT_ID to emittedProduct.telemetryValue),
+        )
+
         newState
     }
 
@@ -174,12 +201,15 @@ class ProEntitlementRepository @Inject constructor(
 
     /**
      * Reset persisted state to [ProState.DEFAULT] and drop the cached
-     * token. The [reason] is available for Slice A6's telemetry event
-     * (`pro_entitlement_lost`); it is not persisted.
+     * token. The [reason] is emitted as the `reason` param of the
+     * [TelemetryEvents.PRO_ENTITLEMENT_LOST] event; it is not persisted.
      */
     suspend fun clearEntitlement(reason: EntitlementLostReason) {
         store.setProState(ProState.DEFAULT)
-        // Telemetry emission lands in Slice A6.
+        telemetryClient.logEvent(
+            TelemetryEvents.PRO_ENTITLEMENT_LOST,
+            mapOf(TelemetryEvents.PARAM_REASON to reason.telemetryValue),
+        )
     }
 
     /**

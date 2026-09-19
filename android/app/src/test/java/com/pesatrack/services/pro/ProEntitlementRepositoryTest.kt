@@ -1,6 +1,8 @@
 package com.pesatrack.services.pro
 
 import com.pesatrack.services.ai.PesaTrackAiClient
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +42,7 @@ class ProEntitlementRepositoryTest {
     private lateinit var aiClient: PesaTrackAiClient
     private lateinit var store: FakeProStateStore
     private lateinit var tokenCache: ProTokenCache
+    private lateinit var telemetry: RecordingTelemetryClient
     private lateinit var repo: ProEntitlementRepository
 
     @Before
@@ -59,7 +62,8 @@ class ProEntitlementRepositoryTest {
 
         store = FakeProStateStore()
         tokenCache = ProTokenCache()
-        repo = ProEntitlementRepository(store, aiClient, tokenCache)
+        telemetry = RecordingTelemetryClient()
+        repo = ProEntitlementRepository(store, aiClient, tokenCache, telemetry)
     }
 
     @After
@@ -332,6 +336,77 @@ class ProEntitlementRepositoryTest {
         assertNull(tokenCache.currentToken())
     }
 
+    // ─── Slice A6: telemetry emissions ──────────────────────────────────
+
+    @Test
+    fun `verifyPurchase success emits pro_purchase_completed and pro_entitlement_gained`() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {"entitled":true,"productId":"pesatrack_pro_annual",
+                 "expiresAtEpochMs":${FAR_FUTURE_MS},
+                 "autoRenewing":true,"isTrialPeriod":true}
+                """.trimIndent()
+            )
+        )
+
+        repo.verifyPurchase("GPA.telemetry.token", ProProduct.ANNUAL)
+
+        // Both events must fire exactly once.
+        val completed = telemetry.events.filter { it.name == TelemetryEvents.PRO_PURCHASE_COMPLETED }
+        assertEquals("expected 1 pro_purchase_completed, got $completed", 1, completed.size)
+        assertEquals("annual", completed[0].params[TelemetryEvents.PARAM_PRODUCT_ID])
+        // is_trial is serialized as the STRING "true" for Firebase dashboard consistency
+        assertEquals("true", completed[0].params[TelemetryEvents.PARAM_IS_TRIAL])
+
+        val gained = telemetry.events.filter { it.name == TelemetryEvents.PRO_ENTITLEMENT_GAINED }
+        assertEquals("expected 1 pro_entitlement_gained, got $gained", 1, gained.size)
+        assertEquals("annual", gained[0].params[TelemetryEvents.PARAM_PRODUCT_ID])
+    }
+
+    @Test
+    fun `verifyPurchase failure emits neither telemetry event`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        repo.verifyPurchase("GPA.any", ProProduct.MONTHLY)
+
+        assertTrue(
+            "expected no pro_purchase_completed after 500, got ${telemetry.events}",
+            telemetry.events.none { it.name == TelemetryEvents.PRO_PURCHASE_COMPLETED },
+        )
+        assertTrue(
+            telemetry.events.none { it.name == TelemetryEvents.PRO_ENTITLEMENT_GAINED },
+        )
+    }
+
+    @Test
+    fun `clearEntitlement emits pro_entitlement_lost with reason value locked to plans allow-list`() = runBlocking {
+        repo.clearEntitlement(EntitlementLostReason.EXPIRED)
+        repo.clearEntitlement(EntitlementLostReason.REFUNDED)
+        repo.clearEntitlement(EntitlementLostReason.REVOKED)
+
+        val lost = telemetry.events.filter { it.name == TelemetryEvents.PRO_ENTITLEMENT_LOST }
+        assertEquals(3, lost.size)
+        assertEquals("expired", lost[0].params[TelemetryEvents.PARAM_REASON])
+        assertEquals("refunded", lost[1].params[TelemetryEvents.PARAM_REASON])
+        assertEquals("revoked", lost[2].params[TelemetryEvents.PARAM_REASON])
+    }
+
+    @Test
+    fun `refreshEntitlement revoked branch (401) emits pro_entitlement_lost`() = runBlocking {
+        // §3.6 allow-list says pro_entitlement_lost.reason ∈ { expired, refunded, revoked };
+        // the 401/404 refresh path clears with EntitlementLostReason.REVOKED, so the
+        // resulting param must be "revoked".
+        store.emit(entitledState("GPA.about.to.be.revoked"))
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        repo.refreshEntitlement()
+
+        val lost = telemetry.events.filter { it.name == TelemetryEvents.PRO_ENTITLEMENT_LOST }
+        assertEquals(1, lost.size)
+        assertEquals("revoked", lost[0].params[TelemetryEvents.PARAM_REASON])
+    }
+
     // ─── Test helpers ───────────────────────────────────────────────────
 
     private fun entitledState(token: String) = ProState(
@@ -384,5 +459,24 @@ private class FakeProStateStore(initial: ProState = ProState.DEFAULT) : ProState
         flow.value = state
         // give any downstream collector a chance to observe
         flow.first { it == state }
+    }
+}
+
+/**
+ * Records every [TelemetryClient.logEvent] call in insertion order for
+ * assertion. Ignored calls to [setEnabled] are no-ops — tests exercise
+ * the enabled path only.
+ */
+private class RecordingTelemetryClient : TelemetryClient {
+    data class Recorded(val name: String, val params: Map<String, Any>)
+
+    val events: MutableList<Recorded> = mutableListOf()
+
+    override fun setEnabled(enabled: Boolean) {
+        /* no-op — tests always run in enabled state */
+    }
+
+    override fun logEvent(name: String, params: Map<String, Any>) {
+        events += Recorded(name, params)
     }
 }
