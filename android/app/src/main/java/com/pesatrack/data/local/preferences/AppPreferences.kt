@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.pesatrack.services.pro.ProState
+import com.pesatrack.services.pro.ProStateJson
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -204,6 +206,20 @@ class AppPreferences @Inject constructor(
          * Settings if they change their mind.
          */
         private val KEY_TELEMETRY_PROMPT_SHOWN = booleanPreferencesKey("telemetry_prompt_shown")
+
+        // ── PesaTrack Pro (AI Pro Phase 1) ──
+
+        /**
+         * Serialized [ProState] JSON blob. The `_v1` suffix is the on-disk
+         * schema version — a future `_v2` migration reads this key, transforms,
+         * writes the new key, and only then deletes this one. See
+         * [com.pesatrack.services.pro.ProStateJson] for the codec and
+         * plans/ai-pro-phase1-spec.md §3.2 for the contract.
+         *
+         * Default (missing key or unparseable blob) is [ProState.DEFAULT]:
+         * `isEntitled = false` and every optional field null.
+         */
+        private val KEY_PRO_STATE = stringPreferencesKey("pro_state_json_v1")
     }
 
     // ==================== Bank SMS Tracking ====================
@@ -858,4 +874,37 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { prefs ->
             prefs[KEY_TELEMETRY_PROMPT_SHOWN] = true
         }
-    }}
+    }
+
+    // ==================== PesaTrack Pro entitlement (AI Pro Phase 1) ====================
+
+    /**
+     * The persisted [ProState] as a hot Flow. Emits [ProState.DEFAULT] when
+     * the key is missing (fresh install) or the stored JSON is malformed
+     * (self-heals silently rather than wedging Pro-gated code paths on cold
+     * start). See plans/ai-pro-phase1-spec.md §3.2.
+     */
+    val proState: Flow<ProState> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_PRO_STATE] ?: return@map ProState.DEFAULT
+        ProStateJson.parse(raw) ?: ProState.DEFAULT
+    }
+
+    /** Snapshot read of the current [ProState]. Convenience over `.first()`. */
+    suspend fun getProState(): ProState {
+        val raw = context.dataStore.data.first()[KEY_PRO_STATE] ?: return ProState.DEFAULT
+        return ProStateJson.parse(raw) ?: ProState.DEFAULT
+    }
+
+    /**
+     * Persist a new [ProState] atomically. Callers must never write partial
+     * fields — mutate a copy of the current state and hand the whole snapshot
+     * here so we can't observe torn intermediate values (e.g.
+     * `purchaseToken` present but `expiresAtEpochMs` still null).
+     */
+    suspend fun setProState(state: ProState) {
+        val json = ProStateJson.serialize(state)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_PRO_STATE] = json
+        }
+    }
+}
