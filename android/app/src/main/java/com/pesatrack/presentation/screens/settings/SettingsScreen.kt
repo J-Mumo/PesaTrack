@@ -43,6 +43,7 @@ fun SettingsScreen(
     onNavigateToCategoryManagement: () -> Unit = {},
     onNavigateToPinSetup: (String) -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
+    onNavigateToPro: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -107,6 +108,9 @@ fun SettingsScreen(
                     onBiometricToggle = viewModel::setBiometricEnabled,
                     onLockTimeoutChanged = viewModel::setLockTimeout
                 )
+
+                // Section: PesaTrack Pro (AI Pro Phase 1 - subscription entry point)
+                PesaTrackProSection(onNavigateToPro = onNavigateToPro)
 
                 // Section: Categories
                 CategoriesSection(onNavigateToCategoryManagement = onNavigateToCategoryManagement)
@@ -367,6 +371,24 @@ private fun CategoriesSection(onNavigateToCategoryManagement: () -> Unit) {
                 }
             }
             Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to Categories", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Entry point to [com.pesatrack.presentation.screens.pro.PesaTrackProScreen]. */
+@Composable
+private fun PesaTrackProSection(onNavigateToPro: () -> Unit) {
+    Text(text = "PesaTrack Pro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    Card(onClick = onNavigateToPro, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Column {
+                    Text(text = "PesaTrack Pro", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    Text(text = "AI coaching to help you save more", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = "Go to PesaTrack Pro", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

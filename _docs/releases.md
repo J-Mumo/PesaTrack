@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.6.0** | 17 | 2026-09-19 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.5.3** | 16 | 2026-09-12 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.5.3** | 15 | 2026-09-12 | Production | 🟡 Pending upload |
 | **1.5.2** | 14 | 2026-09-10 | Production | 🚫 Superseded by 1.5.3 |
@@ -22,6 +23,40 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.6.0 (versionCode 17) — 2026-09-19
+
+**Focus:** Foundation for PesaTrack Pro subscription. Nothing user-visible in production until the Google Play subscription SKUs are published and Slice A6 flips the visibility flag, but the entire on-device plumbing (Play Billing 7.x wrapper, entitlement state machine, `/billing/verify` HTTPS pipeline against `pesatrack-api.jmumo.com`, upsell screen) ships in this build so closed-testing devices can exercise the full purchase → verify → persist loop end-to-end.
+
+### ✨ New
+
+- **PesaTrack Pro subscription screen** ([Settings → PesaTrack Pro](../android/app/src/main/java/com/pesatrack/presentation/screens/pro/PesaTrackProScreen.kt)). Self-adapting UI with four surfaces: `Loading` (product-details fetch in flight), `Available` (Play returned tier data — Monthly + Annual cards with prices, "Subscribe" buttons, and a "Restore purchase" affordance), `Entitled` (status card with expiry + renewal state + link to manage in Play), and `Coming soon` (Play returned no product details — placeholder text, no purchase attempt possible). The Coming-soon surface is what lets v1.6.0 ship safely before the Play Console SKUs are published: users just see the placeholder, and when the SKUs go live the same APK auto-lights up without a version bump.
+- **AI Pro backend** at `https://pesatrack-api.jmumo.com` (Hetzner CPX21, behind the shared Caddy proxy alongside `stockup` / `maliscope` / `pesatrack`). Node + Express + Prisma + Postgres 16, TLS via Let's Encrypt. Three endpoints: `POST /billing/verify` (validates Play purchase tokens → normalized entitlement, keyed on SHA-256(token), raw token never persisted server-side), `GET /billing/entitlement` (Bearer-guarded lookup for cold-start re-verify), `POST /ai/echo` (Phase-1 pipeline proof — no LLM call; the real `/ai/coach` endpoint lands in Phase 2). Purchase tokens are only ever stored/logged as their first 16 SHA-256 hex chars.
+- **Google Play Billing 7.x integration** — new dependency `com.android.billingclient:billing-ktx:7.1.1`. [PlayBillingClient](../android/app/src/main/java/com/pesatrack/services/pro/PlayBillingClient.kt) wraps `BillingClient` behind coroutine-friendly `suspend` functions, republishes `PurchasesUpdatedListener` as a `SharedFlow<PurchaseUpdate>`, and serialises connection via `Mutex`. [ProPurchaseFlow](../android/app/src/main/java/com/pesatrack/services/pro/ProPurchaseFlow.kt) drives the seven-step purchase pipeline from `plans/ai-pro-phase1-spec.md` §6.1: connect → query product details → subscribe to updates BEFORE launching the sheet (race guard) → launch → await update → verify with our backend BEFORE acknowledging (if backend rejects, we skip ack so Play auto-refunds the user within 3 days rather than stranding the entitlement) → best-effort acknowledge.
+
+### 🔐 Privacy invariants
+
+- **HTTPS-only, pinned to one host.** New [network_security_config.xml](../android/app/src/main/res/xml/network_security_config.xml) whitelists `pesatrack-api.jmumo.com` under `cleartextTrafficPermitted="false"` with system trust anchors only — no user-installed CAs, no debug overrides (same policy in release and debug so cert misconfigs surface during development). Referenced via `android:networkSecurityConfig="@xml/network_security_config"` on the manifest `<application>` tag.
+- **INTERNET permission was already declared** for v1.5.0 telemetry — no new permission is requested at install or runtime for this release.
+- **Purchase tokens stay on-device.** The raw Google Play purchase token is persisted only in the device's DataStore (`pro_state_json_v1` key). The backend stores exclusively `SHA-256(token)` — never the raw value — as its unique identity anchor. There is no `User` table on the backend by design; the hashed token is the identity. See [ProState](../android/app/src/main/java/com/pesatrack/services/pro/ProState.kt) KDoc.
+- **Config guard against fake billing.** The backend refuses to boot when `NODE_ENV=production && DEV_FAKE_BILLING=true` (`FATAL: DEV_FAKE_BILLING=true is not permitted when NODE_ENV=production`) so a misconfigured deploy can't silently grant free entitlements.
+- **No new data types collected.** Play Store Data Safety declaration for this version does not add categories — analytics remains the same "app activity" scope from v1.5.0; billing traffic is between the device, Google Play, and our own server.
+
+### 🧭 Architecture (new)
+
+- New package `com.pesatrack.services.pro/` (10 files) — headless entitlement state machine, Play Billing wrapper, purchase orchestration, JSON persistence.
+- New package `com.pesatrack.services.ai/` (5 files) — Retrofit interface, DTOs, `ProAuthInterceptor` (path-based Bearer gating with client-synthesised 401 short-circuit — `/health` and `/billing/verify` never sent with `Authorization`; `/billing/entitlement` and `/ai/*` require it), Hilt module.
+- New Compose screen at `presentation/screens/pro/` plus a `ProUpsellSheet` component in `presentation/components/` (skeleton — no caller wired in this release; Phase 2 will use it from the AI Coach entry when the user isn't entitled).
+- New Hilt module [ProBillingModule](../android/app/src/main/java/com/pesatrack/di/ProBillingModule.kt) binding `PurchaseTokenProvider` → `ProTokenCache` (breaks a Hilt dependency cycle between the interceptor and the entitlement repository) and `ProStateStore` → `AppPreferences`.
+- Room DB unchanged at v18 — all Pro entitlement state lives in DataStore under a single atomic JSON write.
+
+### 📎 Notes
+
+- The Play Console subscription SKUs (`pesatrack_pro_monthly`, `pesatrack_pro_annual`) are **not yet published** at the time of this AAB upload. That's intentional — the screen renders "Coming soon" and no purchase attempt is possible until the SKUs go live, at which point the same APK lights up.
+- Six-slice implementation on the `feat/ai-pro-plan` branch: A1 (dependency + network-security foundation) → A2 (DataStore `ProState` persistence + JSON codec + 9 tests) → A3 (Retrofit + `ProAuthInterceptor` + 12 tests) → A4 (`ProEntitlementRepository` + `ProTokenCache` + 16 tests) → A5a (Play Billing wrapper + `ProPurchaseFlow` + 15 tests) → A5b (Compose UI + navigation + this release notes entry). Slice A6 (feature flag + 7 Pro-lifecycle telemetry events) follows separately.
+- Website sync check (AGENTS.md §Website Sync Check): **required.** New screen + new feature + versionName bump — filed as a follow-up commit on this branch (Slice A5c): new feature MD in [website/src/content/features/](../website/src/content/features/), update `/features` index, `factsheet.json.currentVersion` auto-updates from this file.
 
 ---
 

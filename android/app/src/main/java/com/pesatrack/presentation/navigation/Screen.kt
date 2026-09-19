@@ -73,6 +73,15 @@ sealed class Screen(val route: String) {
     object About : Screen("about")
 
     /**
+     * PesaTrack Pro subscription screen (AI Pro Phase 1). Reached from
+     * Settings. Self-adapts through Loading / Entitled / Available /
+     * Coming-soon surfaces based on Play product-details availability
+     * and current [com.pesatrack.services.pro.ProState]. See
+     * plans/ai-pro-phase1-spec.md §3.1.
+     */
+    object Pro : Screen("pro")
+
+    /**
      * Weekly Review screen (Insights & Reports v1.0).
      *
      * Accepts an optional snapshot id so notifications can deep-link to the

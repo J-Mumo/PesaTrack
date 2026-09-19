@@ -20,6 +20,7 @@ import com.pesatrack.presentation.screens.category_management.CategoryManagement
 import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.about.AboutScreen
 import com.pesatrack.presentation.screens.pin.PinSetupScreen
+import com.pesatrack.presentation.screens.pro.PesaTrackProScreen
 import com.pesatrack.presentation.screens.monthly_review.MonthlyReviewScreen
 import com.pesatrack.presentation.screens.quarterly_review.QuarterlyReviewScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
@@ -258,6 +259,9 @@ fun NavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(Screen.About.route)
+                },
+                onNavigateToPro = {
+                    navController.navigate(Screen.Pro.route)
                 }
             )
         }
@@ -314,6 +318,15 @@ fun NavGraph(
         // About Screen
         composable(route = Screen.About.route) {
             AboutScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // PesaTrack Pro subscription (AI Pro Phase 1)
+        composable(route = Screen.Pro.route) {
+            PesaTrackProScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
