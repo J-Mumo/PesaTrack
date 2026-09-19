@@ -194,6 +194,10 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    // MockWebServer for exercising OkHttp interceptors + Retrofit against a
+    // local HTTP loopback (see e.g. ProAuthInterceptorTest). Version-matched
+    // to the OkHttp core we already ship.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.01"))
