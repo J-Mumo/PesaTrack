@@ -35,6 +35,7 @@ function makeLimiter({ windowMs, max, name }) {
   });
 }
 
+const oneMinute = 60 * 1000;
 const oneHour = 60 * 60 * 1000;
 const oneDay = 24 * oneHour;
 
@@ -42,4 +43,8 @@ module.exports = {
   billingVerify: makeLimiter({ windowMs: oneHour, max: 20, name: 'billing.verify.hourly' }),
   billingEntitlement: makeLimiter({ windowMs: oneHour, max: 60, name: 'billing.entitlement.hourly' }),
   aiEcho: makeLimiter({ windowMs: oneDay, max: 100, name: 'ai.echo.daily' }),
+  // /ai/coach-insight: 3/day headroom over the once-daily intent (pull-to-refresh + a rare recompute),
+  // plus a 1/minute burst guard against double-tap flooding. See plans/ai-pro-phase2-spec.md §9.
+  aiCoachInsightDaily: makeLimiter({ windowMs: oneDay, max: 3, name: 'ai.coach_insight.daily' }),
+  aiCoachInsightMinute: makeLimiter({ windowMs: oneMinute, max: 1, name: 'ai.coach_insight.minute' }),
 };

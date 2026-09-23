@@ -1,0 +1,48 @@
+{
+  "_comment": "Deny-list applied to Coach Insight responses (title + body + assumptions). Case-insensitive substring match. Editable without code changes — reload requires container restart. See plans/ai-pro-phase2-spec.md §7.3.",
+  "substrings": [
+    "guaranteed return",
+    "guaranteed returns",
+    "guaranteed profit",
+    "guaranteed profits",
+    "risk-free",
+    "risk free",
+    "definitely will grow",
+    "will definitely grow",
+    "certainly grow",
+    "certainly grows",
+    "will definitely make you",
+    "guaranteed to make",
+    "investment advice",
+    "financial advice",
+    "sacco recommendation",
+    "sacco recommendations",
+    "mmf recommendation",
+    "money market fund recommendation",
+    "you should invest in",
+    "you must invest in",
+    "you should buy",
+    "you must buy"
+  ],
+  "brokers": [
+    "Faulu",
+    "KCB Capital",
+    "NCBA Investment Bank",
+    "Britam",
+    "Old Mutual Securities",
+    "Sanlam Investments",
+    "ICEA Lion Asset Management",
+    "Cytonn",
+    "Genghis Capital",
+    "Kingdom Securities",
+    "Dyer & Blair",
+    "SBG Securities",
+    "AIB Capital",
+    "Standard Investment Bank",
+    "Suntra Investment Bank"
+  ],
+  "regexes": [
+    "\\bbuy\\s+[A-Z]{3,5}\\s+(shares?|stock|bond)\\b",
+    "\\binvest\\s+in\\s+[A-Z]{3,5}\\b"
+  ]
+}

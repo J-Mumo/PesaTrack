@@ -57,4 +57,16 @@ function getDefaultProvider() {
   return cached;
 }
 
-module.exports = { getDefaultProvider };
+/**
+ * Test hook — inject a mock provider so integration tests can exercise
+ * the coach-insight handler without a real OpenAI call. Never called
+ * outside tests.
+ */
+function __setProviderForTest(provider) {
+  cached = provider;
+}
+function __resetProvider() {
+  cached = null;
+}
+
+module.exports = { getDefaultProvider, __setProviderForTest, __resetProvider };

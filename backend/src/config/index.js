@@ -20,6 +20,7 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().optional().default(''),
   OPENAI_MODEL: z.string().default('gpt-4.1-mini'),
   OPENAI_MAX_TOKENS_OUT: z.coerce.number().int().positive().default(800),
+  AI_COACH_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.4),
 
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.pesatrack'),
   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().optional().default(''),
@@ -59,6 +60,7 @@ module.exports = {
     apiKey: env.OPENAI_API_KEY,
     model: env.OPENAI_MODEL,
     maxTokensOut: env.OPENAI_MAX_TOKENS_OUT,
+    coachTemperature: env.AI_COACH_TEMPERATURE,
   },
 
   playBilling: {
