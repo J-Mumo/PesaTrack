@@ -13,11 +13,16 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.pesatrack.services.pro.ProState
 import com.pesatrack.services.pro.ProStateJson
 import com.pesatrack.services.pro.ProStateStore
+import com.pesatrack.services.ai.CachedCoachInsight
+import com.pesatrack.services.ai.CoachInsight
+import com.pesatrack.services.ai.CoachInsightCache
+import com.pesatrack.services.ai.CoachInsightJson
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,7 +40,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 @Singleton
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
-) : ProStateStore {
+) : ProStateStore, CoachInsightCache {
 
     companion object {
         private const val QUALIFIED_SESSION_GAP_MS = 5 * 60 * 1000L
@@ -221,6 +226,17 @@ class AppPreferences @Inject constructor(
          * `isEntitled = false` and every optional field null.
          */
         private val KEY_PRO_STATE = stringPreferencesKey("pro_state_json_v1")
+
+        /**
+         * Slot holding today's — or, after date rollover, yesterday's —
+         * Coach Insight, serialized as a [CachedCoachInsight] JSON blob.
+         * The `_v1` suffix is the on-disk schema version so a future
+         * `_v2` migration can read this, transform, and delete under one
+         * DataStore edit. Missing-or-malformed reads translate to a cache
+         * miss (never a crash) via [CoachInsightJson.parse]. See
+         * plans/ai-pro-phase2-spec.md §6.4.
+         */
+        private val KEY_COACH_INSIGHT = stringPreferencesKey("coach_insight_cache_v1")
 
         /**
          * Feature-flag ship gate for the AI-Pro calling code paths (Phase 2's
@@ -923,6 +939,47 @@ class AppPreferences @Inject constructor(
         val json = ProStateJson.serialize(state)
         context.dataStore.edit { prefs ->
             prefs[KEY_PRO_STATE] = json
+        }
+    }
+
+    // ==================== Coach Insight cache (AI Pro Phase 2) ====================
+    //
+    // Persists a single slot: the most recent successful Coach Insight,
+    // tagged with the local date it was fetched on. The date drives the
+    // fresh-vs-yesterday-fallback logic in [CoachInsightRepository] (see
+    // plans/ai-pro-phase2-spec.md §6.4).
+    //
+    // Rehydration of `r1..rN` recipient ids happens BEFORE persistence so
+    // the cached JSON already carries real merchant names — the id → name
+    // map itself is ephemeral and never persisted.
+
+    private suspend fun readCachedCoachInsight(): CachedCoachInsight? {
+        val raw = context.dataStore.data.first()[KEY_COACH_INSIGHT] ?: return null
+        return CoachInsightJson.parse(raw)
+    }
+
+    override suspend fun getIfFreshForToday(today: LocalDate): CoachInsight? {
+        val cached = readCachedCoachInsight() ?: return null
+        return if (cached.date == today.toString()) cached.insight else null
+    }
+
+    override suspend fun getYesterday(today: LocalDate): CoachInsight? {
+        val cached = readCachedCoachInsight() ?: return null
+        return if (cached.date == today.minusDays(1).toString()) cached.insight else null
+    }
+
+    override suspend fun putForToday(today: LocalDate, insight: CoachInsight) {
+        val json = CoachInsightJson.serialize(
+            CachedCoachInsight(date = today.toString(), insight = insight)
+        )
+        context.dataStore.edit { prefs ->
+            prefs[KEY_COACH_INSIGHT] = json
+        }
+    }
+
+    override suspend fun clear() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(KEY_COACH_INSIGHT)
         }
     }
 

@@ -56,6 +56,27 @@ interface PesaTrackAiClient {
      */
     @POST("ai/echo")
     suspend fun aiEcho(@Body request: AiEchoRequestDto): Response<AiEchoResponseDto>
+
+    /**
+     * Phase-2 Coach Insight endpoint. Sends the anonymised [DataDigest]
+     * to the backend, which grounds an OpenAI Structured-Outputs call
+     * against it and returns either a [CoachInsight] or a
+     * `fallback: true` envelope with a bucketed reason. Server-side
+     * guardrails: deny-list scrub, `postValidate` cross-checks, and
+     * strict-mode JSON schema enforcement — see
+     * `backend/src/services/ai/coachInsight.js` and
+     * plans/ai-pro-phase2-spec.md §7.
+     *
+     * The response envelope is HTTP 200 even on server-side fallback so
+     * the client renders the template card silently instead of showing
+     * an error state. Only genuine client bugs (invalid digest, missing
+     * bearer) surface as 4xx; the caller ([CoachInsightRepository])
+     * treats every non-2xx as "fall back to yesterday's cache".
+     */
+    @POST("ai/coach-insight")
+    suspend fun coachInsight(
+        @Body request: CoachInsightRequestDto,
+    ): Response<CoachInsightResponseDto>
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -108,4 +129,38 @@ data class AiEchoResponseDto(
     @Json(name = "period") val period: String,
     @Json(name = "provider") val provider: String,
     @Json(name = "request_id") val requestId: String,
+)
+
+/** `POST /ai/coach-insight` request body — wraps a [DataDigest]. */
+@JsonClass(generateAdapter = true)
+data class CoachInsightRequestDto(
+    @Json(name = "digest") val digest: DataDigest,
+)
+
+/**
+ * `POST /ai/coach-insight` response envelope.
+ *
+ * The backend deliberately returns HTTP 200 for every guardrail
+ * rejection or provider failure — the [fallback] flag distinguishes
+ * "usable insight" from "silent template fallback" so the client never
+ * has to render an error state. See plans/ai-pro-phase2-spec.md §8
+ * ("Fallback & Failure Modes").
+ *
+ *  - `fallback == false && insight != null` — happy path, use [insight].
+ *  - `fallback == true` — [insight] is null; render the existing
+ *    template card. [reason] is one of `provider_error`,
+ *    `saveable_no_assumptions`, `unknown_recipient_id`,
+ *    `foreign_currency`, `denylist`, etc. — never surfaced to the
+ *    user, only to telemetry.
+ *  - `cached` — true when the backend served this insight from its own
+ *    24h digest-hash cache. Purely informational (client caches
+ *    independently); nice for debugging.
+ */
+@JsonClass(generateAdapter = true)
+data class CoachInsightResponseDto(
+    @Json(name = "fallback") val fallback: Boolean,
+    @Json(name = "insight") val insight: CoachInsight?,
+    @Json(name = "reason") val reason: String?,
+    @Json(name = "cached") val cached: Boolean?,
+    @Json(name = "request_id") val requestId: String?,
 )

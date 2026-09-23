@@ -48,6 +48,20 @@ private fun coefficientOfVariation(values: List<Double>): Double? {
 }
 
 /**
+ * Narrow contract implemented by [DataDigestBuilder] so
+ * [CoachInsightRepository] (and later slices) can depend on the
+ * *capability* of producing a fresh digest without pulling in the six
+ * DAOs the concrete builder needs.
+ *
+ * Also gives unit tests a trivial way to inject a fixed [Build] without
+ * touching Room, DataStore, or the recurring-expense service.
+ */
+interface DigestBuilder {
+    /** See [DataDigestBuilder.buildForCurrentPeriod]. */
+    suspend fun buildForCurrentPeriod(nowMs: Long = System.currentTimeMillis()): DataDigestBuilder.Build
+}
+
+/**
  * Assembles the privacy-safe [DataDigest] payload the client sends to
  * the AI backend.
  *
@@ -100,7 +114,7 @@ class DataDigestBuilder @Inject constructor(
     private val recipientMappingDao: RecipientCategoryMappingDao,
     private val appPreferences: AppPreferences,
     private val recurringExpenseService: RecurringExpenseService,
-) {
+) : DigestBuilder {
 
     /**
      * Output of a digest build. [digest] is the wire-safe payload that
@@ -121,7 +135,7 @@ class DataDigestBuilder @Inject constructor(
      *   for testability of the wrapper (rarely tested — the pure helper
      *   [computeDigest] carries the coverage).
      */
-    suspend fun buildForCurrentPeriod(nowMs: Long = System.currentTimeMillis()): Build {
+    override suspend fun buildForCurrentPeriod(nowMs: Long): Build {
         val monthStartDay = appPreferences.getMonthStartDay()
         val (currentStart, currentEnd) = MonthPeriod.currentRange(monthStartDay, nowMs)
 

@@ -46,7 +46,7 @@ class ProEntitlementRepository @Inject constructor(
     private val aiClient: PesaTrackAiClient,
     private val tokenCache: ProTokenCache,
     private val telemetryClient: TelemetryClient,
-) {
+) : com.pesatrack.services.ai.EntitlementSource {
 
     /**
      * Long-lived scope owned by the singleton. Cancelled implicitly at
@@ -77,12 +77,20 @@ class ProEntitlementRepository @Inject constructor(
      * that only care about "is the Pro UI unlocked" should call this
      * rather than reading `state.isEntitled` directly.
      */
-    suspend fun isCurrentlyEntitled(now: Long = System.currentTimeMillis()): Boolean {
+    override suspend fun isCurrentlyEntitled(nowMs: Long): Boolean {
         val state = store.getProState()
         if (!state.isEntitled) return false
         val expiry = state.expiresAtEpochMs ?: return false
-        return expiry > now
+        return expiry > nowMs
     }
+
+    /**
+     * Concrete-class overload that preserves the old no-arg call shape
+     * from Slice A4 tests + any future call site that types the receiver
+     * as the concrete repository. Delegates to the interface method.
+     */
+    suspend fun isCurrentlyEntitled(): Boolean =
+        isCurrentlyEntitled(System.currentTimeMillis())
 
     /**
      * Called by Slice A5's `ProPurchaseFlow` immediately after Google Play
