@@ -239,19 +239,29 @@ class AppPreferences @Inject constructor(
         private val KEY_COACH_INSIGHT = stringPreferencesKey("coach_insight_cache_v1")
 
         /**
-         * Feature-flag ship gate for the AI-Pro calling code paths (Phase 2's
-         * `/ai/coach` etc.). Kept independent from the entitlement state so
-         * we can ship Phase 1 to production with the flag OFF, activate it
-         * for closed-testing entitled users, and roll out to production once
-         * verified.
+         * Feature-flag ship gate for the AI-Pro calling code paths
+         * (Phase 2's `/ai/coach-insight`).
+         *
+         * **Default `true` as of v1.7.0.** Phase-1 (v1.6.0) shipped this
+         * default `false` so the AI-calling code paths deployed dark
+         * while the backend endpoint + client repository + composable were
+         * being built. B6 flips the default now that the backend is
+         * live and the CoachInsightCard has landed on Home. See KDoc on
+         * [AppPreferences.proAiEnabled] for the wider ship-gate story.
          *
          * **Not derived from entitlement automatically.** The value is a
          * manual switch — a live Pro subscription does not force this to
          * `true`, and a lost entitlement does not force it to `false`.
          * Callers that gate on AI functionality read this flag AND the
-         * entitlement state together.
+         * entitlement state together (see
+         * `HomeViewModel.loadCoachInsight`).
          *
-         * See plans/ai-pro-phase1-spec.md §3.5.
+         * Kept independent so a support kill-switch can flip it back to
+         * `false` remotely (via [setProAiEnabled]) without touching the
+         * user's `ProState`.
+         *
+         * See plans/ai-pro-phase1-spec.md §3.5 and
+         * plans/ai-pro-phase2-spec.md §6.
          */
         private val KEY_PRO_AI_ENABLED = booleanPreferencesKey("pro_ai_enabled")
     }
@@ -987,23 +997,31 @@ class AppPreferences @Inject constructor(
 
     /**
      * Hot flow of the AI Pro feature flag ([KEY_PRO_AI_ENABLED]). Default
-     * `false` — the AI-calling code paths ship dark and light up only when
-     * this is flipped. See KDoc on [KEY_PRO_AI_ENABLED] for why it's not
-     * auto-derived from entitlement state.
+     * `true` as of v1.7.0 — the Coach Insight feature is live and every
+     * entitled subscriber sees it on Home. Phase-1 (v1.6.0) shipped this
+     * default as `false` so the AI-calling code paths could deploy dark;
+     * B6 (this bump) flips the default now that the backend endpoint,
+     * guardrails, and the CoachInsightCard have all landed. Users who
+     * ever explicitly set the flag (via a debug UX or a future setting)
+     * still keep their persisted value — the default only applies to
+     * fresh installs and users who never touched it.
+     *
+     * The flag stays independent of entitlement state so a support-side
+     * kill switch can flip it back to `false` remotely (via
+     * [setProAiEnabled]) without changing the user's `ProState`.
      */
     val proAiEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PRO_AI_ENABLED] ?: false
+        prefs[KEY_PRO_AI_ENABLED] ?: true
     }
 
-    /** Snapshot read of the AI Pro feature flag. */
+    /** Snapshot read of the AI Pro feature flag. See [proAiEnabled] KDoc. */
     suspend fun isProAiEnabled(): Boolean =
-        context.dataStore.data.first()[KEY_PRO_AI_ENABLED] ?: false
+        context.dataStore.data.first()[KEY_PRO_AI_ENABLED] ?: true
 
     /**
-     * Set the AI Pro feature flag. In Phase 1 this has no callers in
-     * shipping code — the intent is to flip it manually from a debug UX
-     * (or a future closed-testing rollout mechanism) once the AI endpoints
-     * are ready to accept traffic.
+     * Set the AI Pro feature flag. Kept as a public setter so a future
+     * support / kill-switch surface (or a Settings-screen toggle) can
+     * flip it without touching this file.
      */
     suspend fun setProAiEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
