@@ -73,15 +73,19 @@
 <body>
     <div class="container">
         <h1>🔒 PesaTrack Privacy Policy</h1>
-        <p class="subtitle">Last updated: September 19, 2026</p>
+        <p class="subtitle">Last updated: September 23, 2026</p>
 
         <div class="highlight">
             <strong>Key point:</strong> Your transactions, SMS messages, amounts,
-            and personal information stay on your device. Two things can leave
+            and personal information stay on your device. Three things can leave
             your phone, and only if you opt in to them: <em>anonymous usage
-            analytics</em> (Settings → Privacy) and, from v1.6.0,
+            analytics</em> (Settings → Privacy), from v1.6.0
             <em>subscription verification for PesaTrack Pro</em> (only if you buy
-            a plan; see §5.7).
+            a plan; see §5.7), and from v1.7.0 an <em>anonymized spending
+            digest</em> for Coach Insights (only if you subscribe AND the AI
+            feature is enabled for your build; see §5.8). No raw SMS, no
+            individual transactions, and no real merchant names ever leave
+            your device.
         </div>
 
         <h2>1. What PesaTrack Does</h2>
@@ -245,11 +249,79 @@
         the same way you would for any Play Store subscription; your entitlement lasts
         until the end of the paid period.</p>
 
-        <p><strong>AI features (Phase 2, next release cycle):</strong> when the AI coaching
-        endpoints land, this section will be updated to describe exactly what is in the
-        anonymized monthly digest — period label, per-category totals, and anonymized
-        recipient IDs (<code>r1..rN</code>). Until then, no digest is sent, no LLM call is
-        made, and no coaching endpoint is enabled server-side.</p>
+        <h2>5.8 Coach Insights (PesaTrack Pro, from v1.7.0)</h2>
+        <p>Starting in version 1.7.0, an active <strong>PesaTrack Pro</strong> subscription
+        unlocks a daily <strong>Coach Insight</strong> card on the Home screen — one
+        AI-generated observation about your spending pattern, with specific numbers and
+        one thing you could try. Producing that card requires PesaTrack to send an
+        <strong>anonymized spending digest</strong> to our backend at
+        <code>pesatrack-api.jmumo.com</code>, which in turn calls OpenAI (our AI provider)
+        with the same digest. This section describes exactly what leaves your device
+        <em>if</em> you are subscribed and the AI feature is enabled for your build. If
+        you are not subscribed, or the AI feature is off, nothing in this section
+        happens.</p>
+
+        <p><strong>What we send when a Coach Insight is generated:</strong></p>
+        <ul>
+            <li>A <strong>period label</strong> (e.g. <code>"2026-09"</code>) and how far
+            into it you are (day 15 of 30).</li>
+            <li>Aggregated <strong>category totals</strong> for the current period, the
+            previous complete period, and a three-month rolling average. Amounts are
+            whole KES only. Category names are the app's own display labels (e.g.
+            "Food &amp; Dining", "Transport") — never personalized.</li>
+            <li>Opaque <strong>recipient IDs</strong> for your top few recipients — the
+            strings <code>r1</code>, <code>r2</code>, … through <code>r8</code> — with
+            each id's total spend, transaction count, and best-guess category. IDs are
+            <em>assigned locally on your device</em> per request, so the same merchant
+            can receive different ids on different days, and there is no way for the
+            backend to correlate a merchant across users, sessions, or requests.</li>
+            <li>Detected <strong>recurring expense summaries</strong> (label, average
+            amount, cycle, confidence) and current-period totals for income and money
+            moved into savings.</li>
+        </ul>
+
+        <p><strong>What we never send:</strong></p>
+        <ul>
+            <li>The <strong>raw SMS body</strong> of any transaction.</li>
+            <li>Any <strong>individual transaction record</strong>.</li>
+            <li>Real <strong>merchant / recipient names</strong>. Names live only on your
+            device; the id-to-name map is held in memory for the duration of the single
+            AI request and is <em>never persisted, never transmitted</em>. Name
+            substitution happens after the AI response returns, on device.</li>
+            <li>Your phone number, name, email, contacts, device ID, or Google account
+            details.</li>
+            <li>Location data of any kind.</li>
+        </ul>
+
+        <p><strong>Server-side handling:</strong></p>
+        <ul>
+            <li>The backend at <code>pesatrack-api.jmumo.com</code> verifies your
+            entitlement (the same SHA-256-of-purchase-token identity anchor described in
+            §5.7), forwards the digest to OpenAI, applies additional
+            <strong>content guardrails</strong> (the response is rejected if it
+            recommends specific securities, brokers, or claims guaranteed returns), and
+            caches successful responses by a hash of the digest for up to 24 hours so
+            two requests with identical digests share one AI call.</li>
+            <li>The backend logs metadata about each call — request id, token-hash
+            prefix, model id, token counts, response category. It <strong>never logs
+            the digest content or the AI response text</strong>.</li>
+            <li>OpenAI receives the digest as described above (opaque ids, aggregated
+            numbers, category labels) via API. Under OpenAI's API terms, that input is
+            not used to train future models.</li>
+        </ul>
+
+        <p><strong>AI feature usage:</strong> Requests to
+        <code>POST /ai/coach-insight</code> are rate-limited per entitlement to three
+        per day and one per minute — so at most three Coach Insights are generated for
+        you in any 24-hour window. The client caches the most recent successful insight
+        locally for one day; when a fetch fails for any reason, yesterday's cached
+        insight or the free-tier template is shown silently — no error message, no
+        &quot;AI unavailable&quot; text.</p>
+
+        <p><strong>Cancelling or disabling AI features:</strong> Cancel the PesaTrack Pro
+        subscription in Google Play to stop all AI feature usage from your device.
+        Existing cached insights on-device are cleared when the subscription entitlement
+        lapses.</p>
 
         <h2>6. Data Security</h2>
         <p>PesaTrack offers an optional PIN lock with biometric unlock (fingerprint/face) to

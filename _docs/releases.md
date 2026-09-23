@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.7.0** | 19 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.6.0** | 18 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.6.0** | 17 | 2026-09-19 | Closed Testing — PesaTrack Alpha | 🚫 Rejected — Play Billing v7 below v8 upload floor |
 | **1.5.3** | 16 | 2026-09-12 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
@@ -24,6 +25,54 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.7.0 (versionCode 19) — 2026-09-23
+
+**AI Coach Insights (PesaTrack Pro) — first user-visible AI feature**
+
+The v1.6.0 subscription plumbing lit up in the wild but had no AI features to consume for it; v1.7.0 delivers the actual product: one AI-generated **Coach Insight** card per day on Home, replacing the free tier's template summary card for entitled users. Grounded in the user's own aggregated spending pattern via the anonymised `DataDigest` sent to `pesatrack-api.jmumo.com`, guardrailed by OpenAI Structured Outputs strict-mode JSON schema + a server-side deny-list + client-side rehydration, and falling back silently to the existing Home content whenever anything is off — the user never sees an error state.
+
+### What's new
+
+- **Coach Insight card on Home** — one card per day for Pro subscribers when the ship-gate (`pro_ai_enabled` DataStore flag) is on. Rendered immediately after the Monthly Summary Card so it's the first thing an entitled user sees but doesn't dislodge the free-tier hierarchy. Header (`⚡ Coach insight`), title (8..60 chars), 2..3 sentence body (40..400 chars), optional "Could save ~ KES X" pill (only when the model surfaces a saveable figure, with mandatory assumptions), optional action button routing to Analytics / Budgets / Expenses / a specific category or recipient via `pesatrack://…` deep links, and an optional "Show assumptions" expander that surfaces every assumption the model made behind any projected number (per AGENTS.md "honest numbers" principle: no projection without visible assumptions).
+- **Backend endpoint** — `POST /ai/coach-insight` on the existing Hetzner backend (Node + Express + Prisma + Postgres 16 at `https://pesatrack-api.jmumo.com`). OpenAI `chat.completions.create` with `response_format = json_schema` strict mode against a hand-written `coach_insight_v1` schema — every response field is validated at the API level before it reaches our post-validate layer. Per-entitlement rate limits: **3 requests/day** (headroom over the once-daily intent for pull-to-refresh) + **1 request/minute** (burst guard against double-tap flooding). Per-digest-hash cache (SHA-256 of canonically-stringified digest, 24 h TTL) so two clients producing byte-identical digests share the OpenAI call. Every failure mode returns HTTP 200 with `{fallback: true, reason: <bucketed>}` — the client silently renders the free-tier template. Only genuine client bugs (malformed digest, missing bearer) surface as 4xx.
+- **Server-side guardrails** — three layers stack for every response before it reaches the client: (1) OpenAI Structured Outputs strict mode enforces the schema at generation time; (2) `postValidate` cross-checks against the caller's digest — rejects saveable-without-assumptions, unknown recipient references, foreign currencies (USD/EUR/GBP) in body copy, and soft-fixes stale category/recipient deep links (nulls just `action_label`+`action_deeplink` rather than fallback the whole insight); (3) case-insensitive substring deny-list against a data-not-code JSON file (`backend/src/config/denylist.json`) rejects any response mentioning guaranteed returns, specific broker names, "buy XYZ shares" patterns, etc. — a policy tweak is a JSON edit + container restart, no code deploy required.
+- **Client-side privacy** — recipient names never cross the wire. The `DataDigestBuilder` anonymises the top-8 recipients to opaque request-scoped `r1..rN` ids at build time via [RecipientAnonymizer](../android/app/src/main/java/com/pesatrack/services/ai/RecipientAnonymizer.kt); an in-memory `id → real name` map stays on-device for the request duration, and the client rehydrates the ids back to real merchant names in the insight's title + body **after** the response returns. IDs are sequential positional (`r1`, `r2`, …) never content-derived — no fingerprint is possible across requests, sessions, or users. Deep-link `actionDeeplink` and `referencedRecipientIds` deliberately stay in raw `rN` form so navigation still works.
+- **Fallback matrix** — every failure mode (§8 of the phase-2 spec) resolves to either yesterday's cached insight or `null` (⇒ render Home unchanged, no error copy): client offline, backend 5xx, backend 429 rate-limited, backend `fallback: true`, client-side schema failure (defensive), deny-list scrub, deep-link references a stale category/recipient (soft-fixed to no action), OpenAI provider error. **The user never sees "AI unavailable" text.**
+- **Six new telemetry events** — `coach_insight_shown` (fires once per insight identity, source bucketed as `home_card`), `coach_insight_action_tapped` (deep-link route bucketed to `budgets`/`analytics`/`expenses`/`category`/`recipient` — numeric ids and `rN` suffixes dropped so a tap sequence can't fingerprint a merchant), `coach_insight_assumptions_expanded` (only the expand direction — the collapse is trivial UX undo), `coach_insight_fallback` (fires when both gates are open but the repository resolves to null; reason bucketed to `not_entitled`/`provider_error`/`denylist`/`schema`/`rate_limit`/`network`/`unknown`), `coach_insight_fetch_failed` (reserved for client-side regression paths). All events preserve the no-PII discipline: no title/body/assumption text, no digest content, no OpenAI response contents ever hit the wire — only bucketed enums.
+
+### Ship-gate story
+
+The `pro_ai_enabled` DataStore flag (introduced in Slice A6) ships **off by default** in v1.7.0 so the whole AI-calling code path is dark at rollout. Closed-testing entitled users get the flag flipped first via a targeted release, then a broader rollout once cost + insight quality are verified. Repository never surfaces error states to the ViewModel — every failure resolves to `null` which resolves to "render Home unchanged".
+
+### Privacy contract update
+
+New **§5.8 Coach Insights (PesaTrack Pro, from v1.7.0)** subsection under §5 Data Sharing in [docs/privacy-policy.html](../docs/privacy-policy.html), [website/src/pages/privacy.astro](../website/src/pages/privacy.astro), and the Kiswahili mirror [website/src/pages/sw/privacy.astro](../website/src/pages/sw/privacy.astro). Spells out exactly what's sent when a Pro subscriber uses the feature (period label, category totals, opaque `rN` recipient ids with amounts, recurring-expense labels, budget targets — all whole KES ints, no PII) and what's never sent (raw SMS bodies, individual transaction records, real recipient names, phone numbers, account details, contacts). `lastUpdated` bumped to September 23, 2026. See AGENTS.md §Website Sync Check for the full list of surfaces reviewed.
+
+### Files
+
+Backend: [`backend/src/services/ai/coachInsight.js`](../backend/src/services/ai/coachInsight.js) (schema + prompts + postValidate + deny-list + cache + hash), [`backend/src/config/denylist.json`](../backend/src/config/denylist.json), [`backend/src/routes/ai.js`](../backend/src/routes/ai.js) (new handler), [`backend/src/services/ai/OpenAiProvider.js`](../backend/src/services/ai/OpenAiProvider.js) (implemented `callStructured`), [`backend/src/middleware/rateLimit.js`](../backend/src/middleware/rateLimit.js) (2 new limiters). 45 backend tests pass via `npm test`.
+
+Android: [`CoachInsight.kt`](../android/app/src/main/java/com/pesatrack/services/ai/CoachInsight.kt), [`CoachInsightJson.kt`](../android/app/src/main/java/com/pesatrack/services/ai/CoachInsightJson.kt), [`CoachInsightCache.kt`](../android/app/src/main/java/com/pesatrack/services/ai/CoachInsightCache.kt), [`CoachInsightRepository.kt`](../android/app/src/main/java/com/pesatrack/services/ai/CoachInsightRepository.kt), [`RecipientAnonymizer.kt`](../android/app/src/main/java/com/pesatrack/services/ai/RecipientAnonymizer.kt), [`DataDigestBuilder.kt`](../android/app/src/main/java/com/pesatrack/services/ai/DataDigestBuilder.kt), [`CoachInsightCard.kt`](../android/app/src/main/java/com/pesatrack/presentation/components/CoachInsightCard.kt), plus edits to [`HomeUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeUiState.kt), [`HomeViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeViewModel.kt), [`HomeScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/home/HomeScreen.kt), [`TelemetryEvents.kt`](../android/app/src/main/java/com/pesatrack/services/telemetry/TelemetryEvents.kt), [`AppPreferences.kt`](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt), [`PesaTrackAiClient.kt`](../android/app/src/main/java/com/pesatrack/services/ai/PesaTrackAiClient.kt), [`ProEntitlementRepository.kt`](../android/app/src/main/java/com/pesatrack/services/pro/ProEntitlementRepository.kt), [`ProBillingModule.kt`](../android/app/src/main/java/com/pesatrack/di/ProBillingModule.kt). 173 Android tests pass via `./gradlew testDebugUnitTest`, lint clean.
+
+Website: new [`website/src/content/features/coach-insights.md`](../website/src/content/features/coach-insights.md), privacy §5.8 addition to [`website/src/pages/privacy.astro`](../website/src/pages/privacy.astro) + [`website/src/pages/sw/privacy.astro`](../website/src/pages/sw/privacy.astro) + [`docs/privacy-policy.html`](../docs/privacy-policy.html).
+
+### Play Store release notes (draft)
+
+```
+What's New in PesaTrack Pro:
+• Introducing Coach Insights — a daily observation about your spending, with
+  specific numbers and one thing you could try. Grounded in your own M-PESA
+  activity, never generic advice.
+• Every projected saving shows its assumptions.
+• Your SMS content and transaction details never leave your phone.
+  Only anonymised category totals and opaque recipient IDs travel to the
+  AI backend when you subscribe.
+
+Coach Insights are part of PesaTrack Pro. Free features continue unchanged.
+```
 
 ---
 

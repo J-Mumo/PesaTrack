@@ -87,6 +87,7 @@ fun CoachInsightCard(
     insight: CoachInsight,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onAssumptionsExpanded: () -> Unit = {},
 ) {
     var assumptionsExpanded by remember { mutableStateOf(false) }
 
@@ -159,7 +160,14 @@ fun CoachInsightCard(
                 AssumptionsExpander(
                     assumptions = insight.assumptions,
                     expanded = assumptionsExpanded,
-                    onToggle = { assumptionsExpanded = !assumptionsExpanded },
+                    onToggle = {
+                        val next = !assumptionsExpanded
+                        assumptionsExpanded = next
+                        // Only log the expand direction — the collapse is a
+                        // trivial UX undo and doesn't answer any product
+                        // question worth a Firebase event.
+                        if (next) onAssumptionsExpanded()
+                    },
                 )
             }
         }

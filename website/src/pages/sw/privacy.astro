@@ -5,7 +5,7 @@ import Callout from '~/components/Callout.astro';
 import { breadcrumbList } from '~/utils/jsonld';
 import { SITE } from '~/data/site';
 
-const lastUpdated = '19 Septemba, 2026';
+const lastUpdated = '23 Septemba, 2026';
 
 const crumbs = [
   { name: 'Nyumbani', href: '/sw' },
@@ -34,11 +34,16 @@ const crumbs = [
   <Callout variant="success" title="Jambo kuu">
     <p>
       Miamala yako, SMS, kiasi, na taarifa binafsi vinabaki kwenye kifaa chako.
-      Vitu viwili tu vinaweza kuondoka kwenye simu yako, na tu kama utachagua
+      Vitu vitatu tu vinaweza kuondoka kwenye simu yako, na tu kama utachagua
       wewe mwenyewe: <em>takwimu za matumizi zisizokuwa na utambulisho</em>
-      (Settings → Privacy), na kuanzia toleo 1.6.0,
+      (Settings → Privacy), kuanzia toleo 1.6.0
       <em>uthibitisho wa uanachama wa PesaTrack Pro</em> (tu kama utanunua
-      mpango — angalia §5.7).
+      mpango — angalia §5.7), na kuanzia toleo 1.7.0 <em>muhtasari wa
+      matumizi usiokuwa na utambulisho</em> kwa Coach Insights (tu kama
+      umechukua uanachama NA kipengele cha AI kimewashwa kwa build yako —
+      angalia §5.8). Hakuna SMS halisi, hakuna miamala mmoja mmoja, na
+      hakuna majina halisi ya wafanyabiashara vinavyoondoka kwenye kifaa
+      chako.
     </p>
   </Callout>
 
@@ -233,13 +238,82 @@ const crumbs = [
     Play Store; uanachama wako unadumu hadi mwisho wa kipindi kilicholipiwa.
   </p>
 
-  <p><strong>Vipengele vya AI (Awamu ya 2, mzunguko wa toleo linalofuata):</strong>
-    endpoint za coaching za AI zikija, sehemu hii itasasishwa kueleza hasa
-    kile kilichopo kwenye digest ya kila mwezi isiyokuwa na utambulisho —
-    lebo ya kipindi, jumla za kila kategoria, na anonymised recipient IDs
-    (<code>r1..rN</code>). Hadi hapo, hakuna digest inayotumwa, hakuna wito
-    wa LLM unaofanywa, na hakuna coaching endpoint iliyowashwa upande wa
-    seva.
+  <h3 id="coach-insights">5.8 Coach Insights (PesaTrack Pro, kuanzia toleo 1.7.0)</h3>
+  <p>
+    Kuanzia v1.7.0, uanachama wa <strong>PesaTrack Pro</strong> uliohai
+    unafungua kadi ya kila siku ya <strong>Coach Insight</strong> kwenye
+    skrini ya Home — uchunguzi mmoja wa AI kuhusu mfumo wako wa matumizi,
+    ukiwa na nambari mahususi na jambo moja unaloweza kujaribu. Kutayarisha
+    kadi hiyo kunahitaji PesaTrack kutuma <strong>muhtasari wa matumizi
+    usiokuwa na utambulisho</strong> kwa seva yetu ya
+    <code>pesatrack-api.jmumo.com</code>, ambayo nayo inatuma muhtasari
+    huohuo kwa OpenAI (mtoaji wetu wa AI). Ikiwa hujachukua uanachama, au
+    kipengele cha AI kimezimwa, hakuna kitu chochote katika sehemu hii
+    kinachotokea.
+  </p>
+
+  <p><strong>Kile tunachotuma wakati Coach Insight inatengenezwa:</strong></p>
+  <ul>
+    <li>Lebo ya <strong>kipindi</strong> (mfano <code>"2026-09"</code>) na
+    hatua uliyofikia (siku 15 kati ya 30).</li>
+    <li>Jumla za <strong>kategoria zilizojumlishwa</strong> kwa kipindi cha
+    sasa, kipindi kilichopita, na wastani wa miezi mitatu. Kiasi ni KES
+    kamili tu. Majina ya kategoria ni lebo za onyesho za app yenyewe
+    (mfano "Chakula &amp; Baa") — kamwe si ya kibinafsi.</li>
+    <li><strong>Vitambulisho vya wapokeaji visivyoeleweka</strong> kwa
+    wapokeaji wako wachache wa juu — nyuzi <code>r1</code>, <code>r2</code>,
+    … hadi <code>r8</code> — kila kimoja kikiwa na jumla ya matumizi, idadi
+    ya miamala, na kategoria bora ya kubahatisha. Vitambulisho
+    <em>vinatengenezwa kwenye kifaa chako</em> kwa kila ombi, kwa hivyo
+    mfanyabiashara yuleyule anaweza kupata vitambulisho tofauti siku
+    tofauti, na seva haiwezi kuunganisha mfanyabiashara katika watumiaji,
+    vikao, au maombi.</li>
+    <li><strong>Muhtasari wa gharama za mara kwa mara zilizogunduliwa</strong>
+    (lebo, kiasi cha wastani, mzunguko, ujasiri) na jumla za kipindi cha
+    sasa kwa mapato na fedha zilizohamishwa kwa akiba.</li>
+  </ul>
+
+  <p><strong>Kile ambacho kamwe hatutumi:</strong></p>
+  <ul>
+    <li><strong>Ujumbe halisi wa SMS</strong> wa muamala wowote.</li>
+    <li>Rekodi yoyote ya <strong>muamala mmoja mmoja</strong>.</li>
+    <li>Majina halisi ya <strong>wafanyabiashara / wapokeaji</strong>.
+    Majina yanaishi tu kwenye kifaa chako; ramani ya id-kwenda-kwa-jina
+    inahifadhiwa katika kumbukumbu kwa muda wa ombi moja la AI na
+    <em>haihifadhiwi kamwe, haitumwi kamwe</em>. Ubadilishaji wa jina
+    hufanyika baada ya jibu la AI kurudi, kwenye kifaa.</li>
+    <li>Nambari yako ya simu, jina, barua pepe, mawasiliano, kitambulisho
+    cha kifaa, au maelezo ya akaunti ya Google.</li>
+    <li>Data ya eneo la aina yoyote.</li>
+  </ul>
+
+  <p><strong>Usimamizi wa upande wa seva:</strong></p>
+  <ul>
+    <li>Seva inathibitisha uanachama wako (kitambulisho kilekile cha
+    SHA-256-ya-tokeni-ya-ununuzi kama §5.7), inatuma muhtasari kwa OpenAI,
+    inaomba <strong>walinzi wa yaliyomo</strong> (jibu linakataliwa
+    likipendekeza dhamana, madalali, au kudai faida za uhakika), na
+    inahifadhi majibu yenye mafanikio kwa saa 24 kwa hash ya muhtasari ili
+    maombi mawili yenye muhtasari sawa kabisa yashiriki wito mmoja wa
+    AI.</li>
+    <li>Seva inaandika metadata ya kila wito — request id, kianzo cha hash
+    ya tokeni, model id, hesabu za tokeni. <strong>Kamwe hairekodi yaliyomo
+    ya muhtasari au maandishi ya jibu la AI</strong>.</li>
+    <li>OpenAI inapokea muhtasari kama ilivyoelezwa hapo juu (vitambulisho
+    visivyoeleweka, nambari zilizojumlishwa, lebo za kategoria) kupitia
+    API. Chini ya masharti ya API ya OpenAI, data hiyo haitumii kufunza
+    mifano ijayo.</li>
+  </ul>
+
+  <p>
+    Maombi ya <code>/ai/coach-insight</code> yamewekewa kikomo cha
+    kutokuwa zaidi ya matatu kwa siku na moja kwa dakika — kwa hivyo Coach
+    Insights zisizidi tatu zinatengenezwa kwako katika muda wa saa 24
+    zozote. Wakati kuchota kunashindwa kwa sababu yoyote, insight ya jana
+    iliyohifadhiwa au template ya tier ya bure inaonyeshwa kimya kimya —
+    hakuna ujumbe wa hitilafu, hakuna maandishi ya "AI haipatikani". Ghairi
+    uanachama kwenye Google Play ili kusimamisha matumizi yote ya kipengele
+    cha AI kutoka kwa kifaa chako.
   </p>
 
   <h2 id="security">6. Usalama wa data</h2>

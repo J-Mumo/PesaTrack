@@ -269,9 +269,15 @@ fun HomeScreen(
         // plans/ai-pro-phase2-spec.md §2, §8.
         uiState.coachInsight?.let { insight ->
             item {
+                // Fire coach_insight_shown once per insight identity so a
+                // recomposition from unrelated state doesn't double-count.
+                LaunchedEffect(insight.title, insight.body) {
+                    viewModel.onCoachInsightShown()
+                }
                 CoachInsightCard(
                     insight = insight,
                     onActionClick = {
+                        viewModel.onCoachInsightActionTapped(insight.actionDeeplink)
                         handleCoachInsightDeeplink(
                             deeplink = insight.actionDeeplink,
                             onExpenses = onNavigateToExpenses,
@@ -280,6 +286,7 @@ fun HomeScreen(
                             onAnalyticsByCategory = onNavigateToAnalyticsByCategory,
                         )
                     },
+                    onAssumptionsExpanded = { viewModel.onCoachInsightAssumptionsExpanded() },
                 )
             }
         }

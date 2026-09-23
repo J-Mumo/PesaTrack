@@ -331,6 +331,70 @@ object TelemetryEvents {
      */
     const val PRO_ENTITLEMENT_LOST = "pro_entitlement_lost"
 
+    // ==================== Phase 5 (AI Pro Phase 2): Coach Insight lifecycle ====================
+    // See plans/ai-pro-phase2-spec.md §10. Same no-PII rule as everywhere
+    // else in this file — no title/body/assumption text ever hits the wire,
+    // no digest content, no OpenAI response contents. Only bucketed enums.
+
+    /**
+     * Fired when the Home screen renders a non-null `CoachInsight`. Sent
+     * once per Home surface per session — the LaunchedEffect in
+     * `HomeScreen` gates on the current insight identity so recompositions
+     * don't double-count.
+     * Params: [PARAM_SOURCE] — bucketed [SOURCE_HOME_CARD] (fresh network)
+     *   or [SOURCE_HOME_CARD_FROM_CACHE] (client 24h cache hit or the
+     *   yesterday-fallback branch, both cases mean the card rendered
+     *   without a fresh network round-trip).
+     */
+    const val COACH_INSIGHT_SHOWN = "coach_insight_shown"
+
+    /**
+     * User tapped the optional action button on a Coach Insight card.
+     * Never sent when the model omits the action or the server-side
+     * post-validate soft-fix stripped it.
+     * Params: [PARAM_DEEPLINK_ROUTE] — bucketed enum:
+     *   [DEEPLINK_HOME], [DEEPLINK_BUDGETS], [DEEPLINK_ANALYTICS],
+     *   [DEEPLINK_EXPENSES], [DEEPLINK_CATEGORY] (any `category/N`),
+     *   [DEEPLINK_RECIPIENT] (any `recipient/rN`). Numeric ids and rN
+     *   suffixes are dropped so a recipient position can't be
+     *   fingerprinted from a run of taps.
+     */
+    const val COACH_INSIGHT_ACTION_TAPPED = "coach_insight_action_tapped"
+
+    /**
+     * User expanded the "Show assumptions" section on a Coach Insight
+     * card. No params — the click itself is the whole product signal
+     * ("does anyone read the assumptions?"), no need for the count.
+     */
+    const val COACH_INSIGHT_ASSUMPTIONS_EXPANDED = "coach_insight_assumptions_expanded"
+
+    /**
+     * The repository resolved to `null` because either both cache slots
+     * were empty AND a fresh fetch didn't produce a usable insight, or
+     * one of the entitlement / ship-gate guards short-circuited. This is
+     * the visibility surface for the "silent fallback" branch — the user
+     * never sees an error, but the dashboard sees the volume.
+     * Params: [PARAM_REASON] — bucketed enum:
+     *   [REASON_NOT_ENTITLED] (either gate off),
+     *   [REASON_PROVIDER_ERROR] (backend `fallback: true, reason: provider_error`),
+     *   [REASON_DENYLIST] (backend `fallback: true, reason: denylist`),
+     *   [REASON_SCHEMA] (backend `fallback: true, reason: saveable_no_assumptions`
+     *     / `unknown_recipient_id` / `foreign_currency`),
+     *   [REASON_RATE_LIMIT] (HTTP 429),
+     *   [REASON_NETWORK] (IO / timeout / socket disconnect),
+     *   [REASON_UNKNOWN] (anything else, defensive).
+     */
+    const val COACH_INSIGHT_FALLBACK = "coach_insight_fallback"
+
+    /**
+     * The repository threw or the response body was unusable. Distinct
+     * from [COACH_INSIGHT_FALLBACK] because this signals a client-side
+     * regression path (Moshi parse failure, unexpected null insight in a
+     * `fallback: false` envelope, etc.), not a normal fallback.
+     * Params: [PARAM_REASON] — always a small bucketed string.
+     */
+    const val COACH_INSIGHT_FETCH_FAILED = "coach_insight_fetch_failed"
+
     // ==================== Parameter keys ====================
     const val PARAM_SCREEN = "screen"
     const val PARAM_SOURCE = "source"
@@ -346,6 +410,10 @@ object TelemetryEvents {
     const val PARAM_PRODUCT_ID = "product_id"
     const val PARAM_IS_TRIAL = "is_trial"
     const val PARAM_REASON = "reason"
+
+    // AI Pro Phase 2 additions.
+    /** Bucketed deep-link route for [COACH_INSIGHT_ACTION_TAPPED]. */
+    const val PARAM_DEEPLINK_ROUTE = "deeplink_route"
 
     // ==================== Parameter value enums ====================
     const val KIND_EXPENSE = "expense"
@@ -395,6 +463,58 @@ object TelemetryEvents {
     const val REASON_NETWORK = "network"
     const val REASON_BILLING_ERROR = "billing_error"
     const val REASON_VERIFY_FAILED = "verify_failed"
+
+    // AI Pro Phase 2 (Coach Insight) source buckets — the "how did this
+    // insight land on screen" answer for [COACH_INSIGHT_SHOWN].
+    const val SOURCE_HOME_CARD = "home_card"
+    const val SOURCE_HOME_CARD_FROM_CACHE = "home_card_from_cache"
+
+    // AI Pro Phase 2 (Coach Insight) deep-link route buckets — used by
+    // [COACH_INSIGHT_ACTION_TAPPED]. Numeric ids (`category/N`) and the
+    // `rN` recipient suffix are dropped BEFORE the bucket is chosen so a
+    // sequence of taps can't fingerprint a specific merchant.
+    const val DEEPLINK_HOME = "home"
+    const val DEEPLINK_BUDGETS = "budgets"
+    const val DEEPLINK_ANALYTICS = "analytics"
+    const val DEEPLINK_EXPENSES = "expenses"
+    const val DEEPLINK_CATEGORY = "category"
+    const val DEEPLINK_RECIPIENT = "recipient"
+
+    // AI Pro Phase 2 fallback reason buckets — see [COACH_INSIGHT_FALLBACK].
+    // Kept intentionally coarse: even though the backend can produce ~5
+    // distinct `postValidate` rejection reasons, from the client's
+    // dashboard perspective any post-validate rejection is "the schema
+    // guardrails fired" and gets one bucket.
+    const val REASON_NOT_ENTITLED = "not_entitled"
+    const val REASON_PROVIDER_ERROR = "provider_error"
+    const val REASON_DENYLIST = "denylist"
+    const val REASON_SCHEMA = "schema"
+    const val REASON_RATE_LIMIT = "rate_limit"
+    const val REASON_UNKNOWN = "unknown"
+
+    /**
+     * Map a raw pesatrack:// deep link to a [PARAM_DEEPLINK_ROUTE] bucket.
+     * Preserves only the host — numeric ids and rN recipient suffixes
+     * are dropped so the telemetry dashboard can't back-derive which
+     * merchant a user tapped.
+     *
+     * Returns null if the string is null/blank/malformed — callers
+     * should skip logging in that case.
+     */
+    fun deeplinkRouteBucket(deeplink: String?): String? {
+        if (deeplink.isNullOrBlank()) return null
+        val host = runCatching { android.net.Uri.parse(deeplink).host }.getOrNull()
+            ?: return null
+        return when (host) {
+            DEEPLINK_HOME -> DEEPLINK_HOME
+            DEEPLINK_BUDGETS -> DEEPLINK_BUDGETS
+            DEEPLINK_ANALYTICS -> DEEPLINK_ANALYTICS
+            DEEPLINK_EXPENSES -> DEEPLINK_EXPENSES
+            DEEPLINK_CATEGORY -> DEEPLINK_CATEGORY
+            DEEPLINK_RECIPIENT -> DEEPLINK_RECIPIENT
+            else -> null
+        }
+    }
 
     /**
      * Bucketize a raw count to avoid leaking exact volumes.

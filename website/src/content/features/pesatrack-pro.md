@@ -20,27 +20,29 @@ doesNotDo:
 ## What ships in v1.6.0
 
 The PesaTrack Pro subscription screen is live in **Settings → PesaTrack
-Pro** — but the tiers themselves are not published on Google Play yet. If
-you open the screen today, you'll see a **Coming soon** placeholder. When
-the tiers go live in Google Play, the same build will surface the Monthly
-and Annual options — no update needed.
+Pro**, and the Monthly and Annual tiers are published on Google Play. If
+you open the screen today, you'll see the current pricing — the app
+reads it live from Google Play so you always see what you'll actually
+pay at purchase.
 
-Nothing that was free in v1.5.x becomes paid in v1.6.0. Automatic SMS
-tracking, category budgets, imports, analytics, Weekly / Monthly /
-Quarterly / Year-in-Review reports, PIN lock, and every other existing
-feature stay in the free tier and will keep doing so.
+Nothing that was free in v1.5.x becomes paid in v1.6.0 or v1.7.0.
+Automatic SMS tracking, category budgets, imports, analytics, Weekly /
+Monthly / Quarterly / Year-in-Review reports, PIN lock, and every other
+existing feature stay in the free tier and will keep doing so.
 
-## What Pro will add (Phase 2, next release cycle)
+## What Pro adds in v1.7.0 — Coach Insights
 
-The paid tier funds a coaching layer that reads a small anonymised
-summary of your spending and returns short, honest observations:
+The paid tier funds a coaching layer: one AI-generated observation
+about your spending each day, grounded in your own M-PESA activity.
+The full write-up lives on the [Coach Insights](/features/coach-insights)
+page — including the exact digest that leaves your device, the
+server-side content guardrails, and the rate limits.
 
-- "You spent 42% of Transport in the first week of the month, versus 25%
-  at the same point last month" — the comparison is the point, not the
-  scold.
-- Optional deep-dive answers to specific money questions.
-- Every observation ends with a concrete opportunity ("KES X could have
-  moved into savings"), not a warning.
+Two things that specifically **don't** happen: (1) the app never
+recommends specific stocks, brokers, SACCOs, or funds; server-side
+deny-lists reject any response that does; (2) every projected saving
+ships with a "Show assumptions" expander, so you can see the math the
+model used.
 
 ## How the privacy story holds
 

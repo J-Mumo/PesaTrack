@@ -14,6 +14,8 @@ import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
 import com.pesatrack.services.ai.CoachInsightRepository
 import com.pesatrack.services.pro.ProEntitlementRepository
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.UsageSummaryGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -33,6 +35,7 @@ class HomeViewModel @Inject constructor(
     private val usageSummaryGenerator: UsageSummaryGenerator,
     private val entitlement: ProEntitlementRepository,
     private val coachInsightRepository: CoachInsightRepository,
+    private val telemetryClient: TelemetryClient,
 ) : ViewModel() {
 
     companion object {
@@ -396,7 +399,68 @@ class HomeViewModel @Inject constructor(
 
             val insight = coachInsightRepository.getForToday()
             _uiState.update { it.copy(coachInsight = insight) }
+            if (insight == null) {
+                // Both gates were open but the repository still resolved to
+                // null (cache miss + fresh fetch failed or backend fallback).
+                // We only get the coarse "unknown" bucket at the ViewModel
+                // level today — a follow-up will thread the specific reason
+                // (denylist / provider_error / schema / rate_limit / network)
+                // through the repository's return type. See
+                // plans/ai-pro-phase2-spec.md §10.
+                telemetryClient.logEvent(
+                    TelemetryEvents.COACH_INSIGHT_FALLBACK,
+                    mapOf(TelemetryEvents.PARAM_REASON to TelemetryEvents.REASON_UNKNOWN),
+                )
+            }
         }
+    }
+
+    /**
+     * Fired by [com.pesatrack.presentation.screens.home.HomeScreen] the
+     * first time a non-null `CoachInsight` becomes visible in the
+     * current composition — the composable gates on the insight
+     * identity so recompositions from unrelated state changes don't
+     * double-count.
+     *
+     * B5 always sends [TelemetryEvents.SOURCE_HOME_CARD]; the
+     * cache-vs-fresh distinction ([TelemetryEvents.SOURCE_HOME_CARD_FROM_CACHE])
+     * lands with a follow-up that threads the source through the
+     * repository return type.
+     */
+    fun onCoachInsightShown() {
+        telemetryClient.logEvent(
+            TelemetryEvents.COACH_INSIGHT_SHOWN,
+            mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_HOME_CARD),
+        )
+    }
+
+    /**
+     * Fired by [com.pesatrack.presentation.screens.home.HomeScreen]
+     * when the user taps the optional action button on a Coach Insight
+     * card. The [deeplink] is bucketed via
+     * [TelemetryEvents.deeplinkRouteBucket] before it reaches Firebase
+     * — numeric ids (`category/N`) and recipient suffixes (`recipient/rN`)
+     * are dropped so a run of taps can't fingerprint a merchant.
+     */
+    fun onCoachInsightActionTapped(deeplink: String?) {
+        val bucket = TelemetryEvents.deeplinkRouteBucket(deeplink) ?: return
+        telemetryClient.logEvent(
+            TelemetryEvents.COACH_INSIGHT_ACTION_TAPPED,
+            mapOf(TelemetryEvents.PARAM_DEEPLINK_ROUTE to bucket),
+        )
+    }
+
+    /**
+     * Fired by [com.pesatrack.presentation.screens.home.HomeScreen]
+     * when the user expands the "Show assumptions" section (the
+     * collapse direction is deliberately not logged — the whole
+     * product signal is "does anyone read the assumptions?").
+     */
+    fun onCoachInsightAssumptionsExpanded() {
+        telemetryClient.logEvent(
+            TelemetryEvents.COACH_INSIGHT_ASSUMPTIONS_EXPANDED,
+            emptyMap(),
+        )
     }
 
     /**
