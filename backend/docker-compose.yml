@@ -16,6 +16,17 @@ services:
       - web
     # Prisma migrations run on every deploy — safe because they're idempotent.
     command: sh -c "npx prisma migrate deploy && node src/index.js"
+    # Google Play Developer API credentials — mounted at
+    # /run/secrets/play_service_account.json inside the container, which
+    # matches GOOGLE_PLAY_SERVICE_ACCOUNT_JSON in .env.example. Compose
+    # bind-mounts the source file read-only with restrictive perms.
+    #
+    # ROTATION: replace ./play_service_account.json on the host with the
+    # new key from GCP → `docker compose up -d web` (no rebuild required)
+    # → `curl https://pesatrack-api.jmumo.com/health` to confirm boot →
+    # revoke old key in GCP. Nothing else moves.
+    secrets:
+      - play_service_account.json
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
@@ -39,6 +50,16 @@ services:
 
 volumes:
   db_data:
+
+# Docker Compose secrets. Source file lives on the host (never committed
+# — see backend/.gitignore) and is bind-mounted into the container at
+# /run/secrets/<secret-name>. In our case the secret is named exactly
+# `play_service_account.json` so the in-container path is
+# `/run/secrets/play_service_account.json`, matching the default
+# GOOGLE_PLAY_SERVICE_ACCOUNT_JSON in .env.example.
+secrets:
+  play_service_account.json:
+    file: ./play_service_account.json
 
 networks:
   default:
