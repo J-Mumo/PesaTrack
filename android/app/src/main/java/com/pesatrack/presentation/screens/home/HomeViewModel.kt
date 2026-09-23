@@ -390,28 +390,59 @@ class HomeViewModel @Inject constructor(
      * Repository call never throws (§6.3 contract). `null` return means
      * "silently render the existing Home content unchanged" — no error
      * copy is ever shown to the user (§8 golden rule).
+     *
+     * **Reactive rather than one-shot.** Observes both the ship-gate flag
+     * flow and the persisted `proState` flow, and re-runs the fetch every
+     * time either transitions in a way that opens the gate. This is what
+     * lets Home surface a fresh Coach Insight *immediately* after the
+     * user completes a subscribe or restore flow — without a fresh
+     * ViewModel instance and without a full app restart. When either
+     * gate closes (subscription lapses, ship-gate flipped off), the
+     * insight is cleared so the free-tier template renders again.
+     *
+     * The `distinctUntilChanged` keys off the gate boolean, not off the
+     * proState value, so a stream of unrelated ProState mutations
+     * (`lastVerifiedAtEpochMs` bumps on every refresh) doesn't cause
+     * redundant OpenAI calls — the client-side 24-h cache handles the
+     * same-day refetch cheaply anyway.
      */
     private fun loadCoachInsight() {
         viewModelScope.launch {
-            val shipGateOn = appPreferences.isProAiEnabled()
-            if (!shipGateOn) return@launch
-            if (!entitlement.isCurrentlyEntitled()) return@launch
-
-            val insight = coachInsightRepository.getForToday()
-            _uiState.update { it.copy(coachInsight = insight) }
-            if (insight == null) {
-                // Both gates were open but the repository still resolved to
-                // null (cache miss + fresh fetch failed or backend fallback).
-                // We only get the coarse "unknown" bucket at the ViewModel
-                // level today — a follow-up will thread the specific reason
-                // (denylist / provider_error / schema / rate_limit / network)
-                // through the repository's return type. See
-                // plans/ai-pro-phase2-spec.md §10.
-                telemetryClient.logEvent(
-                    TelemetryEvents.COACH_INSIGHT_FALLBACK,
-                    mapOf(TelemetryEvents.PARAM_REASON to TelemetryEvents.REASON_UNKNOWN),
-                )
+            combine(
+                appPreferences.proAiEnabled,
+                entitlement.proState,
+            ) { shipGateOn, proState ->
+                val entitled = proState.isEntitled &&
+                    (proState.expiresAtEpochMs ?: 0L) > System.currentTimeMillis()
+                shipGateOn && entitled
             }
+                .distinctUntilChanged()
+                .collect { gateOpen ->
+                    if (!gateOpen) {
+                        // Ship-gate off or entitlement not (yet) valid — clear
+                        // any previously shown insight so the free-tier
+                        // Monthly Summary card takes back the slot.
+                        _uiState.update { it.copy(coachInsight = null) }
+                        return@collect
+                    }
+
+                    val insight = coachInsightRepository.getForToday()
+                    _uiState.update { it.copy(coachInsight = insight) }
+                    if (insight == null) {
+                        // Both gates were open but the repository still
+                        // resolved to null (cache miss + fresh fetch failed
+                        // or backend fallback). We only get the coarse
+                        // "unknown" bucket at the ViewModel level today —
+                        // a follow-up will thread the specific reason
+                        // (denylist / provider_error / schema / rate_limit
+                        // / network) through the repository's return type.
+                        // See plans/ai-pro-phase2-spec.md §10.
+                        telemetryClient.logEvent(
+                            TelemetryEvents.COACH_INSIGHT_FALLBACK,
+                            mapOf(TelemetryEvents.PARAM_REASON to TelemetryEvents.REASON_UNKNOWN),
+                        )
+                    }
+                }
         }
     }
 

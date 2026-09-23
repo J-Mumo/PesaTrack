@@ -116,14 +116,16 @@ class PurchaseOutcomeMappingTest {
     }
 
     @Test
-    fun `ITEM_ALREADY_OWNED maps to BillingFailed with phase preserved`() {
-        // Callers use this bucket to prompt the user toward the "Restore purchase"
-        // flow — verified by phase inspection in the UI layer.
+    fun `ITEM_ALREADY_OWNED maps to AlreadyOwned (its own outcome, not BillingFailed)`() {
+        // Broken out as a distinct outcome in v1.7.0 so
+        // PesaTrackProViewModel.subscribe() can transparently trigger a
+        // Restore instead of showing the user a scary "purchase failed"
+        // snackbar. See PurchaseOutcome.AlreadyOwned KDoc + the auto-restore
+        // branch in PesaTrackProViewModel.subscribe.
         val outcome = PurchaseOutcome.fromPlayResponseCode(
             PlayBillingResponseCodes.ITEM_ALREADY_OWNED, phase = "launch"
         )
-        assertTrue(outcome is PurchaseOutcome.BillingFailed)
-        assertEquals("launch", (outcome as PurchaseOutcome.BillingFailed).phase)
+        assertEquals(PurchaseOutcome.AlreadyOwned, outcome)
     }
 
     @Test

@@ -29,10 +29,32 @@ sealed class PurchaseOutcome {
     object UserCancelled : PurchaseOutcome()
 
     /**
+     * Google Play refused the purchase because the current Play account
+     * already owns this SKU (`BillingResponseCode.ITEM_ALREADY_OWNED`
+     * = 7). Callers should treat this as an **implicit Restore** signal
+     * — the entitlement already exists server-side, the client just
+     * needs to re-verify against the owned subscription. See
+     * `PesaTrackProViewModel.subscribe` for the auto-Restore handling.
+     *
+     * This case exists because ITEM_ALREADY_OWNED is the natural
+     * failure mode after a fresh install with an existing subscription,
+     * or when the client's local `ProState` fell behind Google's
+     * server-side subscription state (test-track 5-min expiry, cleared
+     * app data, etc.). Bucketing it as generic [BillingFailed] would
+     * surface a scary error to a paying user and mask the trivial fix
+     * (call `Restore` on the caller's behalf).
+     */
+    object AlreadyOwned : PurchaseOutcome()
+
+    /**
      * Google Play refused the purchase before it could reach our backend.
      * [phase] locates the failure: `launch` (the `launchBillingFlow` call
      * itself), `update` (the `PurchasesUpdatedListener` callback), or
      * `acknowledge` (the post-purchase acknowledgement).
+     *
+     * Does **not** cover [AlreadyOwned] — code 7 is broken out as its
+     * own outcome so the ViewModel can auto-restore instead of showing
+     * a failure snackbar.
      */
     data class BillingFailed(
         val playResponseCode: Int,
@@ -67,6 +89,14 @@ sealed class PurchaseOutcome {
                 BillingFailed(code, "$phase:unexpected_ok")
 
             PlayBillingResponseCodes.USER_CANCELED -> UserCancelled
+
+            // "You already own this SKU" — not a real failure. Break out
+            // as its own outcome so the ViewModel can auto-restore
+            // instead of surfacing a scary "purchase failed" snackbar
+            // to a user who is, in fact, subscribed. Common after fresh
+            // installs, cleared app data, or the test-track 5-min
+            // expiry clock resetting local ProState.
+            PlayBillingResponseCodes.ITEM_ALREADY_OWNED -> AlreadyOwned
 
             // Anything network-flavoured maps to NetworkError so the UI can
             // pick a "check connection and retry" surface. The exception

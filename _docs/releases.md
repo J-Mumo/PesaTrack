@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.7.0** | 19 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.7.0** | 20 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.7.0** | 19 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — `ITEM_ALREADY_OWNED` + Home reactive-fetch bugs |
 | **1.6.0** | 18 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.6.0** | 17 | 2026-09-19 | Closed Testing — PesaTrack Alpha | 🚫 Rejected — Play Billing v7 below v8 upload floor |
 | **1.5.3** | 16 | 2026-09-12 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |

@@ -100,6 +100,17 @@ class PesaTrackProViewModel @Inject constructor(
     /**
      * Launch the Play Billing sheet for [product] and drive the whole
      * flow through to a persisted entitlement (or a diagnosable outcome).
+     *
+     * Special case for [PurchaseOutcome.AlreadyOwned] (Play code 7): the
+     * Play account already owns this SKU, but the client's local
+     * `ProState` doesn't reflect it (fresh install, cleared app data,
+     * or the internal-testing 5-minute expiry clock ran out). We
+     * transparently fall through to [restore] so the user gets the
+     * "you're already subscribed" outcome instead of a scary failure
+     * snackbar. The restore call re-verifies the owned subscription
+     * against our backend and updates the local `ProState` — after
+     * which every downstream gate (`isCurrentlyEntitled`, the Home
+     * `CoachInsightCard`) resolves correctly.
      */
     fun subscribe(activity: Activity, product: ProProduct) {
         viewModelScope.launch {
@@ -109,6 +120,20 @@ class PesaTrackProViewModel @Inject constructor(
             )
             _uiState.value = _uiState.value.copy(purchaseInFlight = true)
             val outcome = purchaseFlow.launchPurchase(activity, product)
+
+            // ITEM_ALREADY_OWNED: transparently restore. Don't emit
+            // pro_purchase_failed for this — no purchase attempt actually
+            // failed; the SKU is already owned and the restore fills in
+            // the missing local state.
+            if (outcome == PurchaseOutcome.AlreadyOwned) {
+                telemetryClient.logEvent(TelemetryEvents.PRO_RESTORE_TAPPED)
+                val restoreOutcome = purchaseFlow.restorePurchases()
+                _uiState.value = _uiState.value.copy(
+                    purchaseInFlight = false,
+                    outcomeMessage = restoreOutcome.toMessage(),
+                )
+                return@launch
+            }
 
             // Emit pro_purchase_failed with a bucketed reason. The
             // pro_purchase_completed + pro_entitlement_gained events for the
@@ -120,6 +145,7 @@ class PesaTrackProViewModel @Inject constructor(
                 is PurchaseOutcome.NetworkError -> TelemetryEvents.REASON_NETWORK
                 is PurchaseOutcome.BillingFailed -> TelemetryEvents.REASON_BILLING_ERROR
                 is PurchaseOutcome.VerifyFailed -> TelemetryEvents.REASON_VERIFY_FAILED
+                PurchaseOutcome.AlreadyOwned -> null // handled above; unreachable
             }
             if (failureReason != null) {
                 telemetryClient.logEvent(
@@ -178,6 +204,13 @@ class PesaTrackProViewModel @Inject constructor(
             "Welcome to PesaTrack Pro — ${product.displayLabel()}."
         )
         PurchaseOutcome.UserCancelled -> OutcomeMessage.Info("Purchase cancelled.")
+        // Never surfaced: the subscribe() branch above short-circuits to
+        // restorePurchases() before reaching this mapping. Kept for
+        // exhaustiveness so a future refactor can't drop the case
+        // without the compiler complaining.
+        PurchaseOutcome.AlreadyOwned -> OutcomeMessage.Info(
+            "You already have a PesaTrack Pro subscription — restoring…"
+        )
         is PurchaseOutcome.NetworkError -> OutcomeMessage.Error(
             "Couldn't reach Google Play. Check your connection and try again."
         )
