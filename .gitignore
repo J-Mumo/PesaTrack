@@ -1,0 +1,54 @@
+# Repo-root gitignore — belt-and-braces protection for credentials that
+# might land outside a subproject's own .gitignore (scripts/, plans/,
+# repo root, etc.). Subproject build artifacts, IDE metadata, and local
+# state live in per-project .gitignores (android/, backend/, website/).
+#
+# GitHub secret scanning + push protection are the primary defence; this
+# file is the belt-and-braces layer.
+
+# ── Google Cloud / Play service accounts ──
+# Every plausible naming convention for the Play Developer API service
+# account JSON key. Never commit any of these — the key lives on the
+# Hetzner backend host as a Docker secret at /run/secrets/play_service_account.json.
+**/play_service_account*.json
+**/*service-account*.json
+**/*service_account*.json
+**/gcp-*-key.json
+**/gcp-*-credentials.json
+**/google-*-key.json
+
+# ── Environment files ──
+# .env may contain database URLs with passwords, OpenAI keys, POSTGRES_PASSWORD, etc.
+# Subprojects each keep their own .env; the .env.example files (checked in) show shape only.
+**/.env
+**/.env.local
+**/.env.production
+**/.env.*.local
+
+# ── Private keys and certificates ──
+*.pem
+*.p12
+*.pfx
+*-privatekey*
+*private-key*
+*_rsa
+*_rsa.pub
+*_ed25519
+
+# ── Common credential filenames ──
+**/credentials.json
+**/oauth_*.json
+**/client_secret_*.json
+
+# ── OS / editor scratch (root-level catches only) ──
+.DS_Store
+Thumbs.db
+
+# ── Local scratch that shouldn't leak ──
+/local/
+/secrets/
+/tmp/
+
+# ── Android keystore (belt-and-braces; android/.gitignore is authoritative) ──
+**/*.jks
+**/*.keystore

@@ -8,9 +8,26 @@ node_modules/
 docker-compose.override.yml
 docker-compose.override.yaml
 
-# Play service-account JSON (used by real /billing/verify) — NEVER commit
+# Play service-account JSON (used by real /billing/verify) — NEVER commit.
+# Explicit filename patterns handle the common `play_service_account.json`
+# and any suffixed variants; the two wildcards below are belt-and-braces
+# defence against a rename or a subfolder placement.
 play_service_account.json
 play_service_account*.json
+**/*service-account*.json
+**/*service_account*.json
+
+# Any Google Cloud service-account key (broader net). GCP-issued SA JSON
+# files start with `{"type":"service_account"` — if a file ever gets that
+# shape by mistake, GitHub's push protection will also reject it, but we
+# don't want to rely on that as the only line of defence.
+gcp-*-key.json
+gcp-*-credentials.json
+
+# Any file conventionally holding a private key
+*.pem
+*private-key*
+*-privatekey*
 
 # Logs
 logs/
