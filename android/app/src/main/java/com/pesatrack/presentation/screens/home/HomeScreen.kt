@@ -53,6 +53,8 @@ import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.BudgetStatus
 import com.pesatrack.domain.models.GroupTrendPreview
 import com.pesatrack.presentation.components.ExpenseCard
+import com.pesatrack.presentation.components.CoachInsightCard
+import com.pesatrack.services.ai.CoachInsight
 import com.pesatrack.presentation.screens.analytics.CategoryBreakdownChart
 import com.pesatrack.utils.formatAsCurrency
 import java.text.SimpleDateFormat
@@ -261,6 +263,27 @@ fun HomeScreen(
             )
         }
 
+        // AI Coach Insight — Pro-gated, one card per day, silently absent
+        // whenever the repository returns null (not entitled / ship-gate
+        // off / any failure with no yesterday-cached fallback). See
+        // plans/ai-pro-phase2-spec.md §2, §8.
+        uiState.coachInsight?.let { insight ->
+            item {
+                CoachInsightCard(
+                    insight = insight,
+                    onActionClick = {
+                        handleCoachInsightDeeplink(
+                            deeplink = insight.actionDeeplink,
+                            onExpenses = onNavigateToExpenses,
+                            onBudget = onNavigateToBudget,
+                            onAnalytics = onNavigateToAnalytics,
+                            onAnalyticsByCategory = onNavigateToAnalyticsByCategory,
+                        )
+                    },
+                )
+            }
+        }
+
         // Budget Summary Card (when user has budgets)
         if (uiState.budgetProgressList.isNotEmpty()) {
             item {
@@ -444,6 +467,44 @@ private fun createFeedbackEmailIntent(subject: String, body: String): Intent {
         data = Uri.parse(mailto)
         putExtra(Intent.EXTRA_SUBJECT, subject)
         putExtra(Intent.EXTRA_TEXT, body)
+    }
+}
+
+/**
+ * Route a Coach-Insight `pesatrack://…` deep link to one of the existing
+ * Home-level navigation callbacks. The set of allowed hosts is locked
+ * server-side by the coach_insight_v1 schema's `action_deeplink`
+ * pattern — see backend/src/services/ai/coachInsight.js — so this
+ * `when` is exhaustive by contract; anything else here is a schema
+ * regression, silently no-op'd rather than crashing.
+ *
+ * Two callers can't fully honour the schema's semantics yet:
+ *  - `pesatrack://category/{id}` — Analytics doesn't (yet) accept an
+ *    "open on this specific category" arg from the Home screen, so we
+ *    surface the Analytics-by-category tab as the closest match. Fine
+ *    for v1.7.0; a per-category deep link is a follow-up.
+ *  - `pesatrack://recipient/rN` — no merchant-detail screen deep-link
+ *    exists yet. We route to the Expenses list (where the user can
+ *    search) as a workable approximation.
+ */
+private fun handleCoachInsightDeeplink(
+    deeplink: String?,
+    onExpenses: () -> Unit,
+    onBudget: () -> Unit,
+    onAnalytics: () -> Unit,
+    onAnalyticsByCategory: () -> Unit,
+) {
+    if (deeplink.isNullOrBlank()) return
+    val uri = runCatching { Uri.parse(deeplink) }.getOrNull() ?: return
+    if (uri.scheme != "pesatrack") return
+    when (uri.host) {
+        "home" -> Unit
+        "budgets" -> onBudget()
+        "analytics" -> onAnalytics()
+        "expenses" -> onExpenses()
+        "category" -> onAnalyticsByCategory()
+        "recipient" -> onExpenses()
+        else -> Unit
     }
 }
 

@@ -12,6 +12,8 @@ import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
+import com.pesatrack.services.ai.CoachInsightRepository
+import com.pesatrack.services.pro.ProEntitlementRepository
 import com.pesatrack.utils.UsageSummaryGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -28,7 +30,9 @@ class HomeViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val incomeRepository: IncomeRepository,
     private val appPreferences: AppPreferences,
-    private val usageSummaryGenerator: UsageSummaryGenerator
+    private val usageSummaryGenerator: UsageSummaryGenerator,
+    private val entitlement: ProEntitlementRepository,
+    private val coachInsightRepository: CoachInsightRepository,
 ) : ViewModel() {
 
     companion object {
@@ -62,6 +66,7 @@ class HomeViewModel @Inject constructor(
         loadNotificationBannerState()
         checkReviewPromptEligibility()
         checkStructuredFeedbackPromptEligibility()
+        loadCoachInsight()
     }
     
     private fun initializeData() {
@@ -364,6 +369,35 @@ class HomeViewModel @Inject constructor(
 
     /** Whether the banner was permanently dismissed — cached from DataStore. */
     private var smsBannerPermanentlyDismissed = false
+
+    /**
+     * Load today's AI Coach Insight when both gates are open.
+     *
+     * Two gates check independently — no short-circuit ambiguity:
+     *  1. `pro_ai_enabled` DataStore flag — the ship-gate. Ships false in
+     *     v1.7.0 so the AI-calling code paths deploy dark; B5 flips it
+     *     for closed-testing entitled users first, then production. Kept
+     *     out of [CoachInsightRepository] so that repository stays
+     *     trivially testable without a DataStore fake — this is the one
+     *     call site.
+     *  2. [ProEntitlementRepository.isCurrentlyEntitled] — the
+     *     honest-numbers check: past expiry resolves to `false` even if
+     *     the persisted `isEntitled = true` is stale.
+     *
+     * Repository call never throws (§6.3 contract). `null` return means
+     * "silently render the existing Home content unchanged" — no error
+     * copy is ever shown to the user (§8 golden rule).
+     */
+    private fun loadCoachInsight() {
+        viewModelScope.launch {
+            val shipGateOn = appPreferences.isProAiEnabled()
+            if (!shipGateOn) return@launch
+            if (!entitlement.isCurrentlyEntitled()) return@launch
+
+            val insight = coachInsightRepository.getForToday()
+            _uiState.update { it.copy(coachInsight = insight) }
+        }
+    }
 
     /**
      * Load the permanent dismiss state from DataStore.

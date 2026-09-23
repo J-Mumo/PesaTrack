@@ -7,6 +7,7 @@ import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.GroupTrendPreview
 import com.pesatrack.domain.models.MonthComparison
 import com.pesatrack.presentation.screens.expenses.ExpenseWithCategory
+import com.pesatrack.services.ai.CoachInsight
 
 /**
  * UI State for the Home screen
@@ -106,5 +107,24 @@ data class HomeUiState(
     val pendingFeedbackEmailBody: String? = null,
 
     /** One-shot draft subject for launching editable feedback email. */
-    val pendingFeedbackEmailSubject: String? = null
+    val pendingFeedbackEmailSubject: String? = null,
+
+    // ==================== AI Coach Insight (Phase 2 / v1.7.0) ====================
+
+    /**
+     * The AI-generated Coach Insight for today, produced by
+     * [com.pesatrack.services.ai.CoachInsightRepository.getForToday].
+     *
+     * Null in every case where the card should NOT render: the user isn't
+     * Pro-entitled, the `pro_ai_enabled` ship-gate is off, the backend
+     * returned a fallback envelope, or a network / cache path all failed
+     * with no yesterday-cached fallback available. In every one of those
+     * cases the existing Home content renders unchanged — no error card,
+     * no "AI unavailable" copy. See plans/ai-pro-phase2-spec.md §8.
+     *
+     * Non-null means the model produced (or the cache retained) a valid
+     * insight that has already been recipient-rehydrated on-device — the
+     * title/body already contain real merchant names, not `rN` ids.
+     */
+    val coachInsight: CoachInsight? = null
 )
