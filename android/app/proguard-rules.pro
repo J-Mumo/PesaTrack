@@ -45,3 +45,55 @@
 -dontwarn com.tom_roush.pdfbox.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.apache.fontbox.**
+
+# ============================================================================
+# Moshi + Retrofit (AI Pro backend DTOs)
+# ============================================================================
+# Every DTO in services/ai/PesaTrackAiClient.kt is deserialized via Moshi
+# codegen (@JsonClass(generateAdapter = true)). Without these rules R8 strips
+# either the generated *JsonAdapter classes or the Kotlin metadata that
+# KotlinJsonAdapterFactory reflects on when falling back — the symptom is
+# JsonDataException at response.body() time on release builds, which
+# runCatching turns into VerifyFailed and the user sees "we could not
+# verify the purchase". Debug builds don't minify so this only bit us on
+# the first end-to-end Play Billing test against a live signed AAB.
+#
+# Belt-and-braces: keep every AI/Pro service class + every generated adapter
+# + Kotlin metadata + Moshi & Retrofit annotations.
+
+# Every wire DTO — codegen adapters live in the same package.
+-keep class com.pesatrack.services.ai.** { *; }
+-keep class com.pesatrack.services.pro.ProState { *; }
+-keep class com.pesatrack.services.pro.ProProduct { *; }
+-keep class com.pesatrack.services.pro.ProState$Companion { *; }
+
+# Moshi generated adapter classes. Pattern: <SourceClass>JsonAdapter.
+-keep class **JsonAdapter { <init>(...); *; }
+-keep class **_JsonAdapter { <init>(...); *; }
+
+# @JsonClass-annotated classes.
+-keep @com.squareup.moshi.JsonClass class * { *; }
+
+# Kotlin metadata drives KotlinJsonAdapterFactory's reflective fallback and
+# every codegen adapter's constructor lookup.
+-keepnames class kotlin.Metadata
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+
+# Moshi field/method annotations.
+-keepclassmembers class ** {
+    @com.squareup.moshi.Json <fields>;
+    @com.squareup.moshi.JsonQualifier <methods>;
+    @com.squareup.moshi.FromJson <methods>;
+    @com.squareup.moshi.ToJson <methods>;
+}
+
+# Moshi runtime + Retrofit / OkHttp reflection helpers.
+-dontwarn com.squareup.moshi.**
+-dontwarn retrofit2.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.conscrypt.**
+-keepclassmembers,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+-keepattributes Exceptions
