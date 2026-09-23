@@ -1,5 +1,6 @@
 package com.pesatrack.presentation.screens.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.database.dao.MonthlyTotal
@@ -39,6 +40,7 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+        private const val TAG_COACH = "HomeVM.Coach"
         private const val REVIEW_MIN_INSTALL_AGE_DAYS = 14L
         private const val REVIEW_MIN_CATEGORIZED_EXPENSES = 20
         private const val REVIEW_MIN_QUALIFIED_SESSIONS = 10
@@ -408,16 +410,22 @@ class HomeViewModel @Inject constructor(
      */
     private fun loadCoachInsight() {
         viewModelScope.launch {
+            Log.i(TAG_COACH, "loadCoachInsight: observer starting")
             combine(
                 appPreferences.proAiEnabled,
                 entitlement.proState,
             ) { shipGateOn, proState ->
                 val entitled = proState.isEntitled &&
                     (proState.expiresAtEpochMs ?: 0L) > System.currentTimeMillis()
+                Log.d(TAG_COACH, "loadCoachInsight combine: shipGateOn=$shipGateOn " +
+                    "proState.isEntitled=${proState.isEntitled} " +
+                    "expiresAtEpochMs=${proState.expiresAtEpochMs} " +
+                    "entitled(effective)=$entitled")
                 shipGateOn && entitled
             }
                 .distinctUntilChanged()
                 .collect { gateOpen ->
+                    Log.i(TAG_COACH, "loadCoachInsight collect: gateOpen=$gateOpen")
                     if (!gateOpen) {
                         // Ship-gate off or entitlement not (yet) valid — clear
                         // any previously shown insight so the free-tier
@@ -426,7 +434,21 @@ class HomeViewModel @Inject constructor(
                         return@collect
                     }
 
-                    val insight = coachInsightRepository.getForToday()
+                    val insight = try {
+                        coachInsightRepository.getForToday()
+                    } catch (t: Throwable) {
+                        // The repository is supposed to never throw (§6.3
+                        // contract), but if something we didn't anticipate
+                        // leaks, log it so we can see what class it was and
+                        // fire an explicit fetch_failed telemetry event.
+                        Log.e(TAG_COACH, "loadCoachInsight: repository threw ${t.javaClass.simpleName}: ${t.message}", t)
+                        telemetryClient.logEvent(
+                            TelemetryEvents.COACH_INSIGHT_FETCH_FAILED,
+                            mapOf(TelemetryEvents.PARAM_REASON to (t.javaClass.simpleName ?: "unknown")),
+                        )
+                        null
+                    }
+                    Log.i(TAG_COACH, "loadCoachInsight collect: getForToday returned ${if (insight == null) "null" else "insight (title=${insight.title.take(40)}…)"}")
                     _uiState.update { it.copy(coachInsight = insight) }
                     if (insight == null) {
                         // Both gates were open but the repository still

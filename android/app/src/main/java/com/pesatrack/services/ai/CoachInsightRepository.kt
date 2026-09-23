@@ -1,10 +1,13 @@
 package com.pesatrack.services.ai
 
+import android.util.Log
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "CoachInsightRepo"
 
 /**
  * Narrow entitlement-check surface used by [CoachInsightRepository].
@@ -114,44 +117,60 @@ class CoachInsightRepository @Inject constructor(
         nowMs: Long = System.currentTimeMillis(),
         zoneId: ZoneId = ZoneId.systemDefault(),
     ): CoachInsight? {
+        Log.i(TAG, "getForToday(nowMs=$nowMs, zone=$zoneId) — entered")
         // Entitlement gate. Honest-numbers check — expired persisted state
         // resolves to false even if `isEntitled = true` is still on disk.
-        if (!entitlement.isCurrentlyEntitled(nowMs)) return null
+        val entitled = entitlement.isCurrentlyEntitled(nowMs)
+        if (!entitled) {
+            Log.w(TAG, "getForToday: entitlement.isCurrentlyEntitled=false — returning null (short-circuit)")
+            return null
+        }
+        Log.i(TAG, "getForToday: entitlement OK")
 
         val today = Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
 
         // Cache hit — skip the network and OpenAI cost entirely.
-        cache.getIfFreshForToday(today)?.let { return it }
+        cache.getIfFreshForToday(today)?.let {
+            Log.i(TAG, "getForToday: cache HIT for $today — returning cached")
+            return it
+        }
+        Log.i(TAG, "getForToday: cache miss for $today")
 
         // Fresh fetch: build the digest, post it, rehydrate on success.
         val build = try {
             digestBuilder.buildForCurrentPeriod(nowMs)
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Digest build failed (DAO error, etc.). Fall back rather
             // than crash the ViewModel.
+            Log.e(TAG, "getForToday: digestBuilder threw ${t.javaClass.simpleName}: ${t.message}", t)
             return cache.getYesterday(today)
         }
+        Log.i(TAG, "getForToday: digest built OK — period=${build.digest.period}, recipients=${build.digest.topRecipientsThisPeriod.size}")
 
         val response = try {
             client.coachInsight(CoachInsightRequestDto(digest = build.digest))
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Network / serialization / timeout — every wire-level
             // failure lands here.
+            Log.e(TAG, "getForToday: client.coachInsight threw ${t.javaClass.simpleName}: ${t.message}", t)
             return cache.getYesterday(today)
         }
 
         if (!response.isSuccessful) {
+            Log.w(TAG, "getForToday: HTTP ${response.code()} from /ai/coach-insight — falling back to yesterday cache")
             return cache.getYesterday(today)
         }
 
         val body = response.body()
         val fresh = body?.insight
         if (body == null || body.fallback || fresh == null) {
+            Log.w(TAG, "getForToday: 200 but body=$body / fallback=${body?.fallback} / insight=${fresh?.let { "non-null" } ?: "null"} — falling back")
             return cache.getYesterday(today)
         }
 
         val hydrated = fresh.withRehydratedRecipients(build.rehydrationMap)
         cache.putForToday(today, hydrated)
+        Log.i(TAG, "getForToday: happy path — insight cached and returned")
         return hydrated
     }
 }
