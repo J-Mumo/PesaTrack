@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.6.0** | 17 | 2026-09-19 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.6.0** | 18 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
+| **1.6.0** | 17 | 2026-09-19 | Closed Testing — PesaTrack Alpha | 🚫 Rejected — Play Billing v7 below v8 upload floor |
 | **1.5.3** | 16 | 2026-09-12 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload |
 | **1.5.3** | 15 | 2026-09-12 | Production | 🟡 Pending upload |
 | **1.5.2** | 14 | 2026-09-10 | Production | 🚫 Superseded by 1.5.3 |
@@ -26,7 +27,7 @@
 
 ---
 
-## v1.6.0 (versionCode 17) — 2026-09-19
+## v1.6.0 (versionCode 17 / 18) — 2026-09-19
 
 **Focus:** Foundation for PesaTrack Pro subscription. Nothing user-visible in production until the Google Play subscription SKUs are published and Slice A6 flips the visibility flag, but the entire on-device plumbing (Play Billing 7.x wrapper, entitlement state machine, `/billing/verify` HTTPS pipeline against `pesatrack-api.jmumo.com`, upsell screen) ships in this build so closed-testing devices can exercise the full purchase → verify → persist loop end-to-end.
 
@@ -54,6 +55,7 @@
 
 ### 📎 Notes
 
+- **Why two versionCodes for the same versionName**: Google Play Console raised the minimum Play Billing library upload floor from v7 to v8 in Sep 2026. The first v1.6.0 build (versionCode 17, `com.android.billingclient:billing-ktx:7.1.1`) was rejected at upload time with *"Your app currently uses Play Billing Library version 7.1.1 and must be updated to at least version 8.0.0"*. Bumped the dep to `8.0.0` (source-compatible — zero code changes required because v7 already introduced the `ProductDetails` / `PendingPurchasesParams` / `PurchasesUpdatedListener` surface we use), rebuilt as versionCode 18, uploaded that instead. Play Console holds versionCodes as taken even for rejected uploads, so the bump was forced.
 - The Play Console subscription SKUs (`pesatrack_pro_monthly`, `pesatrack_pro_annual`) are **not yet published** at the time of this AAB upload. That's intentional — the screen renders "Coming soon" and no purchase attempt is possible until the SKUs go live, at which point the same APK lights up.
 - Six-slice implementation on the `feat/ai-pro-plan` branch: A1 (dependency + network-security foundation) → A2 (DataStore `ProState` persistence + JSON codec + 9 tests) → A3 (Retrofit + `ProAuthInterceptor` + 12 tests) → A4 (`ProEntitlementRepository` + `ProTokenCache` + 16 tests) → A5a (Play Billing wrapper + `ProPurchaseFlow` + 15 tests) → A5b (Compose UI + navigation + this release notes entry). Slice A6 (feature flag + 7 Pro-lifecycle telemetry events) follows separately.
 - Website sync check (AGENTS.md §Website Sync Check): **required.** New screen + new feature + versionName bump — filed as a follow-up commit on this branch (Slice A5c): new feature MD in [website/src/content/features/](../website/src/content/features/), update `/features` index, `factsheet.json.currentVersion` auto-updates from this file.
