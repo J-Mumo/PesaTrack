@@ -169,9 +169,11 @@ dependencies {
     implementation("com.google.android.play:review-ktx:2.0.2")
 
     // Google Play Billing — subscriptions for PesaTrack Pro (AI Pro Phase 1).
-    // v7.x deprecates SkuDetails in favor of ProductDetails; ktx wraps
-    // callbacks as coroutine-friendly suspending calls.
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    // v8.x is Play Console's current minimum for new uploads (Google raised
+    // the floor from 7.x in Sep 2026). v8 deprecates SkuDetails in favor of
+    // ProductDetails (same API as 7.x); ktx wraps callbacks as coroutine-
+    // friendly suspending calls.
+    implementation("com.android.billingclient:billing-ktx:8.0.0")
 
     // HTTP client for pesatrack-api.jmumo.com (AI Pro Phase 1).
     // OkHttp handles TLS + connection pooling; Retrofit + Moshi handle
