@@ -421,6 +421,11 @@ class HomeViewModel @Inject constructor(
                     "proState.isEntitled=${proState.isEntitled} " +
                     "expiresAtEpochMs=${proState.expiresAtEpochMs} " +
                     "entitled(effective)=$entitled")
+                // Publish the raw entitlement state alongside the gated
+                // Coach-Insight signal — the FAB routing in [HomeScreen]
+                // needs entitled = true even when the coach-insight
+                // ship-gate (`proAiEnabled`) is off, and vice versa.
+                _uiState.update { it.copy(isProEntitled = entitled) }
                 shipGateOn && entitled
             }
                 .distinctUntilChanged()

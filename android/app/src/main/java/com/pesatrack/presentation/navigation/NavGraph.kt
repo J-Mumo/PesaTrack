@@ -21,6 +21,7 @@ import com.pesatrack.presentation.screens.manual_entry.ManualEntryScreen
 import com.pesatrack.presentation.screens.about.AboutScreen
 import com.pesatrack.presentation.screens.pin.PinSetupScreen
 import com.pesatrack.presentation.screens.pro.PesaTrackProScreen
+import com.pesatrack.presentation.screens.ask.AskYourMoneyScreen
 import com.pesatrack.presentation.screens.monthly_review.MonthlyReviewScreen
 import com.pesatrack.presentation.screens.quarterly_review.QuarterlyReviewScreen
 import com.pesatrack.presentation.screens.settings.SettingsScreen
@@ -80,6 +81,12 @@ fun NavGraph(
                 },
                 onNavigateToIncome = {
                     navController.navigate(Screen.Income.route)
+                },
+                onNavigateToAskYourMoney = {
+                    navController.navigate(Screen.AskYourMoney.route)
+                },
+                onNavigateToProUpsell = {
+                    navController.navigate(Screen.Pro.route)
                 }
             )
         }
@@ -327,6 +334,15 @@ fun NavGraph(
         // PesaTrack Pro subscription (AI Pro Phase 1)
         composable(route = Screen.Pro.route) {
             PesaTrackProScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Ask Your Money — chat surface (AI Pro Phase 3)
+        composable(route = Screen.AskYourMoney.route) {
+            AskYourMoneyScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

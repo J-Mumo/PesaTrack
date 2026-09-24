@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.7.0** | 23 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — fixes Coach Insight null-drop (Moshi `withNullSerialization()`) + backend schema defence-in-depth |
+| **1.8.0** | 24 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — Phase 3 M1: Ask Your Money chat surface behind Home FAB (SSE streaming, 10-turn memory, silent fallback) |
+| **1.7.0** | 23 | 2026-09-24 | Closed Testing — PesaTrack Alpha | ✅ Live — Coach Insight null-drop fix (Moshi `withNullSerialization()`) + backend schema defence-in-depth |
 | **1.7.0** | 22 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — diagnostic build; identified `digest.categories[].budget` + `digest.top_recipients_this_period[].category_id` were being dropped by Moshi when null |
 | **1.7.0** | 21 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Partial — billing works, Coach Insight silently returns null with no diagnostics |
 | **1.7.0** | 20 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — R8 stripped Moshi adapters, `/billing/verify` responses failed to parse |

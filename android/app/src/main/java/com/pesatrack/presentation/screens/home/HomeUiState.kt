@@ -126,5 +126,18 @@ data class HomeUiState(
      * insight that has already been recipient-rehydrated on-device — the
      * title/body already contain real merchant names, not `rN` ids.
      */
-    val coachInsight: CoachInsight? = null
+    val coachInsight: CoachInsight? = null,
+
+    /**
+     * Whether the user currently has a valid Pro entitlement.
+     *
+     * Drives the FAB routing on Home — Pro users tapping the AI FAB go
+     * to [com.pesatrack.presentation.navigation.Screen.AskYourMoney];
+     * free users go to the [com.pesatrack.presentation.navigation.Screen.Pro]
+     * upsell surface. See plans/ai-pro-phase3-spec.md §3.1.
+     *
+     * Sourced from the same reactive observer that drives
+     * [coachInsight] — see [HomeViewModel.loadCoachInsight].
+     */
+    val isProEntitled: Boolean = false,
 )

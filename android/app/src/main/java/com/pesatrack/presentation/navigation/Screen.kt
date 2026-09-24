@@ -82,6 +82,18 @@ sealed class Screen(val route: String) {
     object Pro : Screen("pro")
 
     /**
+     * Ask Your Money — AI Pro Phase 3 chat surface.
+     *
+     * Reached from the Home FAB when the user is currently entitled. Free
+     * users tapping the FAB are routed to [Pro] instead (see
+     * plans/ai-pro-phase3-spec.md §3.1). The screen owns 10 turns of
+     * in-memory chat history (`SnapshotStateList<AskTurn>`) — nothing is
+     * persisted to Room / DataStore, so process death clears the
+     * conversation. That's the whole privacy story.
+     */
+    object AskYourMoney : Screen("ask_your_money")
+
+    /**
      * Weekly Review screen (Insights & Reports v1.0).
      *
      * Accepts an optional snapshot id so notifications can deep-link to the

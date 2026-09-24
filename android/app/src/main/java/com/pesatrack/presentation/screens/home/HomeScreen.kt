@@ -75,6 +75,20 @@ fun HomeScreen(
     onNavigateToYearlyGrid: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
     onNavigateToIncome: () -> Unit = {},
+    /**
+     * Called when the user taps the Home FAB while entitled to Pro —
+     * routes to the Ask Your Money chat surface. Free users tapping
+     * the same FAB fire [onNavigateToProUpsell] instead so we only ever
+     * have one visible FAB but two destinations (see
+     * plans/ai-pro-phase3-spec.md §3.1).
+     */
+    onNavigateToAskYourMoney: () -> Unit = {},
+    /**
+     * Called when the user taps the Home FAB and is NOT currently
+     * entitled — routes to the Pro subscription screen. That screen is
+     * the single discoverable Pro CTA per ai-pro-plan.md §2 row 5.
+     */
+    onNavigateToProUpsell: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -148,16 +162,24 @@ fun HomeScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToManualEntry,
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = "Add expense",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-            }
+            // Home FAB is now the AI (Ask Your Money) entry point — the
+            // Add-Expense action moves to the Expenses tab's own FAB.
+            // See plans/ai-pro-phase3-spec.md §3.1. Both entitled and
+            // free users see the same label; branching happens on tap.
+            ExtendedFloatingActionButton(
+                onClick = {
+                    if (uiState.isProEntitled) onNavigateToAskYourMoney() else onNavigateToProUpsell()
+                },
+                icon = {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                },
+                text = { Text("Ask Your Money", color = MaterialTheme.colorScheme.onPrimary) },
+                containerColor = MaterialTheme.colorScheme.primary,
+            )
         }
     ) { innerPadding ->
     LazyColumn(
