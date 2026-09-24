@@ -194,6 +194,11 @@ dependencies {
     // Only the AI Pro backend is contacted — see res/xml/network_security_config.xml.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    // Server-Sent Events client for the /ai/ask streaming endpoint
+    // (Phase 3). We use OkHttp EventSources instead of a Retrofit call
+    // because SSE isn't a request/response fit — the response is a
+    // long-lived text/event-stream that yields frames over time.
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
     implementation("com.squareup.moshi:moshi:1.15.1")
