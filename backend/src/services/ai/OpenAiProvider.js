@@ -112,10 +112,80 @@ class OpenAiProvider {
   }
 
   async *streamStructured(_input) {
-    const err = new Error('OpenAiProvider.streamStructured not implemented in Phase 1');
-    err.code = 'ai_not_implemented';
-    err.status = 501;
-    throw err;
+    const {
+      systemPrompt,
+      userPrompt,
+      schema,
+      schemaName,
+      temperature,
+      maxTokens,
+    } = _input;
+    const client = this._lazyClient();
+
+    // OpenAI's SDK exposes `stream: true` on `chat.completions.create`,
+    // which returns an async iterator of chunks whose
+    // `choices[0].delta.content` is a token slice of the response body.
+    // We yield each delta as `{ type: 'delta', content }`, then a final
+    // `{ type: 'done', usage, providerModelId }` marker so the caller can
+    // reconcile telemetry counters after the stream ends.
+    let stream;
+    try {
+      stream = await client.chat.completions.create({
+        model: this._model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: schemaName,
+            strict: true,
+            schema,
+          },
+        },
+        temperature: typeof temperature === 'number' ? temperature : 0.4,
+        max_tokens: typeof maxTokens === 'number' ? maxTokens : this._maxTokensOut,
+        stream: true,
+        stream_options: { include_usage: true },
+      });
+    } catch (e) {
+      const err = new Error(`openai_stream_open_failed: ${e.message}`);
+      err.code = 'ai_provider_error';
+      err.status = 502;
+      err.cause = e;
+      throw err;
+    }
+
+    let providerModelId = this._model;
+    let usage = null;
+    try {
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string' && delta.length > 0) {
+          yield { type: 'delta', content: delta };
+        }
+        if (chunk.model) providerModelId = chunk.model;
+        if (chunk.usage) usage = chunk.usage;
+      }
+    } catch (e) {
+      const err = new Error(`openai_stream_read_failed: ${e.message}`);
+      err.code = 'ai_provider_error';
+      err.status = 502;
+      err.cause = e;
+      throw err;
+    }
+
+    yield {
+      type: 'done',
+      usage: usage
+        ? {
+            inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0,
+          }
+        : { inputTokens: 0, outputTokens: 0 },
+      providerModelId,
+    };
   }
 }
 

@@ -47,4 +47,11 @@ module.exports = {
   // plus a 1/minute burst guard against double-tap flooding. See plans/ai-pro-phase2-spec.md §9.
   aiCoachInsightDaily: makeLimiter({ windowMs: oneDay, max: 3, name: 'ai.coach_insight.daily' }),
   aiCoachInsightMinute: makeLimiter({ windowMs: oneMinute, max: 1, name: 'ai.coach_insight.minute' }),
+  // /ai/ask: 200 chat turns/day (includes what-if turns) + 6/min burst.
+  // Sized generously vs coach-insight because chat is interactive — a
+  // motivated user in one session may burn 20-30 turns. Cap at 200/day
+  // protects OpenAI spend and rules out runaway loops if a future
+  // ViewModel bug retries too aggressively. See plans/ai-pro-plan.md §8.5.
+  aiAskDaily: makeLimiter({ windowMs: oneDay, max: 200, name: 'ai.ask.daily' }),
+  aiAskMinute: makeLimiter({ windowMs: oneMinute, max: 6, name: 'ai.ask.minute' }),
 };

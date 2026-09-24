@@ -19,6 +19,7 @@ const {
   postValidateAsk,
   SYSTEM_PROMPT,
   buildAskUserPrompt,
+  StreamingBodyExtractor,
 } = require('../src/services/ai/askOrchestrator');
 
 // ── Fixtures ────────────────────────────────────────────────────────────
@@ -388,5 +389,141 @@ describe('buildAskUserPrompt', () => {
     assert.ok(!p.includes('msg_01'), 'second-oldest turn should be trimmed');
     assert.ok(p.includes('msg_02'), 'third-oldest turn should survive');
     assert.ok(p.includes('msg_11'), 'newest turn should survive');
+  });
+});
+
+// ── StreamingBodyExtractor ──────────────────────────────────────────────
+
+describe('StreamingBodyExtractor', () => {
+  // A canonical happy-path response, split many different ways.
+  const RESPONSE = {
+    body: 'You have spent KES 12,400 on Food & Dining this month.',
+    assumptions: [],
+    action_label: null,
+    action_deeplink: null,
+    chart: null,
+  };
+  const RESPONSE_STR = JSON.stringify(RESPONSE);
+
+  function feedInChunks(str, chunkSize) {
+    const ext = new StreamingBodyExtractor();
+    let out = '';
+    for (let i = 0; i < str.length; i += chunkSize) {
+      out += ext.feed(str.slice(i, i + chunkSize));
+    }
+    return { out, ext };
+  }
+
+  test('emits nothing until the body value opening quote is seen', () => {
+    const ext = new StreamingBodyExtractor();
+    assert.equal(ext.feed('{"assumptions":[],"body":'), '');
+    assert.equal(ext.feed('"'), ''); // opening quote alone still emits nothing
+  });
+
+  test('emits body characters as they arrive when fed one char at a time', () => {
+    const { out } = feedInChunks(RESPONSE_STR, 1);
+    assert.equal(out, RESPONSE.body);
+  });
+
+  test('emits body characters when fed in 3-char chunks', () => {
+    const { out } = feedInChunks(RESPONSE_STR, 3);
+    assert.equal(out, RESPONSE.body);
+  });
+
+  test('emits body characters when fed as one giant chunk', () => {
+    const { out } = feedInChunks(RESPONSE_STR, RESPONSE_STR.length);
+    assert.equal(out, RESPONSE.body);
+  });
+
+  test('marks bodyDone once the closing quote is consumed', () => {
+    const { ext } = feedInChunks(RESPONSE_STR, 5);
+    assert.equal(ext.bodyDone(), true);
+  });
+
+  test('stops emitting after the closing quote — chart data does not leak', () => {
+    const response = {
+      body: 'hi',
+      assumptions: ['x'],
+      action_label: null,
+      action_deeplink: null,
+      chart: { type: 'compound_growth', unit: 'KES', x_labels: ['A'], series: [] },
+    };
+    const s = JSON.stringify(response);
+    const { out } = feedInChunks(s, 2);
+    assert.equal(out, 'hi'); // NOT "hi[\"x\"]nullnull{…"
+  });
+
+  test('decodes \\" escape correctly (emits a literal quote)', () => {
+    // body value is `He said "hi"` — JSON-encodes as `"He said \"hi\""`.
+    const response = {
+      body: 'He said "hi"',
+      assumptions: [],
+      action_label: null,
+      action_deeplink: null,
+      chart: null,
+    };
+    const s = JSON.stringify(response);
+    const { out } = feedInChunks(s, 4);
+    assert.equal(out, 'He said "hi"');
+  });
+
+  test('decodes \\\\ escape correctly (emits a literal backslash)', () => {
+    const response = {
+      body: 'path C:\\Users',
+      assumptions: [],
+      action_label: null,
+      action_deeplink: null,
+      chart: null,
+    };
+    const s = JSON.stringify(response);
+    const { out } = feedInChunks(s, 3);
+    assert.equal(out, 'path C:\\Users');
+  });
+
+  test('decodes \\n escape correctly (emits a literal newline)', () => {
+    const response = {
+      body: 'line one\nline two',
+      assumptions: [],
+      action_label: null,
+      action_deeplink: null,
+      chart: null,
+    };
+    const s = JSON.stringify(response);
+    const { out } = feedInChunks(s, 5);
+    assert.equal(out, 'line one\nline two');
+  });
+
+  test('does NOT stop at an escaped quote spanning two feed() calls', () => {
+    // Simulate the classic streaming pitfall: the `\` and the `"` after
+    // it arrive in separate chunks. A naive extractor treats the `"` as
+    // the end-of-body marker and truncates. The state machine must
+    // buffer the incomplete escape.
+    const ext = new StreamingBodyExtractor();
+    const out1 = ext.feed('{"body":"before ');
+    const out2 = ext.feed('\\'); // dangling backslash
+    const out3 = ext.feed('"after"}');
+    const combined = out1 + out2 + out3;
+    assert.equal(combined, 'before "after');
+    assert.equal(ext.bodyDone(), true);
+  });
+
+  test('exposes the full raw buffer for post-stream JSON.parse', () => {
+    const { ext } = feedInChunks(RESPONSE_STR, 7);
+    assert.equal(ext.buffer(), RESPONSE_STR);
+    // Sanity: the buffer should re-parse to the original object.
+    assert.deepEqual(JSON.parse(ext.buffer()), RESPONSE);
+  });
+
+  test('handles field order variation (body key not first)', () => {
+    const response = {
+      chart: null,
+      action_label: null,
+      action_deeplink: null,
+      assumptions: [],
+      body: 'body appears last in the object',
+    };
+    const s = JSON.stringify(response);
+    const { out } = feedInChunks(s, 4);
+    assert.equal(out, 'body appears last in the object');
   });
 });

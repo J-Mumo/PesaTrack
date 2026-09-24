@@ -271,6 +271,162 @@ function buildAskUserPrompt({ digest, history, question, today = new Date() }) {
   ].join('\n');
 }
 
+// ── 5. Streaming body extractor ─────────────────────────────────────────
+//
+// OpenAI Structured Outputs with `stream: true` delivers the response as
+// a sequence of `content` deltas that gradually build up a valid JSON
+// object matching `askResponseV1Schema`. We want to forward the `body`
+// field's characters to the SSE client as `event: text` frames the
+// moment they're received (see plans/ai-pro-phase3-spec.md §8.3 step 6),
+// and buffer the rest silently until the stream completes.
+//
+// This class is a small state machine that runs on each incoming delta:
+//
+//   1. Accumulate raw JSON in a buffer.
+//   2. Once we spot `"body"` followed by `:` and an opening `"`, mark
+//      that we're inside the body string.
+//   3. While inside, consume characters one at a time, handle backslash
+//      escapes (`\"`, `\\`, `\n`, etc.) so we don't false-positive on a
+//      quote that's actually escaped, and emit the decoded characters
+//      as text deltas. Stop at the first *unescaped* closing quote.
+//   4. Ignore everything else — the final envelope will be re-parsed
+//      by the caller after the stream ends.
+//
+// Design constraints:
+//
+//  - Idempotent-ish under repeated feeds: `feed(chunk)` returns whatever
+//    body characters became newly visible in this chunk, or `''`.
+//  - Never throws on malformed JSON — the caller decides fallback
+//    behaviour on `.finalize()`.
+//  - Does not attempt to parse anything past the body closing quote.
+//    Chart, assumptions, action are extracted from the full buffered
+//    string on `.finalize()`.
+//
+// Not covered by this extractor: streaming Unicode surrogate pairs
+// (`\uXXXX`). If the model uses those in the body, we buffer the six
+// characters of the escape sequence and emit their decoded rune once
+// complete. In practice OpenAI encodes typical latin-1 punctuation as
+// raw UTF-8 bytes, so this branch is rarely exercised — but we handle
+// it defensively so a stray emoji doesn't break the stream.
+
+class StreamingBodyExtractor {
+  constructor() {
+    this._buffer = '';
+    this._sawBodyStart = false;
+    this._insideBody = false;
+    this._bodyDone = false;
+    // Cursor into `_buffer` marking the next character to inspect.
+    this._cursor = 0;
+  }
+
+  /**
+   * Absorb the next delta from the model and return any newly-visible
+   * body characters (decoded — with escapes resolved).
+   *
+   * @param {string} chunk raw JSON delta from the provider
+   * @returns {string} body text delta to send to the SSE client
+   */
+  feed(chunk) {
+    if (typeof chunk !== 'string' || chunk.length === 0) return '';
+    this._buffer += chunk;
+    let emit = '';
+
+    if (!this._sawBodyStart) {
+      // Look for the opening of the body string: `"body"\s*:\s*"`.
+      // We don't use regex here because we may receive it split across
+      // chunks; instead we peek for the key and find the first quote
+      // that follows the colon.
+      const keyIdx = this._buffer.indexOf('"body"');
+      if (keyIdx < 0) return '';
+      // Find the colon after the key.
+      let i = keyIdx + '"body"'.length;
+      while (i < this._buffer.length && this._buffer[i] !== ':') i++;
+      if (i === this._buffer.length) return ''; // colon not yet arrived
+      // Find the opening quote of the value.
+      i++;
+      while (i < this._buffer.length && this._buffer[i] !== '"') {
+        // Skip whitespace between colon and opening quote.
+        if (this._buffer[i] !== ' ' && this._buffer[i] !== '\t' && this._buffer[i] !== '\n') {
+          // A non-whitespace, non-quote char here means the body value
+          // is `null` or begins unexpectedly. Bail — we'll rely on the
+          // final buffer parse instead of streaming.
+          return '';
+        }
+        i++;
+      }
+      if (i === this._buffer.length) return ''; // opening quote not yet arrived
+      this._sawBodyStart = true;
+      this._insideBody = true;
+      this._cursor = i + 1; // first char of body value
+    }
+
+    if (this._insideBody && !this._bodyDone) {
+      // Walk from cursor emitting decoded body chars until we hit an
+      // unescaped closing quote.
+      while (this._cursor < this._buffer.length) {
+        const c = this._buffer[this._cursor];
+        if (c === '\\') {
+          // Need at least one more character to know what to emit.
+          if (this._cursor + 1 >= this._buffer.length) break;
+          const next = this._buffer[this._cursor + 1];
+          if (next === 'u') {
+            // Unicode escape: need 4 more hex digits.
+            if (this._cursor + 5 >= this._buffer.length) break;
+            const hex = this._buffer.substr(this._cursor + 2, 4);
+            emit += String.fromCodePoint(parseInt(hex, 16));
+            this._cursor += 6;
+          } else {
+            emit += decodeSimpleEscape(next);
+            this._cursor += 2;
+          }
+        } else if (c === '"') {
+          this._insideBody = false;
+          this._bodyDone = true;
+          this._cursor += 1;
+          break;
+        } else {
+          emit += c;
+          this._cursor += 1;
+        }
+      }
+    }
+
+    return emit;
+  }
+
+  /**
+   * @returns {string} the full raw JSON accumulated so far — the caller
+   * uses this to re-parse the final envelope after the stream ends.
+   */
+  buffer() {
+    return this._buffer;
+  }
+
+  /**
+   * @returns {boolean} whether the body string was fully consumed.
+   * Callers may want to know this to distinguish a truncated stream
+   * from a well-formed one.
+   */
+  bodyDone() {
+    return this._bodyDone;
+  }
+}
+
+function decodeSimpleEscape(c) {
+  switch (c) {
+    case '"': return '"';
+    case '\\': return '\\';
+    case '/': return '/';
+    case 'b': return '\b';
+    case 'f': return '\f';
+    case 'n': return '\n';
+    case 'r': return '\r';
+    case 't': return '\t';
+    default: return c; // permissive — unknown escape passes through
+  }
+}
+
+
 module.exports = {
   askResponseV1Schema,
   askRequestBodySchema,
@@ -278,6 +434,7 @@ module.exports = {
   postValidateAsk,
   SYSTEM_PROMPT,
   buildAskUserPrompt,
+  StreamingBodyExtractor,
   // exposed for tests
   PROJECTION_MARKERS,
   IMPERATIVE_PAST_PATTERNS,

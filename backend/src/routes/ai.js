@@ -9,7 +9,7 @@ const express = require('express');
 const { z } = require('zod');
 
 const { requireEntitlement } = require('../middleware/entitlement');
-const { aiEcho, aiCoachInsightDaily, aiCoachInsightMinute } = require('../middleware/rateLimit');
+const { aiEcho, aiCoachInsightDaily, aiCoachInsightMinute, aiAskDaily, aiAskMinute } = require('../middleware/rateLimit');
 const { getPrisma } = require('../services/prisma');
 const { log } = require('../middleware/logger');
 const config = require('../config');
@@ -24,6 +24,14 @@ const {
   cacheGet,
   cacheSet,
 } = require('../services/ai/coachInsight');
+const {
+  askResponseV1Schema,
+  askRequestBodySchema,
+  postValidateAsk,
+  SYSTEM_PROMPT: ASK_SYSTEM_PROMPT,
+  buildAskUserPrompt,
+  StreamingBodyExtractor,
+} = require('../services/ai/askOrchestrator');
 const { getDefaultProvider } = require('../services/ai/AiProvider');
 
 const router = express.Router();
@@ -323,6 +331,245 @@ router.post(
   coachInsightHandler,
 );
 
+// ─────────────────────────────────────────────────────────────────────────
+// POST /ai/ask  (Phase 3)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Chat surface for Pro subscribers. See plans/ai-pro-phase3-spec.md §8.
+//
+// Flow: entitlement → rate limit (6/min + 200/day) → validate request →
+// build system + user prompt → open OpenAI stream (Structured Outputs
+// strict = ask_response_v1) → forward `body` field tokens as SSE
+// `event: text` frames as they arrive → on stream close, re-parse the
+// full envelope, run postValidateAsk + denyListMatch, emit `event: done`
+// with either the full response or `{ fallback: true, reason }`.
+//
+// Contract (§9): the endpoint NEVER returns a 5xx for LLM issues. Every
+// LLM/provider/schema failure emits a `done` frame with `fallback: true`
+// so the client can render its template line without special-casing.
+// Genuine client bugs still 4xx (invalid body, missing bearer).
+//
+// SSE framing: we set `Content-Type: text/event-stream` on 200 and
+// flush each frame with a blank line delimiter. Once the first byte is
+// on the wire we can't send a non-2xx status code — so validation
+// failures on the request body must happen BEFORE any writeHead.
+
+const askRequestBody = askRequestBodySchema;
+
+function sseFrame(res, event, data) {
+  // Standard SSE framing: `event: <name>\ndata: <json>\n\n`.
+  // `flush()` is Express-specific and only present under `compression`;
+  // Node's default writable stream flushes on newline for keep-alive
+  // connections, but we call `flushHeaders()` on open just in case.
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+async function askHandler(req, res) {
+  if (!config.enableAiEndpoints) {
+    return res.status(501).json({
+      error: 'not_implemented',
+      hint: 'Set ENABLE_AI_ENDPOINTS=true to enable Ask Your Money.',
+      request_id: req.id,
+    });
+  }
+
+  const parsed = askRequestBody.safeParse(req.body);
+  if (!parsed.success) {
+    const flattened = parsed.error.flatten();
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join('.'),
+      code: i.code,
+      message: i.message,
+      expected: i.expected,
+      received: i.received,
+    }));
+    log.warn({
+      msg: 'ask.invalid_request',
+      request_id: req.id,
+      token_hash: req.entitlement?.purchaseTokenHash?.slice(0, 16),
+      field_errors: flattened.fieldErrors,
+      form_errors: flattened.formErrors,
+      issues,
+    });
+    return res.status(400).json({
+      error: 'invalid_request',
+      details: flattened.fieldErrors,
+      request_id: req.id,
+    });
+  }
+  const { digest, history, question } = parsed.data;
+
+  // Open the SSE stream. Once headers are flushed we can only send more
+  // frames — no HTTP-level error status is possible from here on.
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no', // hint to reverse proxies (Nginx/Caddy)
+  });
+  res.flushHeaders?.();
+
+  const started = Date.now();
+  const provider = getDefaultProvider();
+  const userPrompt = buildAskUserPrompt({ digest, history, question });
+  const extractor = new StreamingBodyExtractor();
+  let usage = { inputTokens: 0, outputTokens: 0 };
+  let providerModelId = provider.modelId?.() || 'unknown';
+
+  try {
+    for await (const event of provider.streamStructured({
+      systemPrompt: ASK_SYSTEM_PROMPT,
+      userPrompt,
+      schema: askResponseV1Schema,
+      schemaName: 'ask_response_v1',
+      temperature: config.openai.coachTemperature,
+      maxTokens: config.openai.maxTokensOut,
+    })) {
+      if (event.type === 'delta') {
+        const bodyDelta = extractor.feed(event.content);
+        if (bodyDelta.length > 0) {
+          sseFrame(res, 'text', { delta: bodyDelta });
+        }
+      } else if (event.type === 'done') {
+        usage = event.usage || usage;
+        providerModelId = event.providerModelId || providerModelId;
+      }
+    }
+  } catch (e) {
+    // Provider stream failed mid-way. Wrap the same way the Coach
+    // Insight route does (commit 65a36d8) so the log line pinpoints
+    // the OpenAI SDK error class (auth / quota / rate / model / net).
+    const cause = e.cause || {};
+    log.warn({
+      msg: 'ask.provider_error',
+      request_id: req.id,
+      token_hash: req.entitlement?.purchaseTokenHash?.slice(0, 16),
+      code: e.code || 'unknown',
+      status: e.status || 0,
+      cause_message: cause.message || e.message || null,
+      cause_status: cause.status || null,
+      cause_code: cause.code || null,
+      cause_type: cause.type || null,
+      cause_param: cause.param || null,
+      cause_error_message: cause.error?.message || null,
+    });
+    await auditAsk(req, 'ask.provider_error', {
+      reason: 'provider_error',
+      code: e.code || 'unknown',
+      status: e.status || 0,
+    });
+    sseFrame(res, 'done', { fallback: true, reason: 'provider_error' });
+    return res.end();
+  }
+
+  // Stream closed cleanly. Parse the full buffered JSON and run post-
+  // validation. Any failure emits `done { fallback: true, reason }` —
+  // the caller's telemetry buckets it, the client swaps to template.
+  let insight;
+  try {
+    insight = JSON.parse(extractor.buffer());
+  } catch (e) {
+    log.warn({
+      msg: 'ask.parse_error',
+      request_id: req.id,
+      token_hash: req.entitlement?.purchaseTokenHash?.slice(0, 16),
+      error: e.message,
+    });
+    await auditAsk(req, 'ask.parse_error', { reason: 'parse_error' });
+    sseFrame(res, 'done', { fallback: true, reason: 'schema' });
+    return res.end();
+  }
+
+  const postIssue = postValidateAsk(insight);
+  if (postIssue) {
+    log.info({
+      msg: 'ask.rejected',
+      request_id: req.id,
+      reason: postIssue,
+    });
+    await auditAsk(req, 'ask.rejected', { reason: postIssue });
+    sseFrame(res, 'done', { fallback: true, reason: postIssue });
+    return res.end();
+  }
+
+  // Deny-list scrub on flattened text — same list as Coach Insights.
+  const flat = [insight.body || '', ...(insight.assumptions || [])].join(' ');
+  const hit = denyListMatch(flat);
+  if (hit) {
+    log.info({
+      msg: 'ask.denylist_hit',
+      request_id: req.id,
+      matched: hit,
+    });
+    await auditAsk(req, 'ask.denylist_hit', { reason: 'denylist', term: hit });
+    sseFrame(res, 'done', { fallback: true, reason: 'denylist' });
+    return res.end();
+  }
+
+  const latencyMs = Date.now() - started;
+  log.info({
+    msg: 'ask.ok',
+    request_id: req.id,
+    token_hash: req.entitlement.purchaseTokenHash.slice(0, 16),
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    latency_ms: latencyMs,
+    provider: provider.name(),
+    model: providerModelId,
+    has_chart: insight.chart != null,
+    has_action: insight.action_deeplink != null,
+    assumptions_count: (insight.assumptions || []).length,
+    history_len: history.length,
+  });
+  await auditAsk(req, 'ask.ok', {
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+    latency_ms: latencyMs,
+    model: providerModelId,
+    has_chart: insight.chart != null,
+    assumptions_count: (insight.assumptions || []).length,
+  });
+
+  sseFrame(res, 'done', {
+    fallback: false,
+    body: insight.body,
+    assumptions: insight.assumptions || [],
+    action_label: insight.action_label ?? null,
+    action_deeplink: insight.action_deeplink ?? null,
+    chart: insight.chart ?? null,
+  });
+  return res.end();
+}
+
+/**
+ * Fire-and-forget audit write for the ask endpoint. Never fails the
+ * request. Metadata is bounded — no digest body, no user question, no
+ * response text.
+ */
+async function auditAsk(req, type, metadata) {
+  try {
+    const prisma = getPrisma();
+    await prisma.auditEvent.create({
+      data: {
+        type,
+        purchaseTokenHash: req.entitlement.purchaseTokenHash,
+        metadata: { ...metadata, endpoint: '/ai/ask' },
+      },
+    });
+  } catch (e) {
+    log.warn({ msg: 'audit_write_failed', request_id: req.id, error: e.message });
+  }
+}
+
+router.post(
+  '/ask',
+  aiAskMinute,
+  aiAskDaily,
+  requireEntitlement,
+  askHandler,
+);
+
 // Phase 2+ endpoints are gated behind ENABLE_AI_ENDPOINTS and are not defined
 // yet. Explicit 501 so a misconfigured client learns immediately.
 if (!config.enableAiEndpoints) {
@@ -340,3 +587,4 @@ module.exports = router;
 // per-token rate limiters (which share process-global state across tests
 // and would false-429 the second request in each run).
 module.exports.coachInsightHandler = coachInsightHandler;
+module.exports.askHandler = askHandler;
