@@ -1,5 +1,6 @@
 package com.pesatrack.presentation.screens.ask
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,12 +72,38 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun AskYourMoneyScreen(
     onNavigateBack: () -> Unit,
+    /**
+     * Deep-link callbacks for the assistant bubble's optional action
+     * button. Wired from NavGraph so tapping "See Food & Dining" or
+     * similar navigates to the target screen. Set of allowed hosts is
+     * locked server-side by the ask_response_v1 schema's
+     * `action_deeplink` pattern — see backend/src/services/ai/askOrchestrator.js.
+     * The `when` in [handleAskDeeplink] is exhaustive by contract; any
+     * unrecognised host is silently no-op'd (schema regression).
+     */
+    onNavigateToExpenses: () -> Unit = {},
+    onNavigateToBudget: () -> Unit = {},
+    onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToAnalyticsByCategory: () -> Unit = {},
     viewModel: AskYourMoneyViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     var menuExpanded by remember { mutableStateOf(false) }
+
+    // Single dispatch point for every action-button tap in the chat.
+    // Kept as a lambda so AssistantBubble doesn't need to know which
+    // Home-tab a `pesatrack://…` link maps to.
+    val onActionClick: (String) -> Unit = { deeplink ->
+        handleAskDeeplink(
+            deeplink = deeplink,
+            onExpenses = onNavigateToExpenses,
+            onBudget = onNavigateToBudget,
+            onAnalytics = onNavigateToAnalytics,
+            onAnalyticsByCategory = onNavigateToAnalyticsByCategory,
+        )
+    }
 
     // Show snackbar for terminal states that don't merit a chat bubble
     // (rate limit). Cleared once shown so re-composition doesn't retrigger.
@@ -161,7 +188,10 @@ fun AskYourMoneyScreen(
                 items(items = uiState.messages, key = { it.id }) { message ->
                     when (message) {
                         is ChatMessage.User -> UserBubble(text = message.text)
-                        is ChatMessage.Assistant -> AssistantBubble(message = message)
+                        is ChatMessage.Assistant -> AssistantBubble(
+                            message = message,
+                            onActionClick = onActionClick,
+                        )
                     }
                 }
             }
@@ -242,7 +272,10 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun AssistantBubble(message: ChatMessage.Assistant) {
+private fun AssistantBubble(
+    message: ChatMessage.Assistant,
+    onActionClick: (String) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start,
@@ -304,10 +337,14 @@ private fun AssistantBubble(message: ChatMessage.Assistant) {
                 }
                 // Action button (optional CTA).
                 val actionLabel = message.response?.actionLabel
+                val actionDeeplink = message.response?.actionDeeplink
                 if (!message.isDraft && !message.isFallback && !actionLabel.isNullOrEmpty()) {
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
-                        onClick = { /* TODO(B5): deep-link handling */ },
+                        onClick = {
+                            if (!actionDeeplink.isNullOrEmpty()) onActionClick(actionDeeplink)
+                        },
+                        enabled = !actionDeeplink.isNullOrEmpty(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(actionLabel)
@@ -360,5 +397,43 @@ private fun Composer(
                 Icon(Icons.Filled.Send, contentDescription = "Send")
             }
         }
+    }
+}
+
+/**
+ * Route an Ask-Your-Money `pesatrack://…` deep link to one of the
+ * existing app-level navigation callbacks. The set of allowed hosts is
+ * locked server-side by the `ask_response_v1` schema's
+ * `action_deeplink` pattern — see backend/src/services/ai/askOrchestrator.js
+ * — so the `when` below is exhaustive by contract. Anything else is a
+ * schema regression: silently no-op'd rather than crashing.
+ *
+ * Deliberately narrower than [com.pesatrack.presentation.screens.home.HomeScreen]'s
+ * Coach-Insight deep-link handler: chat responses don't get to link to
+ * the `pesatrack://recipient/rN` scheme (deemed too noisy in chat
+ * context by the spec).
+ *
+ *  - `pesatrack://home` — no-op (we're already inside the app; users
+ *    tap back if they want Home).
+ *  - `pesatrack://category/{id}` — Analytics doesn't (yet) accept an
+ *    "open on this specific category" arg, so we surface the
+ *    Analytics-by-category tab as the closest match.
+ */
+private fun handleAskDeeplink(
+    deeplink: String,
+    onExpenses: () -> Unit,
+    onBudget: () -> Unit,
+    onAnalytics: () -> Unit,
+    onAnalyticsByCategory: () -> Unit,
+) {
+    val uri = runCatching { Uri.parse(deeplink) }.getOrNull() ?: return
+    if (uri.scheme != "pesatrack") return
+    when (uri.host) {
+        "home" -> Unit
+        "budgets" -> onBudget()
+        "analytics" -> onAnalytics()
+        "expenses" -> onExpenses()
+        "category" -> onAnalyticsByCategory()
+        else -> Unit
     }
 }

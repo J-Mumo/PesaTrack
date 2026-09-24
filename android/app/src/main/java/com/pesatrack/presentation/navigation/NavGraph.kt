@@ -380,7 +380,21 @@ fun NavGraph(
             AskYourMoneyScreen(
                 onNavigateBack = {
                     navController.popBackStack()
-                }
+                },
+                onNavigateToExpenses = {
+                    navController.navigate(Screen.Expenses.route)
+                },
+                onNavigateToBudget = {
+                    navController.navigate(Screen.Budget.route)
+                },
+                onNavigateToAnalytics = {
+                    navController.navigate(Screen.Analytics.createRoute())
+                },
+                onNavigateToAnalyticsByCategory = {
+                    navController.navigate(
+                        Screen.Analytics.createRoute(Screen.Analytics.SECTION_BY_CATEGORY)
+                    )
+                },
             )
         }
 
