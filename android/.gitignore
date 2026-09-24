@@ -42,3 +42,7 @@ lint/tmp/
 
 # Test results
 /captures/
+
+# Local sideload artifacts
+bundletool.jar
+app.apks

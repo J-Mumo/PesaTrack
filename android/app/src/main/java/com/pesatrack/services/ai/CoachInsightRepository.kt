@@ -157,7 +157,17 @@ class CoachInsightRepository @Inject constructor(
         }
 
         if (!response.isSuccessful) {
-            Log.w(TAG, "getForToday: HTTP ${response.code()} from /ai/coach-insight — falling back to yesterday cache")
+            // Snapshot the errorBody once (it can only be read once).
+            // Truncate to 1KB so we don't spam logcat with runaway HTML.
+            val errBody = try {
+                response.errorBody()?.string()?.take(1024)
+            } catch (t: Throwable) {
+                "<errorBody read failed: ${t.javaClass.simpleName}>"
+            }
+            Log.w(
+                TAG,
+                "getForToday: HTTP ${response.code()} from /ai/coach-insight — falling back. body=$errBody",
+            )
             return cache.getYesterday(today)
         }
 

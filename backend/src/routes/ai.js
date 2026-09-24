@@ -125,9 +125,24 @@ async function coachInsightHandler(req, res) {
 
   const parsed = coachInsightBody.safeParse(req.body);
   if (!parsed.success) {
+    const flattened = parsed.error.flatten();
+    log.warn({
+      msg: 'coach_insight.invalid_digest',
+      request_id: req.id,
+      token_hash: req.entitlement?.purchaseTokenHash?.slice(0, 16),
+      field_errors: flattened.fieldErrors,
+      form_errors: flattened.formErrors,
+      // Log the top-level keys of the body so we can spot missing/extra
+      // fields without ever logging user amounts. Category names are
+      // app taxonomy (non-PII) but we still keep it to keys only.
+      body_keys: req.body && typeof req.body === 'object' ? Object.keys(req.body) : null,
+      digest_keys: req.body?.digest && typeof req.body.digest === 'object'
+        ? Object.keys(req.body.digest)
+        : null,
+    });
     return res.status(400).json({
       error: 'invalid_digest',
-      details: parsed.error.flatten().fieldErrors,
+      details: flattened.fieldErrors,
       request_id: req.id,
     });
   }
