@@ -194,6 +194,8 @@ Standard chat surface. Layout:
   - "Clear chat" — wipes in-memory history
   - "How this works" — modal with the privacy explainer (digest, no raw SMS, read-only advisory)
 
+**Mid-stream text swap (rare edge case).** If post-validation (§5) or the deny-list catches an issue *after* text tokens have already streamed into the assistant bubble, the client discards the streamed body text and replaces it with the deterministic fallback line (§9). The user sees text appear then swap to "I couldn't answer that right now…". Expected rate: **< 1% of responses** (guardrail catches). Documented here so the behaviour isn't reported as a UX bug during QA — telemetry logs it as `ask_response_fallback` with `reason=mid_stream_abort` so we can monitor the rate. If it ever exceeds ~2%, consider server-side buffering (trades streaming latency for polish).
+
 ### 3.4 Chart-in-chat (Option B)
 
 When the model determines the question is a projection / scenario / what-if, its response includes an optional `chart` block in the response envelope (see §5). The client renders it inline in the assistant bubble.
@@ -459,6 +461,13 @@ Assistant: <turn 2 response body only>
 | `android/app/src/main/java/com/pesatrack/data/repository/AskYourMoneyRepository.kt` | Wraps client, exposes `Flow<AskStreamEvent>` |
 | `android/app/src/main/java/com/pesatrack/domain/models/AskModels.kt` | `AskTurn`, `AskResponse`, `Chart`, `ChartSeries` |
 
+**Moshi / R8 wiring notes (inherited from Phase 2, don't skip):**
+
+- Every wire DTO in `AskModels.kt` **must** carry `@JsonClass(generateAdapter = true)` and use `@Json(name = "snake_case_name")` on every field the backend expects in snake_case. This is a codegen-time contract — missing an annotation silently ships the camelCase field name to the backend and gets a 400.
+- Every nullable field on the wire schema must be **present with value `null`** on serialisation, not omitted. This works out of the box because `MoshiConverterFactory.create(moshi).withNullSerialization()` is already wired in [android/app/src/main/java/com/pesatrack/di/AiHttpModule.kt](../android/app/src/main/java/com/pesatrack/di/AiHttpModule.kt) since Phase 2 code 23. **Do not remove that call.** Add a wire-contract test (see §12.3) for the new DTOs so a future refactor can't regress it.
+- New DTOs are covered by the existing blanket rule `-keep class com.pesatrack.services.ai.** { *; }` in [android/app/proguard-rules.pro](../android/app/proguard-rules.pro) — place `AskModels.kt` under `services.ai.*` (or add its package to the keep rule). Skip this and R8 strips the generated `*JsonAdapter` in the signed release AAB, producing a `JsonDataException` at first parse and a silent fallback on Home — the exact bug that took three release builds to diagnose in Phase 2 (codes 20 → 21 → 22 → 23).
+- Run `./gradlew.bat bundleRelease` locally at least once before B6 upload and hit `/ai/ask` from the release AAB. Debug builds don't exercise R8; release-only regressions in the Moshi / Retrofit path are the single most expensive class of Phase-2 bug we shipped.
+
 ### 7.2 Home FAB replacement (concrete change)
 
 In `HomeScreen.kt`, replace the current `FloatingActionButton { … }` for "Add Expense" with:
@@ -487,6 +496,85 @@ Entitlement source: `ProEntitlementRepository` from Phase 1. The FAB shows the s
   - `event: text` — data is a partial text token; append to the streaming assistant bubble's `bodyDraft`.
   - `event: done` — data is the full `AskResponse` JSON envelope (schema §5). Finalize the bubble (replace `bodyDraft` with `body`, attach chart, assumptions, action).
 - On any HTTP error, network error, or `event: error`: swap to the fallback template ("I couldn't answer that right now. You could check your Expenses tab for a breakdown."). Log to telemetry. Never surface a technical error to the user.
+
+**OkHttp EventSource sketch** (implementation reference — wire the real one via Hilt in `AskYourMoneyClient.kt`):
+
+```kotlin
+// AskYourMoneyClient.kt
+class AskYourMoneyClient @Inject constructor(
+    @Named("aiPro") private val okHttp: OkHttpClient,
+    @Named("aiPro") private val moshi: Moshi,
+) {
+    private val requestAdapter = moshi.adapter(AskRequest::class.java)
+    private val responseAdapter = moshi.adapter(AskResponse::class.java)
+    private val factory = EventSources.createFactory(okHttp)
+
+    /**
+     * Streams AskStreamEvent to the caller. Never throws — network / parse
+     * failures land as [AskStreamEvent.Fallback] so the ViewModel can
+     * swap in the template line without a try/catch dance.
+     */
+    fun stream(request: AskRequest): Flow<AskStreamEvent> = callbackFlow {
+        val body = requestAdapter.toJson(request)
+            .toRequestBody("application/json".toMediaType())
+        val req = Request.Builder()
+            .url("$BASE_URL/ai/ask")
+            .header("Accept", "text/event-stream")
+            .post(body)
+            .build()
+
+        val listener = object : EventSourceListener() {
+            override fun onOpen(eventSource: EventSource, response: Response) = Unit
+
+            override fun onEvent(
+                eventSource: EventSource,
+                id: String?,
+                type: String?,
+                data: String,
+            ) {
+                when (type) {
+                    "text" -> trySend(AskStreamEvent.TextChunk(data))
+                    "done" -> {
+                        val parsed = runCatching { responseAdapter.fromJson(data) }.getOrNull()
+                        if (parsed == null || parsed.fallback == true) {
+                            trySend(AskStreamEvent.Fallback(reason = "schema"))
+                        } else {
+                            trySend(AskStreamEvent.Done(parsed))
+                        }
+                        close()
+                    }
+                    "error" -> {
+                        trySend(AskStreamEvent.Fallback(reason = "server_error"))
+                        close()
+                    }
+                }
+            }
+
+            override fun onFailure(
+                eventSource: EventSource,
+                t: Throwable?,
+                response: Response?,
+            ) {
+                trySend(AskStreamEvent.Fallback(reason = "network"))
+                close()
+            }
+
+            override fun onClosed(eventSource: EventSource) = Unit
+        }
+
+        val source = factory.newEventSource(req, listener)
+        awaitClose { source.cancel() }
+    }
+}
+
+sealed interface AskStreamEvent {
+    data class TextChunk(val text: String) : AskStreamEvent
+    data class Done(val response: AskResponse) : AskStreamEvent
+    data class Fallback(val reason: String) : AskStreamEvent
+}
+```
+
+Dependency note: `okhttp3.sse.EventSources` lives in the `com.squareup.okhttp3:okhttp-sse` artifact — add to `app/build.gradle.kts` if not already present.
 
 ### 7.4 Chart rendering
 
@@ -536,6 +624,8 @@ Accept: text/event-stream
 - `digest` re-validated against the DataDigest v1 schema (from Phase 1). Malformed ⇒ 400.
 - `question` `minLength: 1, maxLength: 500`. Longer ⇒ 400. Empty ⇒ 400.
 
+**Zod validation pattern (defence-in-depth from Phase 2):** every nullable field on the request schema is written as `.nullable().optional()` — accepts both explicit `null` and absent keys. This closes the class of bug we hit in Phase 2 code 22, where a client that dropped null-valued keys silently 400'd because `.nullable()` alone required key presence. See [backend/src/services/ai/coachInsight.js](../backend/src/services/ai/coachInsight.js) `DigestCategorySchema` for the reference pattern. Add three tests per nullable field: (a) present-with-null accepted, (b) absent accepted, (c) present-with-wrong-type rejected. Mirror the naming used by [backend/test/coachInsight.test.js](../backend/test/coachInsight.test.js) `describe('nullable fields accept null AND absent (undefined)')`.
+
 **Response (success):**
 
 ```
@@ -572,6 +662,30 @@ The `text` frames may already have streamed before a validation failure is detec
 6. As token deltas arrive from OpenAI, if they belong to the `body` field of the streaming JSON, forward as `event: text` frames. Discard deltas belonging to other fields (they'll be complete in the final envelope).
 7. When OpenAI signals stream complete, take the final parsed JSON, run `postValidate` (§5 rules 1–5) and `denyList`. Any failure ⇒ emit `event: done` with `{ "fallback": true }`.
 8. On success ⇒ emit `event: done` with the validated JSON.
+
+**Provider-error logging (mandatory).** `OpenAiProvider.callStructured` (and its `streamStructured` sibling) wraps every OpenAI SDK error in a generic envelope `{ code: 'ai_provider_error', status: 502 }` and stashes the raw error at `err.cause`. The orchestrator's `catch` **must** unwrap `cause` and log the shallow scalar fields so we can tell an auth failure from a quota exhaustion from a timeout without spelunking into the SDK. Mirror the pattern already shipped in [backend/src/routes/ai.js](../backend/src/routes/ai.js) `coach_insight.provider_error` (commit `65a36d8`):
+
+```js
+catch (e) {
+  const cause = e.cause || {};
+  log.warn({
+    msg: 'ask.provider_error',
+    request_id: req.id,
+    code: e.code || 'unknown',
+    status: e.status || 0,
+    cause_message: cause.message || e.message || null,
+    cause_status: cause.status || null,
+    cause_code: cause.code || null,
+    cause_type: cause.type || null,
+    cause_param: cause.param || null,
+    cause_error_message: cause.error?.message || null,
+  });
+  emitDone(res, { fallback: true, reason: 'provider_error' });
+  return;
+}
+```
+
+No digest, question, or history text goes into the log — only shallow scalars from the SDK error. This is the difference between "OpenAI is broken" and "you forgot to fund the org account" being a five-second diagnosis vs a three-hour one.
 
 ### 8.4 Provider streaming caveat
 
@@ -669,6 +783,16 @@ Client tests render each fixture and snapshot the Compose output.
 - Pro-user tap FAB → chat screen appears immediately.
 - Chat memory: send 12 turns, assert `history.slice(-10)` behavior on turn 11 and 12 requests.
 - Chart-in-bubble: assistant response with `chart` renders `InlineChart` composable in the same bubble; response without chart does not.
+
+**Wire-contract test suite (mandatory — mirror of the Phase 2 `DataDigestWireContractTest`).** Add [android/app/src/test/java/com/pesatrack/services/ai/AskRequestWireContractTest.kt](../android/app/src/test/java/com/pesatrack/services/ai/AskRequestWireContractTest.kt) covering the outbound `/ai/ask` request. Uses MockWebServer + a Retrofit stack wired the same way production is (`MoshiConverterFactory.create(moshi).withNullSerialization()`), captures the raw request body, and re-parses it via a `Moshi.adapter(Map::class.java)` so absent-key vs JSON-null is observable. Assertions:
+
+1. Every top-level request key present with the exact snake_case name (`digest`, `history`, `question`).
+2. Every `history[]` entry serialises `role` (enum `"user" | "assistant"`) and `content` — no camelCase leakage, no dropped keys.
+3. Every nullable field the schema declares is present in the JSON with value `null` when the Kotlin field is `null` (not omitted). Run once per nullable field — same discipline that would have caught the Phase 2 code-22 outage before the AAB left the machine.
+4. Digest re-uses the Phase 2 fixtures verbatim, so any drift in the shared `DataDigest` DTO is caught in one place.
+5. Response-side symmetry: enqueue a mock SSE `done` frame with an explicit `"chart": null`, and assert `AskResponse.chart` deserialises to Kotlin `null` (not thrown). Repeat for `action_label`, `action_deeplink`.
+
+See [android/app/src/test/java/com/pesatrack/services/ai/DataDigestWireContractTest.kt](../android/app/src/test/java/com/pesatrack/services/ai/DataDigestWireContractTest.kt) for the reference pattern (uses `Moshi.adapter(Map::class.java)` instead of `org.json.JSONObject`, because the mockable android.jar returns stub nulls for `org.json` on the JVM test classpath). The Phase 2 test caught the null-drop bug in ~30 seconds of `./gradlew.bat testDebugUnitTest`; the Phase 3 equivalent must be committed before B4 (UI) begins so the ViewModel work has a green baseline to build on.
 
 ### 12.4 Insight-quality suite (owner review)
 
