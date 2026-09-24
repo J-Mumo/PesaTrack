@@ -363,7 +363,7 @@ describe('postValidateAsk', () => {
 
 describe('SYSTEM_PROMPT', () => {
   test('pins KES-only + no shame + no securities + advisory-only rules', () => {
-    assert.match(SYSTEM_PROMPT, /Use KES/);
+    assert.match(SYSTEM_PROMPT, /KES [\d,]+/); // shows the KES 12,400 formatting example
     assert.match(SYSTEM_PROMPT, /Never shame/);
     assert.match(SYSTEM_PROMPT, /Never recommend specific securities/);
     assert.match(SYSTEM_PROMPT, /Never claim to have DONE anything/);
@@ -372,7 +372,19 @@ describe('SYSTEM_PROMPT', () => {
 
   test('pins projection → assumptions rule', () => {
     assert.match(SYSTEM_PROMPT, /assumptions/);
-    assert.match(SYSTEM_PROMPT, /projection/i);
+    assert.match(SYSTEM_PROMPT, /hypothetical/i);
+  });
+
+  test('pins depth-scaling instruction (short factual vs long structured)', () => {
+    assert.match(SYSTEM_PROMPT, /Factual \/ narrow questions/);
+    assert.match(SYSTEM_PROMPT, /Deep \/ analytical questions/);
+    assert.match(SYSTEM_PROMPT, /markdown/i);
+    assert.match(SYSTEM_PROMPT, /pipe (tables|syntax)/i);
+  });
+
+  test('locks the ##-heading convention (no h1) so client renderer stays simple', () => {
+    assert.match(SYSTEM_PROMPT, /## Heading/);
+    assert.match(SYSTEM_PROMPT, /never `#`/);
   });
 });
 

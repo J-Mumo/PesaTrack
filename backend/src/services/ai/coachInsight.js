@@ -113,6 +113,14 @@ const DigestAnomalySchema = z.object({
   delta_pct: z.number().int(),
 });
 
+const DigestYearlyTotalSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  spent: z.number().int().min(0).max(10_000_000_000),
+  income_est: z.number().int().min(0).max(10_000_000_000),
+  invested: z.number().int().min(0).max(10_000_000_000),
+  txn_count: z.number().int().min(0).max(1_000_000),
+});
+
 const DigestSchema = z.object({
   period: z.string().min(4).max(20),
   month_start_day: z.number().int().min(1).max(28),
@@ -123,6 +131,12 @@ const DigestSchema = z.object({
   recurring: z.array(DigestRecurringSchema).max(10),
   top_recipients_this_period: z.array(DigestRecipientSchema).max(20),
   anomalies_this_week: z.array(DigestAnomalySchema).max(10),
+  // v1.8.1 Ask Your Money extension. Optional AND nullable so legacy
+  // clients (pre-1.8.1) that don't send the field are still accepted,
+  // and 1.8.1+ clients with no complete year yet can send explicit
+  // null. Capped at 10 entries (enough for a decade of history) so the
+  // digest can't blow up if the app ever mis-computes the range.
+  yearly_totals: z.array(DigestYearlyTotalSchema).max(10).nullable().optional(),
 }).strict();
 
 // ── 3. Pinned system prompt (§5.1) + user prompt builder (§5.2) ──────────

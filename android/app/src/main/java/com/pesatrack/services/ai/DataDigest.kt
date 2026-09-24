@@ -114,6 +114,54 @@ data class DataDigest(
      */
     @Json(name = "anomalies_this_week")
     val anomaliesThisWeek: List<DigestAnomaly>,
+
+    /**
+     * Optional multi-year historical aggregates for deep-analysis
+     * questions (v1.8.1 Ask Your Money extension). Each entry covers
+     * one calendar year; the newest entry is the current year (partial
+     * if we're mid-year). Sorted year-descending.
+     *
+     * Included **only** for the Ask Your Money endpoint's digest —
+     * Coach Insight doesn't need this depth, and adding it there would
+     * bloat the request for a once-daily card. `null` on the wire when
+     * the app has less than one full year of usable data (fresh install,
+     * no complete year), which is also how legacy clients pre-1.8.1
+     * signal that they don't have the field yet.
+     *
+     * The backend Zod schema is `.optional().nullable()` so both
+     * behaviours coexist.
+     */
+    @Json(name = "yearly_totals")
+    val yearlyTotals: List<DigestYearlyTotal>? = null,
+)
+
+/**
+ * A single calendar year's roll-up. Amounts are whole KES.
+ */
+@JsonClass(generateAdapter = true)
+data class DigestYearlyTotal(
+    /** Four-digit calendar year, e.g. `2026`. */
+    val year: Int,
+    /** Total spend for the year (whole KES). Excludes pass-through. */
+    val spent: Int,
+    /**
+     * Estimated income for the year. Zero when the user has no income
+     * tracking configured; the LLM is instructed to treat 0 as "unknown
+     * income", not "zero earnings".
+     */
+    @Json(name = "income_est")
+    val incomeEst: Int,
+    /**
+     * Amount routed to the Savings & Investments category group (18)
+     * in this year. Whole KES.
+     */
+    val invested: Int,
+    /**
+     * Total transactions in the year — a coarse proxy for financial
+     * activity that lets the LLM compare "engagement" across years.
+     */
+    @Json(name = "txn_count")
+    val txnCount: Int,
 )
 
 /**

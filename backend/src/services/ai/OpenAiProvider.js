@@ -119,8 +119,14 @@ class OpenAiProvider {
       schemaName,
       temperature,
       maxTokens,
+      // Optional per-call override of the model id. Falls back to the
+      // provider's default (`this._model` set at construction). Lets
+      // /ai/ask ship on gpt-4.1 while /ai/coach-insight stays on
+      // gpt-4.1-mini without instantiating two providers.
+      model: modelOverride,
     } = _input;
     const client = this._lazyClient();
+    const modelId = modelOverride || this._model;
 
     // OpenAI's SDK exposes `stream: true` on `chat.completions.create`,
     // which returns an async iterator of chunks whose
@@ -131,7 +137,7 @@ class OpenAiProvider {
     let stream;
     try {
       stream = await client.chat.completions.create({
-        model: this._model,
+        model: modelId,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -157,7 +163,7 @@ class OpenAiProvider {
       throw err;
     }
 
-    let providerModelId = this._model;
+    let providerModelId = modelId;
     let usage = null;
     try {
       for await (const chunk of stream) {

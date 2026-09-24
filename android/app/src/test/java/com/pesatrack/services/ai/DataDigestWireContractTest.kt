@@ -224,6 +224,12 @@ class DataDigestWireContractTest {
             "recurring",
             "top_recipients_this_period",
             "anomalies_this_week",
+            // v1.8.1 Ask Your Money extension. Emitted as JSON null when
+            // the client has no full year of history (Moshi
+            // .withNullSerialization()) so backends can distinguish
+            // "no history" from "legacy client that doesn't send the
+            // field yet".
+            "yearly_totals",
         )
         assertEquals(
             "top-level digest keys must match the backend Zod schema exactly",

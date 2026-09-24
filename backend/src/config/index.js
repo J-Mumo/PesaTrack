@@ -22,6 +22,22 @@ const schema = z.object({
   OPENAI_MAX_TOKENS_OUT: z.coerce.number().int().positive().default(800),
   AI_COACH_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.4),
 
+  // /ai/ask (Ask Your Money) gets its own model + token budget knobs
+  // because chat has meaningfully different constraints from the
+  // once-daily Coach Insight card:
+  //  - depth-scaling responses (short factual OR long structured
+  //    markdown) benefit from a stronger reasoning model,
+  //  - the higher token cap accommodates the markdown-heavy structured
+  //    answers users get on deep-analysis questions,
+  //  - temperature is lower than Coach because we want the analytical
+  //    voice to be crisp, not creative.
+  // All three keep the OPENAI_ prefix and default to the safe values so
+  // an existing .env keeps working; ops overrides them at the container
+  // level when we bump.
+  OPENAI_ASK_MODEL: z.string().default('gpt-4.1'),
+  OPENAI_ASK_MAX_TOKENS_OUT: z.coerce.number().int().positive().default(4000),
+  AI_ASK_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.3),
+
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.pesatrack'),
   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().optional().default(''),
 
@@ -61,6 +77,10 @@ module.exports = {
     model: env.OPENAI_MODEL,
     maxTokensOut: env.OPENAI_MAX_TOKENS_OUT,
     coachTemperature: env.AI_COACH_TEMPERATURE,
+    // Ask-specific overrides. See ENV block above for rationale.
+    askModel: env.OPENAI_ASK_MODEL,
+    askMaxTokensOut: env.OPENAI_ASK_MAX_TOKENS_OUT,
+    askTemperature: env.AI_ASK_TEMPERATURE,
   },
 
   playBilling: {

@@ -199,6 +199,26 @@ class DataDigestBuilder @Inject constructor(
         val daysElapsed = daysElapsedIn(currentStart, nowMs)
         val daysTotal = daysBetween(currentStart, currentEnd)
 
+        // Yearly rollups for deep-analysis Ask Your Money queries.
+        // Computed on the builder thread rather than lazily on the wire
+        // because computing 5 * getCategoryGroupTotals + 5 income + 5
+        // txn-count queries is cheap (< 20 ms in practice) and the
+        // digest is either sent whole or not at all.
+        //
+        // We collect up to 5 years of history ending at the current
+        // calendar year. If the app has less than one full year of
+        // usable data the list stays empty and we pass `null` on the
+        // wire (see DataDigest.yearlyTotals doc).
+        val yearlyTotals = try {
+            buildYearlyTotals(nowMs)
+        } catch (t: Throwable) {
+            android.util.Log.w(
+                "DataDigestBuilder",
+                "buildYearlyTotals failed (${t.javaClass.simpleName}); omitting yearly_totals",
+            )
+            emptyList()
+        }
+
         return computeDigest(
             DigestInputs(
                 periodLabel = periodLabel,
@@ -214,8 +234,65 @@ class DataDigestBuilder @Inject constructor(
                 investedThisPeriod = investedThisPeriod,
                 recurring = recurring,
                 anomalies = emptyList(),
+                yearlyTotals = yearlyTotals,
             )
         )
+    }
+
+    /**
+     * Compute yearly rollups for the last 5 calendar years (inclusive
+     * of the current). Each entry aggregates the same shape the monthly
+     * digest carries — spent, income estimate, invested — plus a
+     * transaction count so the LLM can talk about engagement/activity.
+     *
+     * Returns an empty list when the app has zero usable data. The
+     * caller wraps that into `null` on the wire for privacy.
+     */
+    private suspend fun buildYearlyTotals(nowMs: Long): List<DigestYearlyTotal> {
+        val calendar = Calendar.getInstance().apply { timeInMillis = nowMs }
+        val currentYear = calendar.get(Calendar.YEAR)
+        val out = mutableListOf<DigestYearlyTotal>()
+        for (y in currentYear downTo currentYear - 4) {
+            val yearStart = Calendar.getInstance().apply {
+                clear(); set(Calendar.YEAR, y); set(Calendar.MONTH, Calendar.JANUARY); set(Calendar.DAY_OF_MONTH, 1)
+            }.timeInMillis
+            val yearEnd = Calendar.getInstance().apply {
+                clear(); set(Calendar.YEAR, y + 1); set(Calendar.MONTH, Calendar.JANUARY); set(Calendar.DAY_OF_MONTH, 1)
+            }.timeInMillis
+            val cappedEnd = minOf(yearEnd, nowMs + 1) // don't reach past "now" for the current year
+
+            val totals = expenseDao.getCategoryGroupTotals(yearStart, cappedEnd)
+            val spent = totals.sumOf { it.total }.roundToWholeKes()
+            val txnCount = totals.sumOf { it.transactionCount }
+            val invested = totals
+                .filter { it.categoryId == SAVINGS_INVESTMENTS_GROUP_ID }
+                .sumOf { it.total }
+                .roundToWholeKes()
+
+            // Income: sum of the 12 monthly income budgets for that
+            // year. Missing months contribute 0 — matches the "0 =
+            // unknown" convention in the DigestTotals.incomeEst doc.
+            var incomeYear = 0
+            for (m in 1..12) {
+                val yearMonth = "$y-${m.toString().padStart(2, '0')}"
+                val incomeBudget = monthlyIncomeBudgetDao.getByYearMonth(yearMonth)?.amount
+                if (incomeBudget != null) incomeYear += incomeBudget.roundToWholeKes()
+            }
+
+            // Skip years with literally no activity — reduces payload
+            // for fresh installs and keeps the LLM from talking about
+            // a year it has no data for.
+            if (spent == 0 && txnCount == 0 && incomeYear == 0 && invested == 0) continue
+
+            out += DigestYearlyTotal(
+                year = y,
+                spent = spent,
+                incomeEst = incomeYear,
+                invested = invested,
+                txnCount = txnCount,
+            )
+        }
+        return out
     }
 
     /**
@@ -238,6 +315,13 @@ class DataDigestBuilder @Inject constructor(
         val investedThisPeriod: Int,
         val recurring: List<RecurringExpense>,
         val anomalies: List<DigestAnomaly>,
+        /**
+         * Yearly rollups (v1.8.1 Ask Your Money extension). Empty list
+         * for tests that don't care and for legacy builds; nullified
+         * to `null` at wire time. See [DataDigest.yearlyTotals] for
+         * the contract.
+         */
+        val yearlyTotals: List<DigestYearlyTotal> = emptyList(),
     )
 
     companion object {
@@ -344,6 +428,9 @@ class DataDigestBuilder @Inject constructor(
                 recurring = digestRecurring,
                 topRecipientsThisPeriod = batch.recipients,
                 anomaliesThisWeek = inputs.anomalies,
+                // Wire `null` when the list is empty so backends distinguish
+                // "no history" from "1.8.1 client with an empty year".
+                yearlyTotals = inputs.yearlyTotals.takeIf { it.isNotEmpty() },
             )
             return Build(digest = digest, rehydrationMap = batch.rehydrationMap)
         }

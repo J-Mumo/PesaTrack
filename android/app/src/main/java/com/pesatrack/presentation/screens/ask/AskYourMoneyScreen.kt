@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.pesatrack.presentation.components.MarkdownText
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -296,12 +297,25 @@ private fun AssistantBubble(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                } else {
+                } else if (message.isDraft || message.isFallback) {
+                    // While streaming, render as plain text — markdown
+                    // parsing on every keystroke would recompute the
+                    // block tree N times per second. Fallback line is
+                    // always plain italic anyway.
                     Text(
                         message.text,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         fontStyle = if (message.isFallback) FontStyle.Italic else FontStyle.Normal,
+                    )
+                } else {
+                    // Finalised, non-fallback body — render markdown so
+                    // deep-analysis answers with headings, bullets, and
+                    // tables display correctly. See MarkdownText for the
+                    // supported subset.
+                    MarkdownText(
+                        markdown = message.text,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
                 // Show assumptions (if any) below the body once finalised.

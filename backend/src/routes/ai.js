@@ -423,8 +423,13 @@ async function askHandler(req, res) {
       userPrompt,
       schema: askResponseV1Schema,
       schemaName: 'ask_response_v1',
-      temperature: config.openai.coachTemperature,
-      maxTokens: config.openai.maxTokensOut,
+      // Ask-specific model + budget + temperature. See config.openai
+      // for rationale — chat has different constraints from Coach.
+      // If the caller left `model` empty on the provider config, this
+      // override tells the provider which OpenAI model to invoke.
+      model: config.openai.askModel,
+      temperature: config.openai.askTemperature,
+      maxTokens: config.openai.askMaxTokensOut,
     })) {
       if (event.type === 'delta') {
         const bodyDelta = extractor.feed(event.content);
