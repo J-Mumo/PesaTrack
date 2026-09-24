@@ -126,18 +126,46 @@ async function coachInsightHandler(req, res) {
   const parsed = coachInsightBody.safeParse(req.body);
   if (!parsed.success) {
     const flattened = parsed.error.flatten();
+    // .flatten() only shows top-level fieldErrors; nested failures get
+    // collapsed onto the parent key with the same message ("Required" x N).
+    // .issues gives us the full path per issue so we can pinpoint the
+    // exact nested field(s) that failed.
+    const issues = parsed.error.issues.map((i) => ({
+      path: i.path.join('.'),
+      code: i.code,
+      message: i.message,
+      // For union/enum/literal errors these carry the expected values.
+      expected: i.expected,
+      received: i.received,
+    }));
     log.warn({
       msg: 'coach_insight.invalid_digest',
       request_id: req.id,
       token_hash: req.entitlement?.purchaseTokenHash?.slice(0, 16),
       field_errors: flattened.fieldErrors,
       form_errors: flattened.formErrors,
+      issues,
       // Log the top-level keys of the body so we can spot missing/extra
       // fields without ever logging user amounts. Category names are
       // app taxonomy (non-PII) but we still keep it to keys only.
       body_keys: req.body && typeof req.body === 'object' ? Object.keys(req.body) : null,
       digest_keys: req.body?.digest && typeof req.body.digest === 'object'
         ? Object.keys(req.body.digest)
+        : null,
+      // Also dump the nested key sets that are most likely to be at fault
+      // (totals + first category / recipient / recurring / anomaly). Keys
+      // only — never values.
+      totals_keys: req.body?.digest?.totals && typeof req.body.digest.totals === 'object'
+        ? Object.keys(req.body.digest.totals)
+        : null,
+      first_category_keys: Array.isArray(req.body?.digest?.categories) && req.body.digest.categories[0]
+        ? Object.keys(req.body.digest.categories[0])
+        : null,
+      first_recipient_keys: Array.isArray(req.body?.digest?.top_recipients_this_period) && req.body.digest.top_recipients_this_period[0]
+        ? Object.keys(req.body.digest.top_recipients_this_period[0])
+        : null,
+      first_recurring_keys: Array.isArray(req.body?.digest?.recurring) && req.body.digest.recurring[0]
+        ? Object.keys(req.body.digest.recurring[0])
         : null,
     });
     return res.status(400).json({
