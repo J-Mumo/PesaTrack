@@ -203,11 +203,26 @@ async function coachInsightHandler(req, res) {
       maxTokens: config.openai.maxTokensOut,
     });
   } catch (e) {
+    // OpenAiProvider.callStructured wraps the raw SDK error with
+    // `err.cause` — dig it out so the log actually tells us what the
+    // provider said (quota, auth, model not found, timeout, etc.).
+    // We deliberately do NOT log the request bearer or the digest;
+    // this is provider-side diagnostic only.
+    const cause = e.cause || {};
     log.warn({
       msg: 'coach_insight.provider_error',
       request_id: req.id,
       code: e.code || 'unknown',
       status: e.status || 0,
+      cause_message: cause.message || e.message || null,
+      // OpenAI SDK errors surface .status, .code, .type, .param, and
+      // .error.message on nested APIError. Capture all shallow fields
+      // we care about; skip anything nested that might carry user data.
+      cause_status: cause.status || null,
+      cause_code: cause.code || null,
+      cause_type: cause.type || null,
+      cause_param: cause.param || null,
+      cause_error_message: cause.error && cause.error.message ? cause.error.message : null,
     });
     await auditCoachInsight(req, 'coach_insight.provider_error', {
       reason: e.code || 'provider_error',
