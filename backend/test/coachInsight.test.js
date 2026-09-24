@@ -143,6 +143,95 @@ describe('DigestSchema (Zod inbound validation)', () => {
     const parsed = DigestSchema.safeParse(validDigest());
     assert.equal(parsed.success, true);
   });
+
+  // Regression cover for the code-22 outage (see plans/ai-pro-phase2-spec.md
+  // notes and _docs/releases.md for the full postmortem). Moshi on the
+  // Android client used to drop null-valued keys; the client fix
+  // (withNullSerialization) makes it emit them, and this defence-in-depth
+  // schema change makes the server accept BOTH:
+  //   - key present with value null  (matches production wire format now)
+  //   - key absent entirely           (matches any older or bug-dropping client)
+  // Both must pass forever.
+  describe('nullable fields accept null AND absent (undefined)', () => {
+    // Deep-clone helper so overrides don't leak between subtests.
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+
+    test('categories[].budget accepts null', () => {
+      const d = validDigest();
+      d.categories[0].budget = null;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+    test('categories[].budget accepts absent', () => {
+      const d = clone(validDigest());
+      delete d.categories[0].budget;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+
+    test('categories[].id accepts null', () => {
+      const d = validDigest();
+      d.categories[0].id = null;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+    test('categories[].id accepts absent', () => {
+      const d = clone(validDigest());
+      delete d.categories[0].id;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+
+    test('categories[].cv accepts null', () => {
+      const d = validDigest();
+      d.categories[0].cv = null;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+    test('categories[].cv accepts absent', () => {
+      const d = clone(validDigest());
+      delete d.categories[0].cv;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+
+    test('top_recipients_this_period[].category_id accepts null', () => {
+      const d = validDigest();
+      d.top_recipients_this_period[0].category_id = null;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+    test('top_recipients_this_period[].category_id accepts absent', () => {
+      const d = clone(validDigest());
+      delete d.top_recipients_this_period[0].category_id;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+
+    test('anomalies_this_week[].category_id accepts null', () => {
+      const d = validDigest();
+      d.anomalies_this_week[0].category_id = null;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+    test('anomalies_this_week[].category_id accepts absent', () => {
+      const d = clone(validDigest());
+      delete d.anomalies_this_week[0].category_id;
+      assert.equal(DigestSchema.safeParse(d).success, true);
+    });
+
+    // Real-world reproduction of the code-22 outage: a digest where the
+    // first category has no budget AND the first top-recipient has no
+    // primary category mapping. Before the fix Zod returned two
+    // "Required" errors on `digest.categories.0.budget` and
+    // `digest.top_recipients_this_period.0.category_id`. Now both must
+    // be accepted, both when absent (old client) and when null (new).
+    test('code-22 regression: category-without-budget AND recipient-without-mapping accepted (both absent)', () => {
+      const d = clone(validDigest());
+      delete d.categories[0].budget;
+      delete d.top_recipients_this_period[0].category_id;
+      const parsed = DigestSchema.safeParse(d);
+      assert.equal(parsed.success, true, parsed.error && JSON.stringify(parsed.error.issues));
+    });
+    test('code-22 regression: category-without-budget AND recipient-without-mapping accepted (both null)', () => {
+      const d = validDigest();
+      d.categories[0].budget = null;
+      d.top_recipients_this_period[0].category_id = null;
+      const parsed = DigestSchema.safeParse(d);
+      assert.equal(parsed.success, true, parsed.error && JSON.stringify(parsed.error.issues));
+    });
+  });
 });
 
 // ── Prompt building ─────────────────────────────────────────────────────

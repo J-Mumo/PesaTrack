@@ -72,6 +72,19 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            // Sign debug builds with the release upload keystore when it's
+            // available on the host (KEYSTORE_PASSWORD env var set). That
+            // way the debug APK carries the same signing certificate as
+            // the release AAB, which is what Play Billing checks against
+            // — so an emulator or tethered device signed into a licensed
+            // tester Google account can subscribe end-to-end using a
+            // fast iteration build (minifyEnabled=false, HTTP body log
+            // interceptor on, no R8). Falls back to the auto-generated
+            // debug keystore when the env vars are missing, so CI + fresh
+            // clones still build.
+            if (System.getenv("KEYSTORE_PASSWORD") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

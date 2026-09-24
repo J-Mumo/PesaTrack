@@ -59,7 +59,13 @@ class CoachInsightRepositoryTest {
         val retrofit = Retrofit.Builder()
             .baseUrl(server.url("/"))
             .client(http)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            // Mirror production wiring (com.pesatrack.di.AiHttpModule).
+            // `withNullSerialization()` is what makes nullable fields
+            // emit as JSON null instead of being dropped — kept here so
+            // this suite exercises the exact converter contract the app
+            // ships. See DataDigestWireContractTest for the dedicated
+            // regression cover.
+            .addConverterFactory(MoshiConverterFactory.create(moshi).withNullSerialization())
             .build()
         client = retrofit.create(PesaTrackAiClient::class.java)
     }
