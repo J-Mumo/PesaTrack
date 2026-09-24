@@ -86,7 +86,13 @@ fun NavGraph(
                     navController.navigate(Screen.AskYourMoney.route)
                 },
                 onNavigateToProUpsell = {
-                    navController.navigate(Screen.Pro.route)
+                    // Ask FAB routed us to the Pro screen because the
+                    // user isn't entitled yet. Carry `returnTo` so a
+                    // successful subscribe lands them in the chat
+                    // instead of Home (see Screen.Pro.RETURN_ASK_YOUR_MONEY).
+                    navController.navigate(
+                        Screen.Pro.createRoute(Screen.Pro.RETURN_ASK_YOUR_MONEY)
+                    )
                 }
             )
         }
@@ -268,7 +274,7 @@ fun NavGraph(
                     navController.navigate(Screen.About.route)
                 },
                 onNavigateToPro = {
-                    navController.navigate(Screen.Pro.route)
+                    navController.navigate(Screen.Pro.createRoute())
                 }
             )
         }
@@ -332,11 +338,40 @@ fun NavGraph(
         }
 
         // PesaTrack Pro subscription (AI Pro Phase 1)
-        composable(route = Screen.Pro.route) {
+        composable(
+            route = Screen.Pro.route,
+            arguments = listOf(
+                navArgument(Screen.Pro.ARG_RETURN_TO) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { backStackEntry ->
+            val returnTo = backStackEntry.arguments?.getString(Screen.Pro.ARG_RETURN_TO)
             PesaTrackProScreen(
                 onNavigateBack = {
                     navController.popBackStack()
-                }
+                },
+                onEntitled = {
+                    // Auto-forward to the caller's intended destination
+                    // after a successful subscribe / restore. If nothing
+                    // was requested, stay on the Pro screen so the user
+                    // can see the freshly-populated Entitled panel and
+                    // navigate back on their own.
+                    when (returnTo) {
+                        Screen.Pro.RETURN_ASK_YOUR_MONEY -> {
+                            navController.navigate(Screen.AskYourMoney.route) {
+                                // Pop the Pro screen off the back stack
+                                // so tapping back from chat returns to
+                                // Home, not back to the just-completed
+                                // subscribe flow.
+                                popUpTo(Screen.Pro.route) { inclusive = true }
+                            }
+                        }
+                        else -> Unit
+                    }
+                },
             )
         }
 

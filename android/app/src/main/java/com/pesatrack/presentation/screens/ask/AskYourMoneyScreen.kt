@@ -290,6 +290,18 @@ private fun AssistantBubble(message: ChatMessage.Assistant) {
                         )
                     }
                 }
+                // Tester-diagnostic caption showing the bucketed
+                // fallback reason. Not shown on happy-path answers.
+                // Copy is technical on purpose — see AskYourMoneyUiState
+                // doc on `fallbackReason` for the rationale.
+                if (message.isFallback && !message.fallbackReason.isNullOrEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "reason: ${message.fallbackReason}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // Action button (optional CTA).
                 val actionLabel = message.response?.actionLabel
                 if (!message.isDraft && !message.isFallback && !actionLabel.isNullOrEmpty()) {

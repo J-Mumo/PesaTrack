@@ -174,6 +174,7 @@ class AskYourMoneyViewModel @Inject constructor(
                         isDraft = false,
                         isFallback = true,
                         response = null,
+                        fallbackReason = event.reason,
                     )
                 } else msg
             }

@@ -281,6 +281,50 @@ describe('postValidateAsk', () => {
     assert.equal(postValidateAsk(fine), null);
   });
 
+  // Tester-fed regressions (2026-09-24) — the previous marker list
+  // flagged these as projections and swapped in the template line.
+  // The tightened list must accept them as factual.
+
+  test('null on "you are paying r1 KES X per month" (factual pace phrasing)', () => {
+    const fine = validFactualInsight({
+      body: 'You are paying r1 the most this month at KES 4,200 per month, followed by r2 at KES 2,100.',
+      assumptions: [],
+    });
+    assert.equal(postValidateAsk(fine), null);
+  });
+
+  test('null on "over the year" retrospective phrasing', () => {
+    const fine = validFactualInsight({
+      body: 'Over the year you have spent KES 68,000 on Food & Dining, or about KES 5,700 per month on average.',
+      assumptions: [],
+    });
+    assert.equal(postValidateAsk(fine), null);
+  });
+
+  test('null on "if you look at your top recipients" framing (not a projection intent verb)', () => {
+    const fine = validFactualInsight({
+      body: 'If you look at your top recipients this month, r1 tops the list at KES 4,200.',
+      assumptions: [],
+    });
+    assert.equal(postValidateAsk(fine), null);
+  });
+
+  test("null on \"if you're wondering\" framing", () => {
+    const fine = validFactualInsight({
+      body: "If you're wondering where the largest transfer went, it was r1 with KES 12,400.",
+      assumptions: [],
+    });
+    assert.equal(postValidateAsk(fine), null);
+  });
+
+  test('projection_no_assumptions still fires on "in a year" future projection with empty assumptions', () => {
+    const bad = validFactualInsight({
+      body: 'Trimming takeout by half frees up about KES 54,600 in a year.',
+      assumptions: [],
+    });
+    assert.equal(postValidateAsk(bad), 'projection_no_assumptions');
+  });
+
   // ── Rule 3: imperative-past scrub ──
   test('imperative_past when body claims "I set" a budget', () => {
     const bad = validFactualInsight({

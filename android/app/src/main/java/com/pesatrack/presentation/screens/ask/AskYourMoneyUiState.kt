@@ -80,5 +80,20 @@ sealed interface ChatMessage {
          * bubble.
          */
         val isFallback: Boolean = false,
+        /**
+         * Bucketed reason code from the fallback path — populated only
+         * when [isFallback] is true. Values match the Firebase
+         * `PARAM_REASON` enum in plans/ai-pro-phase3-spec.md §11
+         * (network / server_error / rate_limit / schema /
+         * projection_no_assumptions / chart_length_mismatch /
+         * imperative_past / denylist / provider_error / not_entitled /
+         * empty_question / digest_error / unknown / mid_stream_abort).
+         *
+         * Surfaced as a small caption below the fallback bubble in the
+         * closed-tester build so QA doesn't need SSH access to diagnose
+         * "the fallback fired again" reports. Copy is intentionally
+         * technical — this is not a user-facing insight.
+         */
+        val fallbackReason: String? = null,
     ) : ChatMessage
 }

@@ -79,7 +79,16 @@ sealed class Screen(val route: String) {
      * and current [com.pesatrack.services.pro.ProState]. See
      * plans/ai-pro-phase1-spec.md §3.1.
      */
-    object Pro : Screen("pro")
+    object Pro : Screen("pro?returnTo={returnTo}") {
+        const val ARG_RETURN_TO = "returnTo"
+        /** Deep-link value: after subscribe, forward to Ask Your Money. */
+        const val RETURN_ASK_YOUR_MONEY = "ask_your_money"
+        /** Base route for entry points that don't need auto-forward (Settings, Home Coach card). */
+        const val BASE_ROUTE = "pro"
+
+        fun createRoute(returnTo: String? = null): String =
+            if (returnTo == null) BASE_ROUTE else "$BASE_ROUTE?returnTo=$returnTo"
+    }
 
     /**
      * Ask Your Money — AI Pro Phase 3 chat surface.

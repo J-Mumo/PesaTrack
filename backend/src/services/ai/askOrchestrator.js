@@ -135,15 +135,33 @@ const askRequestBodySchema = z.object({
 // Rejection returns a reason bucket (never the raw model text) — the route
 // handler swaps it for `{ fallback: true, reason: bucket }` and logs.
 
+// Projection markers — patterns in the body that mean the model made a
+// hypothetical, future-looking, or scenario claim and therefore MUST
+// carry supporting assumptions.
+//
+// Tightened 2026-09-24 after tester feedback: the previous list flagged
+// ordinary English pace phrasing ("KES 4,200 per month", "over the
+// year", any sentence starting with "if you") which caused factual
+// answers to fail postValidate and swap to the template line. The list
+// below only fires on unambiguously projection language:
+//
+//  - `could save` / `would save` / `would free up` — savings estimates
+//  - `what if` — direct hypothetical
+//  - `if you (cut|reduce|redirect|invest|stop|start|switch|save|move|halve|double)`
+//    — scenario intent verbs
+//  - `in a year` / `in five years` etc. — future projection when NOT
+//    followed by "ago" (which would make it retrospective)
+//
+// Not projection: `per month`, `per week`, `per year`, `over the year`,
+// `if you look`, `if you're`. Those are how normal factual answers
+// naturally phrase pace and framing.
 const PROJECTION_MARKERS = [
   /\bcould save\b/i,
   /\bwould save\b/i,
-  /\bwould\b.*\bfree up\b/i,
-  /\bif you\b/i,
+  /\bwould\b[^.!?]*\bfree up\b/i,
   /\bwhat if\b/i,
-  /\bover (a|the) year\b/i,
-  /\bper year\b/i,
-  /KES\s+[\d,]+\s+(a|per)\s+(year|month|week)/i,
+  /\bif you (cut|reduce|redirect|invest|stop|start|switch|save|move|halve|double)\b/i,
+  /\bin (a|one|two|three|five|ten) years?\b(?!\s*ago)/i,
 ];
 
 const IMPERATIVE_PAST_PATTERNS = [

@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.8.0** | 24 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — Phase 3 M1: Ask Your Money chat surface behind Home FAB (SSE streaming, 10-turn memory, silent fallback) |
+| **1.8.0** | 25 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — Ask Your Money hotfix: return-to-chat after subscribe, loosened projection markers on backend, fallback reason caption for QA |
+| **1.8.0** | 24 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — factual answers hitting projection_no_assumptions fallback; subscribe flow doesn't return to chat |
 | **1.7.0** | 23 | 2026-09-24 | Closed Testing — PesaTrack Alpha | ✅ Live — Coach Insight null-drop fix (Moshi `withNullSerialization()`) + backend schema defence-in-depth |
 | **1.7.0** | 22 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — diagnostic build; identified `digest.categories[].budget` + `digest.top_recipients_this_period[].category_id` were being dropped by Moshi when null |
 | **1.7.0** | 21 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Partial — billing works, Coach Insight silently returns null with no diagnostics |

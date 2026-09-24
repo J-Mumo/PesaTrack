@@ -41,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +77,23 @@ import java.util.Date
 fun PesaTrackProScreen(
     onNavigateBack: () -> Unit,
     entrySource: String = TelemetryEvents.SOURCE_SETTINGS,
+    /**
+     * Fires ONCE when the local Pro entitlement transitions from
+     * `!isEntitled` to `isEntitled` while this screen is on top.
+     *
+     * NavGraph uses this to auto-forward the user to their originally-
+     * intended destination — e.g. a free user who tapped the Home Ask
+     * Your Money FAB gets sent to the chat screen the moment the
+     * subscribe / restore completes, without an extra manual tap on
+     * back to Home and re-tap on the FAB. Defaults to no-op so entry
+     * points that don't want the auto-forward (e.g. Settings → Pro)
+     * behave unchanged.
+     *
+     * The callback is idempotent-guarded by [rememberSaveable] so a
+     * process-death restore doesn't fire it again on the same screen
+     * instance.
+     */
+    onEntitled: () -> Unit = {},
     viewModel: PesaTrackProViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -93,6 +113,18 @@ fun PesaTrackProScreen(
         val msg = uiState.outcomeMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(msg.text, duration = SnackbarDuration.Short)
         viewModel.dismissMessage()
+    }
+
+    // Fire onEntitled exactly once when isEntitled transitions to true
+    // while this screen is on top. Guarded by rememberSaveable so a
+    // config-change / process-death restore can't re-fire it after the
+    // navigation has already happened.
+    var entitledForwarded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uiState.currentState.isEntitled) {
+        if (uiState.currentState.isEntitled && !entitledForwarded) {
+            entitledForwarded = true
+            onEntitled()
+        }
     }
 
     Scaffold(
