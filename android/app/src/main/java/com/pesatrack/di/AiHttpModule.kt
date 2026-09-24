@@ -110,7 +110,17 @@ object AiHttpModule {
     ): Retrofit = Retrofit.Builder()
         .baseUrl(BASE_URL)
         .client(okHttpClient)
-        .addConverterFactory(MoshiConverterFactory.create(moshi))
+        // .withNullSerialization() causes the converter to call
+        // JsonAdapter.serializeNulls() on every request/response adapter.
+        // Without it Moshi silently drops keys whose value is null, and
+        // the backend Zod schema rejects the payload because .nullable()
+        // requires the key to be PRESENT with value null — not absent.
+        // We hit exactly that with digest.categories[].budget and
+        // digest.top_recipients_this_period[].category_id (users with no
+        // budget set for a category / no primary category mapping for a
+        // recipient). See backend log msg=coach_insight.invalid_digest
+        // request_id 576186cf on 2026-09-24 for the receipts.
+        .addConverterFactory(MoshiConverterFactory.create(moshi).withNullSerialization())
         .build()
 
     @Provides

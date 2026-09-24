@@ -78,13 +78,18 @@ const DigestTotalsSchema = z.object({
   invested_this_period: z.number().int().min(0).max(1_000_000_000),
 });
 
+// Defence-in-depth: nullable fields are ALSO .optional() so an absent key
+// deserialises the same as an explicit `null`. Moshi on the client omits
+// null-valued fields by default (we now call .withNullSerialization() to
+// stop that, but this keeps old clients working and rules out one whole
+// class of silent 400 in the future).
 const DigestCategorySchema = z.object({
-  id: z.number().int().nullable(),
+  id: z.number().int().nullable().optional(),
   name: z.string().min(1).max(80),
   spent: z.number().int().min(0).max(1_000_000_000),
-  budget: z.number().int().min(0).max(1_000_000_000).nullable(),
+  budget: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   '3mo_avg': z.number().int().min(0).max(1_000_000_000),
-  cv: z.number().min(0).max(100).nullable(),
+  cv: z.number().min(0).max(100).nullable().optional(),
 });
 
 const DigestRecurringSchema = z.object({
@@ -98,13 +103,13 @@ const DigestRecipientSchema = z.object({
   id: z.string().regex(/^r\d+$/),
   spent: z.number().int().min(0).max(1_000_000_000),
   count: z.number().int().min(0).max(100_000),
-  category_id: z.number().int().nullable(),
+  category_id: z.number().int().nullable().optional(),
   '3mo_avg': z.number().int().min(0).max(1_000_000_000),
 });
 
 const DigestAnomalySchema = z.object({
   type: z.string().min(1).max(40),
-  category_id: z.number().int().nullable(),
+  category_id: z.number().int().nullable().optional(),
   delta_pct: z.number().int(),
 });
 

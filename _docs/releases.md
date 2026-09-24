@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.7.0** | 22 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — diagnostic build (Log/telemetry at every Coach Insight failure point) |
+| **1.7.0** | 23 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — fixes Coach Insight null-drop (Moshi `withNullSerialization()`) + backend schema defence-in-depth |
+| **1.7.0** | 22 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — diagnostic build; identified `digest.categories[].budget` + `digest.top_recipients_this_period[].category_id` were being dropped by Moshi when null |
 | **1.7.0** | 21 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Partial — billing works, Coach Insight silently returns null with no diagnostics |
 | **1.7.0** | 20 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — R8 stripped Moshi adapters, `/billing/verify` responses failed to parse |
 | **1.7.0** | 19 | 2026-09-23 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — `ITEM_ALREADY_OWNED` + Home reactive-fetch bugs |
