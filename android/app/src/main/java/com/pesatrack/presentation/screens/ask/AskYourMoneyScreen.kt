@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -51,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -178,21 +180,28 @@ fun AskYourMoneyScreen(
                 onExampleTapped = viewModel::onExamplePromptTapped,
             )
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(items = uiState.messages, key = { it.id }) { message ->
-                    when (message) {
-                        is ChatMessage.User -> UserBubble(text = message.text)
-                        is ChatMessage.Assistant -> AssistantBubble(
-                            message = message,
-                            onActionClick = onActionClick,
-                        )
+            // Wrap the whole chat list in a SelectionContainer so a
+            // long-press on any Text (user bubble, assistant markdown,
+            // assumptions, table cells) enters the standard
+            // copy-selection UI. One container covers every child
+            // Text; individual Composables don't need to opt in.
+            SelectionContainer {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(items = uiState.messages, key = { it.id }) { message ->
+                        when (message) {
+                            is ChatMessage.User -> UserBubble(text = message.text)
+                            is ChatMessage.Assistant -> AssistantBubble(
+                                message = message,
+                                onActionClick = onActionClick,
+                            )
+                        }
                     }
                 }
             }
@@ -275,96 +284,81 @@ private fun UserBubble(text: String) {
 @Composable
 private fun AssistantBubble(
     message: ChatMessage.Assistant,
-    onActionClick: (String) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onActionClick: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Start,
+    // Full-width, white “paper” surface for the assistant response
+    // (per tester feedback — chat-bubble constraint truncated long
+    // structured answers and made copy-select awkward). User bubbles
+    // stay right-aligned and rounded so the dialogue direction is
+    // still legible.
+    //
+    // Action button intentionally removed — the server-side prompt
+    // now defaults action_label to null unless the user explicitly
+    // asks to be taken somewhere, so we no longer render a CTA row
+    // at all. If a stray action_label leaks through from an older
+    // server build we still ignore it here.
+    val bodyColor = MaterialTheme.colorScheme.onSurface
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = if (message.isFallback) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.secondaryContainer
-            },
-            modifier = Modifier.widthIn(max = 320.dp),
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                if (message.text.isEmpty() && message.isDraft) {
-                    Text(
-                        "…",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else if (message.isDraft || message.isFallback) {
-                    // While streaming, render as plain text — markdown
-                    // parsing on every keystroke would recompute the
-                    // block tree N times per second. Fallback line is
-                    // always plain italic anyway.
-                    Text(
-                        message.text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontStyle = if (message.isFallback) FontStyle.Italic else FontStyle.Normal,
-                    )
-                } else {
-                    // Finalised, non-fallback body — render markdown so
-                    // deep-analysis answers with headings, bullets, and
-                    // tables display correctly. See MarkdownText for the
-                    // supported subset.
-                    MarkdownText(
-                        markdown = message.text,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                }
-                // Show assumptions (if any) below the body once finalised.
-                val assumptions = message.response?.assumptions.orEmpty()
-                if (!message.isDraft && !message.isFallback && assumptions.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Assumptions",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    assumptions.forEach { line ->
-                        Text(
-                            "• $line",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                // Tester-diagnostic caption showing the bucketed
-                // fallback reason. Not shown on happy-path answers.
-                // Copy is technical on purpose — see AskYourMoneyUiState
-                // doc on `fallbackReason` for the rationale.
-                if (message.isFallback && !message.fallbackReason.isNullOrEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "reason: ${message.fallbackReason}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                // Action button (optional CTA).
-                val actionLabel = message.response?.actionLabel
-                val actionDeeplink = message.response?.actionDeeplink
-                if (!message.isDraft && !message.isFallback && !actionLabel.isNullOrEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(
-                        onClick = {
-                            if (!actionDeeplink.isNullOrEmpty()) onActionClick(actionDeeplink)
-                        },
-                        enabled = !actionDeeplink.isNullOrEmpty(),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(actionLabel)
-                    }
-                }
+        if (message.text.isEmpty() && message.isDraft) {
+            Text(
+                "…",
+                style = MaterialTheme.typography.bodyLarge,
+                color = bodyColor.copy(alpha = 0.6f),
+            )
+        } else if (message.isDraft || message.isFallback) {
+            // While streaming, render as plain text — markdown
+            // parsing on every keystroke would recompute the
+            // block tree N times per second. Fallback line is
+            // always plain italic anyway.
+            Text(
+                message.text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = bodyColor,
+                fontStyle = if (message.isFallback) FontStyle.Italic else FontStyle.Normal,
+            )
+        } else {
+            // Finalised, non-fallback body — render markdown so
+            // deep-analysis answers with headings, bullets, and
+            // tables display correctly. See MarkdownText for the
+            // supported subset.
+            MarkdownText(
+                markdown = message.text,
+                color = bodyColor,
+            )
+        }
+        // Show assumptions (if any) below the body once finalised.
+        val assumptions = message.response?.assumptions.orEmpty()
+        if (!message.isDraft && !message.isFallback && assumptions.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Assumptions",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            assumptions.forEach { line ->
+                Text(
+                    "• $line",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+        }
+        // Tester-diagnostic caption showing the bucketed
+        // fallback reason. Not shown on happy-path answers.
+        if (message.isFallback && !message.fallbackReason.isNullOrEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "reason: ${message.fallbackReason}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

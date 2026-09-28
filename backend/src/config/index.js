@@ -35,7 +35,7 @@ const schema = z.object({
   // an existing .env keeps working; ops overrides them at the container
   // level when we bump.
   OPENAI_ASK_MODEL: z.string().default('gpt-4.1'),
-  OPENAI_ASK_MAX_TOKENS_OUT: z.coerce.number().int().positive().default(4000),
+  OPENAI_ASK_MAX_TOKENS_OUT: z.coerce.number().int().positive().default(16000),
   AI_ASK_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.3),
 
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.pesatrack'),

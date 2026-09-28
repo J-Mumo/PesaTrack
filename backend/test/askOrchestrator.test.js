@@ -147,9 +147,9 @@ describe('ask_response_v1 schema', () => {
     assert.equal(askResponseV1Schema.properties.chart.properties.series.maxItems, 2);
   });
 
-  test('body is bounded 1..800 chars (matches spec §5)', () => {
+  test('body has no maxLength cap (uncapped 2026-09-28 so deep memos aren\'t truncated)', () => {
     assert.equal(askResponseV1Schema.properties.body.minLength, 1);
-    assert.equal(askResponseV1Schema.properties.body.maxLength, 800);
+    assert.equal(askResponseV1Schema.properties.body.maxLength, undefined);
   });
 });
 

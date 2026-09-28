@@ -602,37 +602,46 @@ fun MainScreen(
         Triple(BottomNavItem.EXPENSES, Icons.AutoMirrored.Filled.ReceiptLong, "Expenses")
     )
 
+    // Routes that should render full-screen without the app-level
+    // bottom nav bar. Ask Your Money is chat-focused — a bottom nav
+    // steals vertical space from the composer + response and confuses
+    // tab-highlight semantics (chat doesn't belong to any tab).
+    val currentRouteBase = currentDestination?.route?.substringBefore('?')?.substringBefore('/')
+    val hideBottomNav = currentRouteBase == Screen.AskYourMoney.route
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar {
-                items.forEach { (item, icon, label) ->
-                    NavigationBarItem(
-                        icon = { Icon(icon, contentDescription = label) },
-                        label = { Text(label) },
-                        selected = currentDestination?.hierarchy?.any { dest ->
-                            // Compare ignoring optional query args ("route?arg={arg}") so
-                            // destinations like Analytics still highlight the tab.
-                            dest.route?.substringBefore("?") == item.route
-                        } == true,
-                        onClick = {
-                            // Special-case the start destination (Home):
-                            // restoreState = true silently fails when there is
-                            // no previously-saved state, so we skip save/restore
-                            // for the Home tab and use inclusive = true to clear
-                            // the entire back-stack.
-                            val isStartDest =
-                                item.route == navController.graph.findStartDestination().route
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = !isStartDest
-                                    inclusive = isStartDest
+            if (!hideBottomNav) {
+                NavigationBar {
+                    items.forEach { (item, icon, label) ->
+                        NavigationBarItem(
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label) },
+                            selected = currentDestination?.hierarchy?.any { dest ->
+                                // Compare ignoring optional query args ("route?arg={arg}") so
+                                // destinations like Analytics still highlight the tab.
+                                dest.route?.substringBefore("?") == item.route
+                            } == true,
+                            onClick = {
+                                // Special-case the start destination (Home):
+                                // restoreState = true silently fails when there is
+                                // no previously-saved state, so we skip save/restore
+                                // for the Home tab and use inclusive = true to clear
+                                // the entire back-stack.
+                                val isStartDest =
+                                    item.route == navController.graph.findStartDestination().route
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = !isStartDest
+                                        inclusive = isStartDest
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = !isStartDest
                                 }
-                                launchSingleTop = true
-                                restoreState = !isStartDest
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }

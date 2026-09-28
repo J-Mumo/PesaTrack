@@ -38,9 +38,12 @@ const askResponseV1Schema = {
     body: {
       type: 'string',
       minLength: 1,
-      maxLength: 800,
+      // No maxLength: deep/analytical questions produce structured
+      // markdown memos that legitimately run several thousand chars.
+      // The token-budget cap on the provider call (askMaxTokensOut)
+      // is the practical ceiling.
       description:
-        'The answer. ≤ 5 sentences. Second person, present tense. Include specific KES figures. Never mention specific securities, brokers, guaranteed returns, or claim to have executed anything.',
+        'The answer. Depth scales to the question (see system prompt): 1-3 sentences for factual, 1-3 paragraphs for comparative, structured markdown memo for deep/analytical. Second person, present tense. KES figures with thousands separators. Never mention specific securities, brokers, guaranteed returns, or claim to have executed anything.',
     },
     assumptions: {
       type: 'array',
@@ -282,10 +285,15 @@ const SYSTEM_PROMPT = [
   '- Chart series values are whole KES integers, minimum 0.',
   '',
   'ACTIONS',
-  '- Optionally return an action_label + action_deeplink that helps the',
-  '  user act on the answer. Deep-link must match the server whitelist',
-  '  (home | budgets | analytics | expenses | category/{id}). Otherwise',
-  '  null. The action is a suggestion, not a promise - never phrase the',
+  '- Default action_label and action_deeplink to null. Only include a',
+  '  non-null action when the user explicitly asks to be taken to a',
+  '  screen ("open my budget", "show me the food category", "take me',
+  '  to expenses"). If the user just asked a factual, comparative, or',
+  '  analytical question, leave both fields null - answers stand on',
+  '  their own without a CTA.',
+  '- When you do include one, the deep-link must match the server',
+  '  whitelist (home | budgets | analytics | expenses | category/{id}).',
+  '  The action is a suggestion, not a promise - never phrase the',
   '  label as if you have already navigated somewhere for them.',
   '',
   'INPUT: JSON DataDigest + last N conversation turns.',
