@@ -3,10 +3,9 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
 
-// PesaTrack website
-// Site URL: TBD (hosting deferred per plans/website-full-plan.md §14)
-// Until a domain is chosen, keep this as a placeholder — override via SITE env var.
-const SITE = process.env.SITE ?? 'https://pesatrack.example';
+// PesaTrack website. SITE remains overridable for preview builds, while the
+// production fallback keeps canonical metadata correct outside Docker.
+const SITE = process.env.SITE ?? 'https://pesatrack.jmumo.com';
 
 // https://astro.build/config
 export default defineConfig({

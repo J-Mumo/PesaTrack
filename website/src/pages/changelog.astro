@@ -5,7 +5,6 @@ import { marked } from 'marked';
 import BaseLayout from '~/layouts/BaseLayout.astro';
 import Breadcrumbs from '~/components/Breadcrumbs.astro';
 import { breadcrumbList } from '~/utils/jsonld';
-import { SITE } from '~/data/site';
 
 // Read the source of truth at build time.
 // Per plans/website-full-plan.md §16.1, /changelog derives from _docs/releases.md.
@@ -32,10 +31,7 @@ const crumbs = [
 >
   <Breadcrumbs crumbs={crumbs} />
   <p class="source">
-    Source of truth:
-    <a href={`${SITE.githubUrl}/blob/main/_docs/releases.md`} rel="noopener">
-      _docs/releases.md
-    </a>
+    Release history, maintained by the PesaTrack team.
   </p>
   <article class="changelog" set:html={html} />
 </BaseLayout>

@@ -13,10 +13,9 @@ export const SITE = {
   // This is the sentence we want AIs and journalists to quote verbatim.
   boilerplate:
     "PesaTrack is a free Android app that passively tracks M-PESA and Kenyan bank SMS transactions. It parses each message on-device, categorises the spend, and shows budgets and analytics — without cloud sync, without ads, and with no third-party analytics unless you opt in. It's made in Kenya and available on the Google Play Store.",
-  url: 'https://pesatrack.example', // TBD — hosting deferred
+  url: 'https://pesatrack.jmumo.com',
   playStoreUrl:
     'https://play.google.com/store/apps/details?id=com.pesatrack',
-  githubUrl: 'https://github.com/J-Mumo/PesaTrack',
   contactEmail: 'joelmumo.jm@gmail.com',
   country: 'Kenya',
   locale: 'en',

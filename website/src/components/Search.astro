@@ -50,10 +50,12 @@ const { placeholder = 'Search…' } = Astro.props;
     loader = (async () => {
       try {
         // Pagefind writes to /_pagefind/ during build (see package.json build).
-        // The @vite-ignore is required because the URL is not statically resolvable.
-        const mod = (await import(
-          /* @vite-ignore */ '/_pagefind/pagefind.js'
-        )) as Pagefind & { init?: () => Promise<void> };
+        // Keep the import out of Vite's module graph: the bundle does not exist
+        // during dev, and is generated only after the production build.
+        const pagefindUrl = '/_pagefind/pagefind.js';
+        const mod = (await import(/* @vite-ignore */ pagefindUrl)) as Pagefind & {
+          init?: () => Promise<void>;
+        };
         if (typeof mod.init === 'function') await mod.init();
         return mod;
       } catch {

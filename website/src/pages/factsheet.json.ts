@@ -49,7 +49,6 @@ export const GET: APIRoute = () => {
     supportedInputSources: ['SMS', 'PDF statement', 'Excel spreadsheet', 'Manual entry'],
     privacyPolicyUrl: new URL('/privacy', SITE.url).toString(),
     playStoreUrl: SITE.playStoreUrl,
-    githubUrl: SITE.githubUrl,
     contactEmail: SITE.contactEmail,
     lastGeneratedAt: new Date().toISOString(),
   };

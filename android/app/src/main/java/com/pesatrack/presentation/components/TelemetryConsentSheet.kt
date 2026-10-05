@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.pesatrack.utils.Constants
 
 /**
  * One-time consent sheet for anonymous usage analytics (Phase 1 telemetry).
@@ -271,5 +272,5 @@ private fun InfoCard(
     }
 }
 
-private const val PRIVACY_POLICY_URL =
-    "https://j-mumo.github.io/PesaTrack/privacy-policy.html"
+private const val PRIVACY_POLICY_URL = Constants.PRIVACY_POLICY_URL
+

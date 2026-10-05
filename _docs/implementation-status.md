@@ -402,7 +402,7 @@ SMS Sources ──────────────────────�
 | **Production Track** | Published — live on Google Play |
 | **Internal Testing** | Live — testers can install via opt-in link |
 | **Store Listing** | Short description (76 chars), full description (~1950 chars), 8 screenshots, feature graphic (1024×500), hi-res icon (512×512) |
-| **Privacy Policy** | [`docs/privacy-policy.html`](../docs/privacy-policy.html) — hosted via GitHub Pages |
+| **Privacy Policy** | [`website/src/pages/privacy.astro`](../website/src/pages/privacy.astro) — deployed at https://pesatrack.jmumo.com/privacy; Android source on `main` now points there, but already-installed builds still use GitHub Pages until updated |
 | **Content Rating** | IARC questionnaire completed |
 | **Data Safety** | Completed — no data collected/shared, all data stored on-device |
 | **SMS Permission Declaration** | ✅ Complete |
@@ -452,6 +452,11 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 ---
 
 ## Current File Structure
+
+### Operational documentation
+
+- [`plans/private-repo-transition-plan.md`](../plans/private-repo-transition-plan.md) — migration sequence and go/no-go criteria (in progress).
+- [`_docs/private-repo-transition-checklist.md`](private-repo-transition-checklist.md) — verified local steps, console handoffs and post-cutover checks (in progress).
 
 ### Android App
 
@@ -661,6 +666,14 @@ backend/
 ## Bug Fixes & Improvements History
 
 ### Recent Features
+
+- **Website type-check restored (2026-10-05)** — Installed `@astrojs/check` 0.9.10 as a development dependency and updated the pnpm lockfile. The checker exposed a missing-module error for the generated Pagefind bundle; [Search.astro](../website/src/components/Search.astro) now dynamically imports a runtime URL variable instead of a compile-time literal, without code evaluation. `pnpm check` passes across 46 files (0 errors/warnings/hints) and `pnpm build` passes. **Deployment explicitly deferred by the maintainer** until additional bug fixes; committing/pushing these changes does not deploy the site, release the app or change repository visibility.
+
+- **Play listing privacy URL still needs updating (2026-10-05)** — Anonymous public Play Store HTML returned 200 and still references the GitHub Pages privacy URL; the new `https://pesatrack.jmumo.com/privacy` URL is not yet in that page's HTML. Updating the local Android constant does **not** update the Play Console listing. Play Data Safety publicly mentions App activity and Device or other IDs. The [cutover checklist](private-repo-transition-checklist.md) keeps the console edit and logged-out verification unchecked.
+
+- **Private-repository cutover handoff checklist (2026-10-05)** — Added [execution checklist](private-repo-transition-checklist.md) with explicit maintainer/hosting/Play Console owners and a GO/NO-GO gate. Updated [repository README](../README.md) and [website README](../website/README.md) to remove obsolete STK Push/public-source setup and document the deployed privacy site and private-repo deployment dependency. Identified `pnpm check` as blocked by missing `@astrojs/check` (installation declined); a passing website build alone is not a passing CI gate. Verified only filenames, not Git history contents, for sensitive files; full credential audit and Play Console updates remain pending.
+
+- **Public-to-private repository transition preparation (2026-10-05; not yet private)** — Implementation started from synchronized `main`. The Android About and telemetry-consent links now share `Constants.PRIVACY_POLICY_URL = https://pesatrack.jmumo.com/privacy`; the website's canonical URL defaults to that production domain and public pages no longer link to private GitHub issues/source. The website policy content was not changed. The English, Kiswahili and legacy GitHub Pages policy URLs were publicly reachable at the time of checking; the deployed English policy still says “Last updated: September 3, 2026.” Website sync included (public support/blog links, factsheet and metadata updated). **Still pending:** verify privacy disclosures against the version actually shipped before deployment, deploy the website and Android changes, update Play Console's privacy URL, preserve the legacy link for installed apps, audit credentials and GitHub/hosting settings, then change GitHub visibility and verify anonymous access is denied. See [private-repo-transition-plan.md](../plans/private-repo-transition-plan.md).
 
 - **Pochi la Biashara M-PESA SMS now parsed (bug fix)** — User reported that an M-PESA confirmation like `"UI5044ZHEB Confirmed. Ksh800.00 sent to MARGARET GICHIRA on 5/9/26 at 2:13 PM. New M-PESA balance is Ksh2,931.83. Transaction cost, Ksh13.00."` was silently dropped by the parser. Root cause: Pochi la Biashara (M-PESA's "Business Pouch" product for individual traders) SMS uses `"sent to NAME on DATE"` — no phone number after the recipient and no `for account` clause. `MpesaSmsParser.classifyTransaction` had three classifiers on that verb: `payBillPattern` (requires `for account`), `fulizaSendPattern` (requires `Fuliza` marker), and `sendMoneyPattern` (requires a 10–12 digit phone number after the name). Pochi matched none, so the classifier returned `null`, `tryParseExpense` logged "Could not classify transaction", and the receiver treated the SMS as irrelevant. Fix: added `pochiLaBiasharaPattern = "sent to (.+?)\\s+on\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}"` (trailing date anchor keeps the lazy name group tight) and a new classifier arm that runs **after** Send Money and Pay Bill so those still win when their fields are present. Recipient name is trimmed and internal runs of whitespace collapsed to a single space (M-PESA sometimes double-spaces first/last name). Classified as `PaymentType.BUY_GOODS` because Pochi is semantically a merchant payment — the whole point of Business Pouch is that the trader is receiving on the business side of M-PESA. Transaction-cost extraction path is unchanged, so the `Ksh13.00` on this SMS still spawns the paired category-606 (M-PESA Transaction Cost) expense. New unit tests in [MpesaSmsParserPochiTest.kt](../android/app/src/test/java/com/pesatrack/utils/parsers/MpesaSmsParserPochiTest.kt) cover: the exact production SMS above (BUY_GOODS + KES 800 + "MARGARET GICHIRA" + KES 13 tx-cost expense), Send Money with phone still classifies as SEND_MONEY (regression guard), Pay Bill with `for account` still classifies as PAY_BILL (regression guard), and a zero-tx-cost Pochi produces no cost expense. Verified with `./gradlew :app:testDebugUnitTest --tests MpesaSmsParserPochiTest --tests MpesaSmsParserIncomeTest` (all 4 new + all existing income tests pass, BUILD SUCCESSFUL). Files: [MpesaSmsParser.kt](../android/app/src/main/java/com/pesatrack/utils/parsers/MpesaSmsParser.kt), [MpesaSmsParserPochiTest.kt](../android/app/src/test/java/com/pesatrack/utils/parsers/MpesaSmsParserPochiTest.kt).
 

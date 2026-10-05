@@ -86,11 +86,9 @@ inayoweza kurudi — si sasisho la kimya.
 
 Ukitaka kuhakiki chochote:
 
-- [AndroidManifest.xml](https://github.com/J-Mumo/PesaTrack) inaorodhesha kila
-  ruhusa app inaomba.
-- Class ya [`SmsReceiver`](https://github.com/J-Mumo/PesaTrack) ndiyo mlango
-  pekee wa maudhui ya SMS.
-- [Ukurasa wa Faragha](/sw/privacy) ni sera hiyo hiyo Google Play inayounganisha.
+- [Ukurasa wa Faragha](/sw/privacy) unaorodhesha ruhusa na watumaji wa SMS ambao programu hutumia.
+- [Jinsi inavyofanya kazi](/sw/how-it-works) inaeleza jinsi ujumbe husika unavyochakatwa.
+- Ukurasa wa Faragha ndio sera tunayotaka Google Play iunganishe.
 - [Factsheet](/factsheet.json) ni toleo linaloweza kusomwa na mashine.
 
 Ukiona tofauti yoyote kati ya hivi, tunataka kusikia.

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pesatrack.BuildConfig
+import com.pesatrack.utils.Constants
 import kotlinx.coroutines.launch
 
 /**
@@ -124,7 +125,7 @@ fun AboutScreen(
                         onClick = {
                             val intent = Intent(
                                 Intent.ACTION_VIEW,
-                                Uri.parse(PRIVACY_POLICY_URL)
+                                Uri.parse(Constants.PRIVACY_POLICY_URL)
                             )
                             context.startActivity(intent)
                         }
@@ -264,6 +265,4 @@ private fun LinkRow(
     }
 }
 
-// Constants — update these when privacy policy is live
-private const val PRIVACY_POLICY_URL = "https://j-mumo.github.io/PesaTrack/privacy-policy.html"
 private const val CONTACT_EMAIL = "joelmumo.jm@gmail.com"

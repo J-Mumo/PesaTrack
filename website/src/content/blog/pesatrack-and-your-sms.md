@@ -81,11 +81,9 @@ update.
 
 If you want to verify any of this:
 
-- [AndroidManifest.xml](https://github.com/J-Mumo/PesaTrack) lists every permission
-  the app requests.
-- The [`SmsReceiver`](https://github.com/J-Mumo/PesaTrack) class is the only entry
-  point for SMS content.
-- The [Privacy page](/privacy) is the same policy Google Play links to.
+- The [Privacy page](/privacy) lists the permissions and SMS senders the app uses.
+- The [How it works page](/how-it-works) explains how qualifying messages are processed.
+- The Privacy page is the policy we ask Google Play to link to.
 - The [factsheet](/factsheet.json) is the machine-readable version of the above.
 
 If you spot a mismatch between any of those, we want to hear about it.

@@ -4,6 +4,8 @@ package com.pesatrack.utils
  * App-wide constants
  */
 object Constants {
+    // Public legal URL must remain reachable even when the source repository is private.
+    const val PRIVACY_POLICY_URL = "https://pesatrack.jmumo.com/privacy"
     
     // Notification channels
     const val NOTIFICATION_CHANNEL_ID = "pesatrack_expenses"

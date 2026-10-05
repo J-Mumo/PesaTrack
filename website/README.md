@@ -149,11 +149,22 @@ pnpm approve-builds esbuild sharp -y
 
 The allow-list also lives in `pnpm-workspace.yaml` (`onlyBuiltDependencies`).
 
-### `SITE` URL is a placeholder
+### Public URL and deployment
 
-`astro.config.mjs` and `src/data/site.ts` both use `https://pesatrack.example`
-until hosting is decided (see [plan §14](../plans/website-full-plan.md#14-hosting-decisions-deferred)).
-Override at build time with `SITE=https://real-domain.tld pnpm build`.
+The production site and canonical policy are served at `https://pesatrack.jmumo.com`
+and `https://pesatrack.jmumo.com/privacy`. The Docker build bakes in this domain;
+`SITE` can still override Astro's build URL for previews. The website GitHub Actions
+workflow runs checks and uploads an artifact; it does **not** deploy the production
+site. Before making the repository private, verify the Hetzner deployment process
+can fetch/build from a private GitHub repository and keep the site public.
+
+`pnpm check` uses the declared `@astrojs/check` and `typescript` development
+dependencies. Run both `pnpm check` and `pnpm build` before release; the Pagefind
+bundle is generated after the Astro build and loaded through a runtime URL.
+
+Production deployment is currently deferred by the maintainer pending additional
+bug fixes. Pushing to `main` runs CI; it does not authorize a manual deployment
+or a repository visibility change.
 
 ### `factsheet.json`'s `currentVersion` is a manual TODO
 
