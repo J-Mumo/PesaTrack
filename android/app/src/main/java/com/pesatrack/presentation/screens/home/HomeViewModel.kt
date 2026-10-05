@@ -8,6 +8,10 @@ import com.pesatrack.data.repository.BudgetRepository
 import com.pesatrack.data.repository.CategoryRepository
 import com.pesatrack.data.repository.ExpenseRepository
 import com.pesatrack.data.repository.IncomeRepository
+import com.pesatrack.domain.insights.FirstFindingsGenerator
+import com.pesatrack.services.telemetry.ActivationTelemetry
+import com.pesatrack.services.telemetry.TelemetryClient
+import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.domain.models.Category
 import com.pesatrack.domain.models.EffectiveIncomeSource
 import com.pesatrack.domain.models.MonthComparison
@@ -28,7 +32,9 @@ class HomeViewModel @Inject constructor(
     private val budgetRepository: BudgetRepository,
     private val incomeRepository: IncomeRepository,
     private val appPreferences: AppPreferences,
-    private val usageSummaryGenerator: UsageSummaryGenerator
+    private val usageSummaryGenerator: UsageSummaryGenerator,
+    private val activationTelemetry: ActivationTelemetry,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     companion object {
@@ -60,6 +66,7 @@ class HomeViewModel @Inject constructor(
         loadIncomeData()
         loadSmsBannerState()
         loadNotificationBannerState()
+        loadFirstFindings()
         checkReviewPromptEligibility()
         checkStructuredFeedbackPromptEligibility()
     }
@@ -382,9 +389,142 @@ class HomeViewModel @Inject constructor(
      */
     fun updateSmsPermissionStatus(hasPermission: Boolean) {
         lastKnownSmsPermissionGranted = hasPermission
-        val shouldShow = !hasPermission && !smsBannerPermanentlyDismissed
+        val shouldShow = !hasPermission && !smsBannerPermanentlyDismissed &&
+            !_uiState.value.showSmsReask
         _uiState.update { it.copy(showSmsPermissionBanner = shouldShow) }
         evaluateLowEngagementPromptEligibility(hasPermission)
+        evaluateNoSmsCards(hasPermission)
+    }
+
+    // ==================== First-session findings (Paths A/B/C) ====================
+
+    private var findingsDismissed = false
+    private var exampleDismissed = false
+
+    /**
+     * Recompute findings whenever the expenses table changes (Room invalidates
+     * the uncategorized query on any write, including imports).
+     */
+    private fun loadFirstFindings() {
+        viewModelScope.launch {
+            findingsDismissed = appPreferences.findingsCardDismissed.first()
+            exampleDismissed = appPreferences.exampleCardDismissed.first()
+            expenseRepository.getUncategorizedExpenses().collect { refreshFindings() }
+        }
+    }
+
+    private suspend fun refreshFindings() {
+        try {
+            val now = System.currentTimeMillis()
+            val dayMs = 24L * 60 * 60 * 1000
+            val findings = FirstFindingsGenerator.generate(
+                expenseRepository.getCategoryTotalsInRange(now - 30 * dayMs, now), "Last 30 days"
+            ) ?: FirstFindingsGenerator.generate(
+                expenseRepository.getCategoryTotalsInRange(now - 90 * dayMs, now), "Last 90 days"
+            )
+            val hasAnyData = expenseRepository.getTotalExpenseCount() > 0
+            val showFindings = findings != null && !findingsDismissed
+            val showExample = !hasAnyData && !exampleDismissed
+            _uiState.update {
+                it.copy(
+                    firstFindings = findings,
+                    showFindingsCard = showFindings,
+                    showExampleCard = showExample
+                )
+            }
+            if (showFindings) {
+                activationTelemetry.onInsightShown(
+                    findings!!.headlineKind, TelemetryEvents.INSIGHT_SOURCE_REAL
+                )
+            } else if (showExample) {
+                activationTelemetry.onInsightShown(
+                    FirstFindingsGenerator.example().headlineKind,
+                    TelemetryEvents.INSIGHT_SOURCE_EXAMPLE
+                )
+            }
+        } catch (_: Exception) {
+            // Non-critical
+        }
+    }
+
+    fun dismissFindingsCard() {
+        findingsDismissed = true
+        _uiState.update { it.copy(showFindingsCard = false) }
+        viewModelScope.launch { appPreferences.dismissFindingsCard() }
+    }
+
+    fun dismissExampleCard() {
+        exampleDismissed = true
+        _uiState.update { it.copy(showExampleCard = false) }
+        viewModelScope.launch { appPreferences.dismissExampleCard() }
+    }
+
+    /**
+     * Cards that only apply to users without SMS access:
+     *  - One-time contextual SMS re-ask after their first manual entry.
+     *  - Monthly statement-refresh reminder when they have imported data.
+     */
+    private fun evaluateNoSmsCards(hasPermission: Boolean) {
+        viewModelScope.launch {
+            try {
+                if (hasPermission) {
+                    _uiState.update { it.copy(showSmsReask = false, showStatementRefresh = false) }
+                    return@launch
+                }
+                val metrics = appPreferences.getUsageMetricsSnapshot()
+                val reask = metrics.firstManualEntry && !appPreferences.isSmsReaskShown()
+                if (reask) {
+                    appPreferences.markSmsReaskShown()
+                    telemetryClient.logEvent(
+                        TelemetryEvents.SMS_REASK,
+                        mapOf(TelemetryEvents.PARAM_KIND to TelemetryEvents.REASK_SHOWN)
+                    )
+                }
+                val cal = Calendar.getInstance()
+                val monthIndex = cal.get(Calendar.YEAR) * 12 + cal.get(Calendar.MONTH)
+                val hasData = expenseRepository.getTotalExpenseCount() > 0
+                val refresh = hasData &&
+                    (metrics.countImports > 0 || metrics.firstImportCompleted) &&
+                    appPreferences.getStatementRefreshDismissedMonth() != monthIndex
+                _uiState.update {
+                    it.copy(
+                        showSmsReask = reask || it.showSmsReask,
+                        showSmsPermissionBanner = if (reask) false else it.showSmsPermissionBanner,
+                        showStatementRefresh = refresh
+                    )
+                }
+            } catch (_: Exception) {
+                // Non-critical
+            }
+        }
+    }
+
+    fun onSmsReaskResult(accepted: Boolean) {
+        _uiState.update { it.copy(showSmsReask = false) }
+        telemetryClient.logEvent(
+            TelemetryEvents.SMS_REASK,
+            mapOf(
+                TelemetryEvents.PARAM_KIND to
+                    if (accepted) TelemetryEvents.REASK_ACCEPTED else TelemetryEvents.REASK_DISMISSED
+            )
+        )
+    }
+
+    fun dismissStatementRefresh() {
+        _uiState.update { it.copy(showStatementRefresh = false) }
+        viewModelScope.launch {
+            val cal = Calendar.getInstance()
+            appPreferences.setStatementRefreshDismissedMonth(
+                cal.get(Calendar.YEAR) * 12 + cal.get(Calendar.MONTH)
+            )
+        }
+    }
+
+    fun onStatementAlternativeTapped() {
+        telemetryClient.logEvent(
+            TelemetryEvents.STATEMENT_ALTERNATIVE_CHOSEN,
+            mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_APP)
+        )
     }
 
     /**

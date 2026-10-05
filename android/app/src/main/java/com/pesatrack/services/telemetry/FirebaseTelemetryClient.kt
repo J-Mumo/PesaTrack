@@ -79,4 +79,9 @@ class FirebaseTelemetryClient(context: Context) : TelemetryClient {
         }
         analytics.logEvent(name, bundle)
     }
+
+    override fun setUserProperty(name: String, value: String) {
+        if (!enabled) return
+        analytics.setUserProperty(name, value)
+    }
 }

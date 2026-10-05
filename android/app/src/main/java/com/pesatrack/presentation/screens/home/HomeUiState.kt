@@ -1,6 +1,7 @@
 package com.pesatrack.presentation.screens.home
 
 import com.pesatrack.data.local.database.dao.CategoryTotal
+import com.pesatrack.domain.insights.FirstFindings
 import com.pesatrack.data.local.database.dao.MonthlyTotal
 import com.pesatrack.domain.models.BudgetProgress
 import com.pesatrack.domain.models.EffectiveIncomeSource
@@ -72,6 +73,19 @@ data class HomeUiState(
      * missing + not permanently dismissed).
      */
     val showNotificationPermissionBanner: Boolean = false,
+
+    // ==================== First-session findings (onboarding Paths A/B/C) ====================
+
+    /** Findings from the user's own data (Paths A/B). Null when not enough data. */
+    val firstFindings: FirstFindings? = null,
+    /** Show [firstFindings] card (data present + not dismissed). */
+    val showFindingsCard: Boolean = false,
+    /** Path C — no data at all: show a clearly labelled example card. */
+    val showExampleCard: Boolean = false,
+    /** One-time contextual SMS re-ask (after the user has added an expense manually). */
+    val showSmsReask: Boolean = false,
+    /** Monthly reminder for statement-only users that their data does not update automatically. */
+    val showStatementRefresh: Boolean = false,
 
     // ==================== Budget ====================
 

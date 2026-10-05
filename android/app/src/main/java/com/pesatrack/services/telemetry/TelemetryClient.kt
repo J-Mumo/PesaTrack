@@ -34,4 +34,11 @@ interface TelemetryClient {
      * user-entered strings, no amounts, no counterparty text).
      */
     fun logEvent(name: String, params: Map<String, Any> = emptyMap())
+
+    /**
+     * Set an allow-listed user property (e.g. [TelemetryEvents.USER_PROP_SMS_PERM]).
+     * [value] must be one of the small enum values declared in
+     * [TelemetryEvents]. No-op while telemetry is disabled.
+     */
+    fun setUserProperty(name: String, value: String) = Unit
 }

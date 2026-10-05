@@ -73,6 +73,7 @@ fun HomeScreen(
     onNavigateToYearlyGrid: () -> Unit = {},
     onNavigateToBudget: () -> Unit = {},
     onNavigateToIncome: () -> Unit = {},
+    onNavigateToStatementImport: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -133,6 +134,8 @@ fun HomeScreen(
     ) { permissions ->
         val granted = permissions.values.all { it }
         viewModel.updateSmsPermissionStatus(granted)
+        // Newly granted → offer the history import so findings appear straight away.
+        if (granted) onNavigateToImport()
     }
 
     // Permission launcher for notifications (Android 13+ POST_NOTIFICATIONS)
@@ -247,7 +250,60 @@ fun HomeScreen(
                 )
             }
         }
-        
+
+        // One-time contextual SMS re-ask (no-SMS users, after first manual entry)
+        if (uiState.showSmsReask) {
+            item {
+                SmsReaskCard(
+                    onAllow = {
+                        viewModel.onSmsReaskResult(accepted = true)
+                        smsPermissionLauncher.launch(
+                            arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)
+                        )
+                    },
+                    onDismiss = { viewModel.onSmsReaskResult(accepted = false) }
+                )
+            }
+        }
+
+        // First-session findings (Paths A/B) — facts before any task
+        val findings = uiState.firstFindings
+        if (uiState.showFindingsCard && findings != null) {
+            item {
+                FindingsCard(
+                    findings = findings,
+                    uncategorizedCount = uiState.uncategorizedCount,
+                    onViewAnalytics = onNavigateToAnalytics,
+                    onCategorize = onNavigateToBatchCategorize,
+                    onDismiss = { viewModel.dismissFindingsCard() }
+                )
+            }
+        }
+
+        // Path C — no data yet: labelled example + routes to real data
+        if (uiState.showExampleCard) {
+            item {
+                ExampleFindingsCard(
+                    onImportStatement = {
+                        viewModel.onStatementAlternativeTapped()
+                        onNavigateToStatementImport()
+                    },
+                    onAddExpense = onNavigateToManualEntry,
+                    onDismiss = { viewModel.dismissExampleCard() }
+                )
+            }
+        }
+
+        // Statement-only users: monthly reminder that data does not update itself
+        if (uiState.showStatementRefresh) {
+            item {
+                StatementRefreshCard(
+                    onImport = onNavigateToStatementImport,
+                    onDismiss = { viewModel.dismissStatementRefresh() }
+                )
+            }
+        }
+
         // Monthly Summary Card
         item {
             MonthlySummaryCard(
@@ -304,8 +360,9 @@ fun HomeScreen(
             ImportHistoryCard(onImport = onNavigateToImport)
         }
         
-        // Uncategorized Alert
-        if (uiState.uncategorizedCount > 0) {
+        // Uncategorized Alert — suppressed while the Findings card offers the
+        // same action as an optional secondary button (avoid a task-first Home).
+        if (uiState.uncategorizedCount > 0 && !uiState.showFindingsCard) {
             item {
                 UncategorizedAlert(
                     count = uiState.uncategorizedCount,

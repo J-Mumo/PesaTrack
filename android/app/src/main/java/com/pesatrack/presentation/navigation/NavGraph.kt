@@ -79,6 +79,9 @@ fun NavGraph(
                 },
                 onNavigateToIncome = {
                     navController.navigate(Screen.Income.route)
+                },
+                onNavigateToStatementImport = {
+                    navController.navigate(Screen.StatementImport.route)
                 }
             )
         }

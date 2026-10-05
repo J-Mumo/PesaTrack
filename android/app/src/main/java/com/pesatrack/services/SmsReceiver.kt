@@ -18,12 +18,12 @@ import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.SmsParser
 import com.pesatrack.utils.parsers.ParsedSms
+import com.pesatrack.utils.parsers.NcbaPairedSmsResolver
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.util.regex.Pattern
 import javax.inject.Inject
 
 /**
@@ -92,38 +92,32 @@ class SmsReceiver : BroadcastReceiver() {
             }
         }
 
-        for ((sender, bodyBuilder) in smsByAddress) {
-            val body = bodyBuilder.toString()
-            val smsDate = smsTimestamps[sender] ?: System.currentTimeMillis()
-
-            // M-PESA SMS — always processed (no preference check needed).
-            // We only gate on the universal M-PESA transaction marker
-            // "Confirmed"; the parser itself decides whether the body is an
-            // expense, an income, or NotARelevantMessage. The previous
-            // `SmsParser.isTransactionSms` gate only matched expense keywords
-            // and silently dropped income SMS (received / salary / business /
-            // M-Shwari / Offnet B2C), so no income notification ever fired.
-            if (SmsParser.isMpesaSms(sender) && body.contains("Confirmed", ignoreCase = true)) {
-                processTransaction(context, sender, body, smsDate)
-                continue
-            }
-
-            // Bank SMS — check if the sender's bank parser is enabled
-            scope.launch {
-                try {
-                    val parser = SmsParserRegistry.findParser(sender, body)
-                    if (parser != null && parser.displayName != "M-PESA") {
-                        // Check if this bank is enabled in preferences
-                        val bankEnabled = appPreferences.isBankEnabled(parser.displayName)
-                        if (bankEnabled) {
-                            processTransaction(context, sender, body, smsDate)
-                        } else {
-                            Log.d(TAG, "Ignoring ${parser.displayName} SMS — bank tracking not enabled")
-                        }
+        val pendingResult = goAsync()
+        scope.launch {
+            try {
+                for ((sender, bodyBuilder) in smsByAddress) {
+                    val body = bodyBuilder.toString()
+                    val smsDate = smsTimestamps[sender] ?: System.currentTimeMillis()
+                    // Gate on Confirmed, not expense-only keywords: incomes must also reach the parser.
+                    if (SmsParser.isMpesaSms(sender) && body.contains("Confirmed", ignoreCase = true)) {
+                        processTransaction(context, sender, body, smsDate)
+                        continue
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error checking bank SMS", e)
+                    try {
+                        val parser = SmsParserRegistry.findParser(sender, body)
+                        if (parser != null && parser.displayName != "M-PESA") {
+                            if (appPreferences.isBankEnabled(parser.displayName)) {
+                                processTransaction(context, sender, body, smsDate)
+                            } else {
+                                Log.d(TAG, "Ignoring ${parser.displayName} SMS — bank tracking not enabled")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error checking bank SMS", e)
+                    }
                 }
+            } finally {
+                pendingResult.finish()
             }
         }
     }
@@ -137,17 +131,29 @@ class SmsReceiver : BroadcastReceiver() {
      * 1. Deterministic rules (Airtime → 202, Transaction Cost → 606)
      * 2. Recipient mapping (learned from previous categorizations)
      */
-    private fun processTransaction(context: Context, sender: String, smsBody: String, smsDate: Long = System.currentTimeMillis()) {
-        scope.launch {
-            try {
-                when (val parsed = SmsParserRegistry.parseSms(sender, smsBody, smsDate)) {
-                    is ParsedSms.ExpenseResult -> handleExpenseResult(context, parsed, smsBody, smsDate, sender)
-                    is ParsedSms.IncomeResult -> handleIncomeResult(context, parsed.income, smsBody, sender)
-                    ParsedSms.NotARelevantMessage -> Unit
+    private suspend fun processTransaction(context: Context, sender: String, smsBody: String, smsDate: Long = System.currentTimeMillis()) {
+        try {
+            when (val parsed = SmsParserRegistry.parseSms(sender, smsBody, smsDate)) {
+                is ParsedSms.ExpenseResult -> handleExpenseResult(context, parsed, smsBody, smsDate, sender)
+                is ParsedSms.IncomeResult -> handleIncomeResult(context, parsed.income, smsBody, sender)
+                ParsedSms.NotARelevantMessage -> {
+                    val current = NcbaPairedSmsResolver.Message(sender, smsBody, smsDate)
+                    if (NcbaPairedSmsResolver.parseDebit(current) != null) {
+                        // Retry approvals when their KES debit arrives later. Never import a debit alone.
+                        val inbox = readNcbaPairingMessages(context, smsDate) + current
+                        for (approval in inbox.distinct()) {
+                            if (kotlin.math.abs(approval.timestamp - smsDate) > NcbaPairedSmsResolver.WINDOW_MS) continue
+                            if (NcbaPairedSmsResolver.parseApproval(approval) == null) continue
+                            val card = SmsParserRegistry.parseSms(approval.sender, approval.body, approval.timestamp)
+                            if (card is ParsedSms.ExpenseResult) {
+                                handleExpenseResult(context, card, approval.body, approval.timestamp, approval.sender, inbox)
+                            }
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error processing SMS from $sender", e)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing SMS from $sender", e)
         }
     }
 
@@ -201,14 +207,21 @@ class SmsReceiver : BroadcastReceiver() {
         parsed: ParsedSms.ExpenseResult,
         smsBody: String,
         smsDate: Long,
-        senderAddress: String
+        senderAddress: String,
+        ncbaInbox: List<NcbaPairedSmsResolver.Message>? = null
     ) {
         var mainExpense = parsed.expense.copy(rawSms = smsBody)
 
         // Handle card approval update — look up paired debit from inbox
         if (parsed.isCardApprovalUpdate) {
-            handleCardApprovalUpdate(context, mainExpense, smsDate)
-            return
+            val message = NcbaPairedSmsResolver.Message(senderAddress, smsBody, smsDate)
+            mainExpense = NcbaPairedSmsResolver.resolve(
+                message, ncbaInbox ?: readNcbaPairingMessages(context, smsDate)
+            )?.expense ?: run {
+                Log.d(TAG, "NCBA foreign card approval deferred: no unambiguous KES debit")
+                return
+            }
+            if (expenseRepository.cardApprovalAlreadySaved(smsBody, smsDate)) return
         }
 
         // Check if transaction already exists
@@ -222,7 +235,9 @@ class SmsReceiver : BroadcastReceiver() {
         mainExpense = applyAutoCategorization(mainExpense)
 
         // Save the main expense
-        val expenseId = expenseRepository.saveExpense(mainExpense)
+        // IGNORE, not REPLACE: simultaneous replay must preserve categorization and row identity.
+        val expenseId = expenseRepository.saveExpenses(listOf(mainExpense)).single()
+        if (expenseId <= 0) return
         Log.d(TAG, "Saved expense: ${mainExpense.paymentType.displayName()} " +
                 "Ksh${mainExpense.amount} to ${mainExpense.recipientName ?: mainExpense.recipient}" +
                 " [${mainExpense.source}]" +
@@ -374,121 +389,30 @@ class SmsReceiver : BroadcastReceiver() {
         )
     }
 
-    /**
-     * Handle a card approval SMS by looking up the paired generic debit SMS
-     * from the device inbox to get the KES amount, then saving a complete expense.
-     *
-     * Strategy:
-     * - Card approval has: merchant name, foreign currency amount, card last-4
-     * - Paired generic debit has: KES amount, bank ref, timestamp
-     * - We query the SMS inbox within a 2-minute window for the debit SMS
-     * - If found, use KES amount from debit + merchant from approval
-     * - If not found, save with the foreign currency amount as fallback
-     */
-    private suspend fun handleCardApprovalUpdate(
-        context: Context,
-        cardApproval: com.pesatrack.domain.models.Expense,
-        smsDate: Long
-    ) {
-        // Look up the paired debit SMS from inbox (2-minute window)
-        val kesAmount = lookupCardDebitFromInbox(context, smsDate)
-
-        val finalAmount = kesAmount ?: cardApproval.amount // Fallback to foreign currency amount
-        val bankRef = lookupCardDebitRefFromInbox(context, smsDate)
-
-        val expense = cardApproval.copy(
-            amount = finalAmount,
-            transactionId = bankRef, // Use bank ref as transaction ID for dedup
-        )
-
-        // Check if already exists (by bank ref)
-        if (bankRef != null && expenseRepository.transactionExists(bankRef)) {
-            Log.d(TAG, "Card payment $bankRef already recorded, skipping")
-            return
-        }
-
-        // Apply auto-categorization and save
-        val categorized = applyAutoCategorization(expense)
-        val expenseId = expenseRepository.saveExpense(categorized)
-        Log.d(TAG, "Saved card payment: KES $finalAmount at ${cardApproval.recipientName} (ref: $bankRef)")
-
-        if (expenseId > 0 && !categorized.isCategorized) {
-            showCategorizeNotification(
-                context, expenseId, finalAmount,
-                cardApproval.recipientName ?: "Card Payment"
-            )
-        }
-
-        if (expenseId > 0 && categorized.isCategorized &&
-            categorized.categoryId == KeywordRulesEngine.MISCELLANEOUS_CATEGORY_ID
-        ) {
-            NotificationHelper.showMiscAutoCategorizedNotification(
-                context = context,
-                expenseId = expenseId,
-                amount = finalAmount,
-                recipient = cardApproval.recipientName ?: "Card Payment"
-            )
-        }
-    }
-
-    /**
-     * Query the SMS inbox for the paired NCBA generic debit SMS within 2 minutes
-     * of the card approval timestamp. Extracts the KES amount.
-     *
-     * Pattern: "Your account 763****018 has been debited with KES 1,574.87 on ..."
-     */
-    private fun lookupCardDebitFromInbox(context: Context, approvalTimestamp: Long): Double? {
-        val windowMs = 2 * 60 * 1000L // 2 minutes
-        val body = findNcbaDebitSmsBody(context, approvalTimestamp, windowMs) ?: return null
-
-        val amountPattern = Pattern.compile(
-            "has been debited with KES\\s*([\\d,]+(?:\\.\\d{1,2})?)",
-            Pattern.CASE_INSENSITIVE
-        )
-        val matcher = amountPattern.matcher(body)
-        return if (matcher.find()) {
-            matcher.group(1)?.replace(",", "")?.toDoubleOrNull()
-        } else null
-    }
-
-    /**
-     * Query the SMS inbox for the paired NCBA generic debit SMS within 2 minutes
-     * and extract the bank reference (Ref: FTC...).
-     */
-    private fun lookupCardDebitRefFromInbox(context: Context, approvalTimestamp: Long): String? {
-        val windowMs = 2 * 60 * 1000L // 2 minutes
-        val body = findNcbaDebitSmsBody(context, approvalTimestamp, windowMs) ?: return null
-
-        val refPattern = Pattern.compile("Ref:\\s*(\\S+)", Pattern.CASE_INSENSITIVE)
-        val matcher = refPattern.matcher(body)
-        return if (matcher.find()) matcher.group(1)?.trimEnd('.') else null
-    }
-
-    /**
-     * Find the closest NCBA debit SMS body from the inbox within a time window.
-     */
-    private fun findNcbaDebitSmsBody(context: Context, targetTimestamp: Long, windowMs: Long): String? {
+    /** One snapshot containing both debits and competing approvals, never two independent lookups. */
+    private fun readNcbaPairingMessages(context: Context, targetTimestamp: Long): List<NcbaPairedSmsResolver.Message> {
+        val messages = mutableListOf<NcbaPairedSmsResolver.Message>()
         try {
-            val minTime = (targetTimestamp - windowMs).toString()
-            val maxTime = targetTimestamp.toString()
-
-            val cursor = context.contentResolver.query(
+            // Three windows also cover competitors when retrying an approval near a late debit.
+            val minTime = (targetTimestamp - 3 * NcbaPairedSmsResolver.WINDOW_MS).toString()
+            val maxTime = (targetTimestamp + 3 * NcbaPairedSmsResolver.WINDOW_MS).toString()
+            context.contentResolver.query(
                 Uri.parse("content://sms/inbox"),
-                arrayOf("body", "date"),
-                "address LIKE ? AND date >= ? AND date <= ? AND body LIKE ?",
-                arrayOf("%NCBA%", minTime, maxTime, "%has been debited%"),
-                "date DESC"
-            )
-
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    return it.getString(0)
+                arrayOf("body", "date", "date_sent", "address"),
+                "address = ? COLLATE NOCASE AND ((date >= ? AND date <= ?) OR (date_sent >= ? AND date_sent <= ?))",
+                arrayOf(NcbaPairedSmsResolver.SENDER, minTime, maxTime, minTime, maxTime),
+                "date ASC"
+            )?.use {
+                while (it.moveToNext()) {
+                    val body = it.getString(0) ?: continue
+                    val date = it.getLong(2).takeIf { sent -> sent > 0 } ?: it.getLong(1)
+                    messages.add(NcbaPairedSmsResolver.Message(it.getString(3), body, date))
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error querying SMS inbox for card debit", e)
+            Log.e(TAG, "Unable to read NCBA pairing inbox", e)
         }
-        return null
+        return messages
     }
 
     companion object {

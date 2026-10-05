@@ -124,6 +124,10 @@ class ExpenseRepository @Inject constructor(
         return expenseDao.transactionExists(transactionId)
     }
 
+    suspend fun cardApprovalAlreadySaved(body: String, timestamp: Long): Boolean {
+        return expenseDao.cardApprovalAlreadySaved(body, timestamp)
+    }
+
     /**
      * Get expense by ID
      */

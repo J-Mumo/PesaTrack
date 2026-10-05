@@ -12,6 +12,7 @@ import com.pesatrack.domain.models.IncomeTransaction
 import com.pesatrack.domain.models.PaymentType
 import com.pesatrack.utils.SmsParser
 import com.pesatrack.utils.parsers.ParsedSms
+import com.pesatrack.utils.parsers.NcbaPairedSmsResolver
 import com.pesatrack.utils.parsers.SmsParserRegistry
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -82,7 +83,9 @@ class SmsImportService @Inject constructor(
         /** Number of sources that were imported from */
         val sourcesImported: Int = 0,
         /** Errors encountered during import */
-        val errors: Int = 0
+        val errors: Int = 0,
+        /** Foreign card approvals without a safe KES debit; never saved as KES. */
+        val unresolvedCardApprovals: Int = 0
     )
 
     /**
@@ -106,6 +109,13 @@ class SmsImportService @Inject constructor(
 
         // 1. Read SMS from inbox for all active senders
         val smsList = readSmsFromInbox(senderIds, fromTimestamp, toTimestamp)
+        // Pairing context extends beyond the selected range; context SMS are never imported alone.
+        val ncbaInbox = if (senderIds.contains(NcbaPairedSmsResolver.SENDER)) {
+            readSmsForSender(NcbaPairedSmsResolver.SENDER,
+                fromTimestamp?.minus(2 * NcbaPairedSmsResolver.WINDOW_MS),
+                toTimestamp?.plus(2 * NcbaPairedSmsResolver.WINDOW_MS))
+                .map { NcbaPairedSmsResolver.Message(it.sender, it.body, it.date) }
+        } else emptyList()
         Log.d(TAG, "Found ${smsList.size} SMS in inbox from ${senderIds.size} sources")
 
         if (smsList.isEmpty()) {
@@ -127,6 +137,8 @@ class SmsImportService @Inject constructor(
         var newIncomesImported = 0
         var incomeDuplicatesSkipped = 0
         var errors = 0
+        var unresolvedCardApprovals = 0
+        val seenTransactionIds = mutableSetOf<String>()
 
         val expenseBatch = mutableListOf<Expense>()
 
@@ -152,10 +164,24 @@ class SmsImportService @Inject constructor(
 
                 // Create main expense with rawSms
                 var mainExpense = parsed.expense.copy(rawSms = sms.body)
+                if (parsed.isCardApprovalUpdate) {
+                    val resolved = NcbaPairedSmsResolver.resolve(
+                        NcbaPairedSmsResolver.Message(sms.sender, sms.body, sms.date), ncbaInbox
+                    )
+                    if (resolved == null) {
+                        unresolvedCardApprovals++
+                        continue
+                    }
+                    mainExpense = resolved.expense
+                    if (expenseRepository.cardApprovalAlreadySaved(sms.body, sms.date)) {
+                        duplicatesSkipped++
+                        continue
+                    }
+                }
 
                 // Check duplicate
                 val txId = mainExpense.transactionId
-                if (txId != null && expenseRepository.transactionExists(txId)) {
+                if (txId != null && (!seenTransactionIds.add(txId) || expenseRepository.transactionExists(txId))) {
                     duplicatesSkipped++
                     continue
                 }
@@ -219,7 +245,8 @@ class SmsImportService @Inject constructor(
             newIncomesImported = newIncomesImported,
             incomeDuplicatesSkipped = incomeDuplicatesSkipped,
             sourcesImported = senderIds.size,
-            errors = errors
+            errors = errors,
+            unresolvedCardApprovals = unresolvedCardApprovals
         )
 
         // Track import milestone and counter (fire-and-forget)
@@ -295,7 +322,7 @@ class SmsImportService @Inject constructor(
         val messages = mutableListOf<SmsMessage>()
 
         // Build selection query
-        val selectionParts = mutableListOf("address = ?")
+        val selectionParts = mutableListOf("address = ? COLLATE NOCASE")
         val selectionArgs = mutableListOf(senderId)
 
         if (fromTimestamp != null) {
@@ -312,7 +339,7 @@ class SmsImportService @Inject constructor(
         try {
             context.contentResolver.query(
                 SMS_INBOX_URI,
-                arrayOf("body", "date", "address"),
+                arrayOf("body", "date", "address", "date_sent"),
                 selection,
                 selectionArgs.toTypedArray(),
                 "date ASC" // oldest first for chronological import
@@ -320,11 +347,14 @@ class SmsImportService @Inject constructor(
                 val bodyIndex = cursor.getColumnIndexOrThrow("body")
                 val dateIndex = cursor.getColumnIndexOrThrow("date")
                 val addressIndex = cursor.getColumnIndexOrThrow("address")
+                val sentIndex = cursor.getColumnIndexOrThrow("date_sent")
 
                 while (cursor.moveToNext()) {
                     val body = cursor.getString(bodyIndex) ?: continue
-                    val date = cursor.getLong(dateIndex)
                     val address = cursor.getString(addressIndex) ?: senderId
+                    val date = if (NcbaPairedSmsResolver.isNcba(address)) {
+                        cursor.getLong(sentIndex).takeIf { it > 0 } ?: cursor.getLong(dateIndex)
+                    } else cursor.getLong(dateIndex)
 
                     // Check if any parser can handle this SMS
                     if (SmsParserRegistry.canHandleAny(address, body)) {

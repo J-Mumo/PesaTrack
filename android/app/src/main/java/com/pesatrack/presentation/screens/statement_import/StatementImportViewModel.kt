@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.services.StatementImportService
+import com.pesatrack.services.telemetry.ActivationTelemetry
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
@@ -26,7 +27,8 @@ import javax.inject.Inject
 class StatementImportViewModel @Inject constructor(
     private val application: Application,
     private val statementImportService: StatementImportService,
-    private val telemetryClient: TelemetryClient
+    private val telemetryClient: TelemetryClient,
+    private val activationTelemetry: ActivationTelemetry
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(StatementImportUiState())
@@ -151,6 +153,11 @@ class StatementImportViewModel @Inject constructor(
                         it.copy(
                             phase = StatementImportPhase.COMPLETED,
                             result = result
+                        )
+                    }
+                    runCatching {
+                        activationTelemetry.recordScanCompleted(
+                            TelemetryEvents.SOURCE_STATEMENT, result.imported
                         )
                     }
                     telemetryClient.logEvent(

@@ -10,6 +10,7 @@ import com.pesatrack.services.DataManagementService
 import com.pesatrack.services.SampleDataService
 import com.pesatrack.services.NotificationHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.pesatrack.services.telemetry.ActivationTelemetry
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.parsers.SmsParserRegistry
@@ -40,6 +41,7 @@ class SettingsViewModel @Inject constructor(
     private val dataManagementService: DataManagementService,
     private val sampleDataService: SampleDataService,
     private val telemetryClient: TelemetryClient,
+    private val activationTelemetry: ActivationTelemetry,
     @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
 
@@ -194,6 +196,7 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.setTelemetryEnabled(true)
                 telemetryClient.setEnabled(true)
                 telemetryClient.logEvent(TelemetryEvents.TELEMETRY_ENABLED)
+                runCatching { activationTelemetry.onTelemetryEnabled() }
             } else {
                 telemetryClient.logEvent(TelemetryEvents.TELEMETRY_DISABLED)
                 telemetryClient.setEnabled(false)

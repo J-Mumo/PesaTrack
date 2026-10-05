@@ -3,6 +3,7 @@ package com.pesatrack.presentation.screens.import_history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.services.SmsImportService
+import com.pesatrack.services.telemetry.ActivationTelemetry
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,7 +26,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ImportViewModel @Inject constructor(
     private val smsImportService: SmsImportService,
-    private val telemetryClient: TelemetryClient
+    private val telemetryClient: TelemetryClient,
+    private val activationTelemetry: ActivationTelemetry
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ImportUiState())
@@ -81,6 +83,12 @@ class ImportViewModel @Inject constructor(
                     )
                 }
 
+                runCatching {
+                    activationTelemetry.recordScanCompleted(
+                        TelemetryEvents.SOURCE_SMS,
+                        result.newExpensesImported + result.newIncomesImported
+                    )
+                }
                 telemetryClient.logEvent(
                     TelemetryEvents.IMPORT_COMPLETED,
                     mapOf(

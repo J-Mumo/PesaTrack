@@ -388,6 +388,13 @@ private fun ImportResultCard(result: SmsImportService.ImportResult) {
             ResultRow("New expenses imported", result.newExpensesImported.toString())
             ResultRow("Duplicates skipped", result.duplicatesSkipped.toString())
             ResultRow("Transaction costs saved", result.transactionCostsSaved.toString())
+            if (result.unresolvedCardApprovals > 0) {
+                ResultRow("Foreign card approvals not imported", result.unresolvedCardApprovals.toString())
+                Text(
+                    text = "No unambiguous KES debit was found for these approvals. You can import again after the debit SMS arrives, or enter the KES expense manually.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
             if (result.newIncomesImported > 0 || result.incomeDuplicatesSkipped > 0) {
                 ResultRow("Income transactions imported", result.newIncomesImported.toString())

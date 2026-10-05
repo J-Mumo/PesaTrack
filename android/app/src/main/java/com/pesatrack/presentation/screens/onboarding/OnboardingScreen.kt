@@ -42,11 +42,19 @@ fun OnboardingScreen(
     onSmsPermissionRequested: () -> Unit = {},
     onSmsPermissionGranted: () -> Unit = {},
     onSmsPermissionDenied: () -> Unit = {},
-    onSmsPermissionSkipped: () -> Unit = {}
+    onSmsPermissionSkipped: () -> Unit = {},
+    /** Path B — user chose to import an M-PESA PDF statement instead of SMS access. */
+    onImportStatement: () -> Unit = {},
+    /** Called with the pager index each time a page becomes current (for abandonment tracking). */
+    onPageReached: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val pagerState = rememberPagerState(pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState.currentPage) {
+        onPageReached(pagerState.currentPage)
+    }
 
     // Track SMS permission state
     var smsPermissionGranted by remember {
@@ -127,12 +135,21 @@ fun OnboardingScreen(
                                     Manifest.permission.RECEIVE_SMS
                                 )
                             )
+                        },
+                        onImportStatement = {
+                            onSmsPermissionSkipped()
+                            onImportStatement()
+                            onComplete()
                         }
                     )
                     3 -> ImportHistoryPage(
                         smsPermissionGranted = smsPermissionGranted,
                         onImportNow = {
                             onImportHistory()
+                            onComplete()
+                        },
+                        onImportStatement = {
+                            onImportStatement()
                             onComplete()
                         }
                     )
@@ -191,7 +208,7 @@ fun OnboardingScreen(
                     val isSmsPageWithoutPermission =
                         pagerState.currentPage == 2 && !smsPermissionGranted
                     val buttonLabel = if (isSmsPageWithoutPermission) {
-                        "Skip \u2014 I'll add manually"
+                        "Not now"
                     } else {
                         "Next"
                     }
@@ -264,7 +281,8 @@ private fun HowItWorksPage() {
 @Composable
 private fun SmsPermissionPage(
     smsPermissionGranted: Boolean,
-    onGrantPermission: () -> Unit
+    onGrantPermission: () -> Unit,
+    onImportStatement: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -282,7 +300,7 @@ private fun SmsPermissionPage(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "SMS Access Required",
+            text = "Two ways to see your spending",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -292,12 +310,10 @@ private fun SmsPermissionPage(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "PesaTrack reads only M-PESA and bank SMS to track your " +
-                    "expenses. We ignore all other messages.\n\n" +
-                    "Nothing leaves your phone \u2014 PesaTrack has no internet " +
-                    "permission, so it cannot send your data anywhere.\n\n" +
-                    "Prefer not to grant SMS access? You can add expenses " +
-                    "manually \u2014 just tap Skip below.",
+            text = "Automatic: PesaTrack reads only M-PESA and bank SMS. " +
+                    "All other messages are ignored.\n\n" +
+                    "No SMS access: import an M-PESA statement PDF instead. " +
+                    "Either way, your data stays on this phone.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -326,20 +342,42 @@ private fun SmsPermissionPage(
                 }
             }
         } else {
+            // Equal-weight choices: neither path is presented as the "lesser" option.
             Button(
                 onClick = onGrantPermission,
-                modifier = Modifier.fillMaxWidth(0.7f)
+                modifier = Modifier.fillMaxWidth(0.85f)
             ) {
-                Text("Grant SMS Permission")
+                Text("Allow SMS reading (automatic)")
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onImportStatement,
+                modifier = Modifier.fillMaxWidth(0.85f)
+            ) {
+                Text("Import a statement instead")
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = StatementHowTo.SHORT,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
+}
+
+/** Copy for obtaining an M-PESA statement. Shared by onboarding and Home. */
+object StatementHowTo {
+    const val SHORT = "Get a statement: M-PESA app or dial *334# \u2192 My Account \u2192 " +
+        "M-PESA Statement. Safaricom emails a password-protected PDF."
 }
 
 @Composable
 private fun ImportHistoryPage(
     smsPermissionGranted: Boolean,
-    onImportNow: () -> Unit
+    onImportNow: () -> Unit,
+    onImportStatement: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -368,13 +406,12 @@ private fun ImportHistoryPage(
 
         Text(
             text = if (smsPermissionGranted) {
-                "Want to import your existing M-PESA SMS?\n\n" +
-                        "This scans your message history for M-PESA transactions " +
-                        "and adds them to PesaTrack."
+                "Read your past M-PESA SMS now to see last month's spending " +
+                        "straight away. Nothing needs categorising first."
             } else {
-                "No problem \u2014 you can add expenses manually as you spend.\n\n" +
-                        "To import past M-PESA SMS later, grant SMS access from " +
-                        "the Home screen or Settings anytime."
+                "Import an M-PESA statement to see where your money went " +
+                        "\u2014 no SMS access needed.\n\n" +
+                        "Or start with an example and add expenses as you go."
             },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
@@ -395,6 +432,20 @@ private fun ImportHistoryPage(
 
             Text(
                 text = "You can also import later from the Import screen",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        } else {
+            Button(
+                onClick = onImportStatement,
+                modifier = Modifier.fillMaxWidth(0.7f)
+            ) {
+                Text("Import statement")
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = StatementHowTo.SHORT,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

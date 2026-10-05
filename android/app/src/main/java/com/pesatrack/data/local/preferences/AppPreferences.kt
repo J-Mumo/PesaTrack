@@ -206,6 +206,33 @@ class AppPreferences @Inject constructor(
         val KEY_COUNT_EXPORTS = intPreferencesKey("count_exports")
         val KEY_COUNT_BACKUPS = intPreferencesKey("count_backups")
 
+        // ── Activation diagnostics (Phase 4) ──
+
+        /** Epoch millis of the SMS-permission denial during onboarding (milestone). */
+        val KEY_ONBOARDING_SMS_DENIED = longPreferencesKey("onboarding_sms_denied")
+        /** Furthest onboarding page index reached (0..3). */
+        val KEY_ONBOARDING_MAX_STEP = intPreferencesKey("onboarding_max_step")
+        /** Pending abandoned step (set when onboarding restarts after a prior incomplete run). */
+        val KEY_ONBOARDING_ABANDONED_STEP = intPreferencesKey("onboarding_abandoned_step")
+        /** Whether onboarding_snapshot has been emitted (once per install). */
+        val KEY_ONBOARDING_SNAPSHOT_SENT = booleanPreferencesKey("onboarding_snapshot_sent")
+        /** Epoch-day of the last permission_state emission. */
+        val KEY_PERMISSION_STATE_LAST_DAY = longPreferencesKey("permission_state_last_day")
+        /** Whether first_scan_completed has been emitted (once per install). */
+        val KEY_FIRST_SCAN_SENT = booleanPreferencesKey("first_scan_sent")
+        /** Pending first-scan result to flush once telemetry is enabled: "source|bucket". */
+        val KEY_FIRST_SCAN_PENDING = stringPreferencesKey("first_scan_pending")
+        /** Whether first_insight_shown has been emitted (once per install). */
+        val KEY_FIRST_INSIGHT_SENT = booleanPreferencesKey("first_insight_sent")
+        /** Whether the Findings card was dismissed by the user. */
+        val KEY_FINDINGS_CARD_DISMISSED = booleanPreferencesKey("findings_card_dismissed")
+        /** Whether the "Example data" card was dismissed by the user. */
+        val KEY_EXAMPLE_CARD_DISMISSED = booleanPreferencesKey("example_card_dismissed")
+        /** Whether the one-time contextual SMS re-ask has been shown. */
+        val KEY_SMS_REASK_SHOWN = booleanPreferencesKey("sms_reask_shown")
+        /** Year*12+month of the last statement-refresh reminder dismissal. */
+        val KEY_STATEMENT_REFRESH_DISMISSED_MONTH = intPreferencesKey("statement_refresh_dismissed_month")
+
         // ── Telemetry (Phase 1) ──
 
         /**
@@ -940,4 +967,152 @@ class AppPreferences @Inject constructor(
         context.dataStore.edit { prefs ->
             prefs[KEY_TELEMETRY_PROMPT_SHOWN] = true
         }
-    }}
+    }
+
+    // ==================== Activation diagnostics (Phase 4) ====================
+
+    /** Snapshot of locally-recorded onboarding choices for [ONBOARDING_SNAPSHOT]. */
+    data class OnboardingChoices(
+        val smsGranted: Boolean,
+        val smsDenied: Boolean,
+        val smsSkipped: Boolean,
+        val importChosen: Boolean,
+        val importSkipped: Boolean,
+        val installTimestamp: Long
+    )
+
+    suspend fun getOnboardingChoices(): OnboardingChoices {
+        val p = context.dataStore.data.first()
+        return OnboardingChoices(
+            smsGranted = (p[KEY_ONBOARDING_SMS_GRANTED] ?: 0L) > 0L,
+            smsDenied = (p[KEY_ONBOARDING_SMS_DENIED] ?: 0L) > 0L,
+            smsSkipped = (p[KEY_ONBOARDING_SMS_SKIPPED] ?: 0L) > 0L,
+            importChosen = (p[KEY_ONBOARDING_IMPORT_CHOSEN] ?: 0L) > 0L,
+            importSkipped = (p[KEY_ONBOARDING_IMPORT_SKIPPED] ?: 0L) > 0L,
+            installTimestamp = p[KEY_INSTALL_TIMESTAMP] ?: 0L
+        )
+    }
+
+    suspend fun recordOnboardingSmsDenied() = recordMilestone(KEY_ONBOARDING_SMS_DENIED)
+
+    /** Whether onboarding was started on a previous launch (milestone set). */
+    suspend fun wasOnboardingStarted(): Boolean =
+        (context.dataStore.data.first()[KEY_ONBOARDING_STARTED] ?: 0L) > 0L
+
+    /** Record the furthest onboarding page reached (monotonic). */
+    suspend fun recordOnboardingStep(page: Int) {
+        context.dataStore.edit { p ->
+            if (page > (p[KEY_ONBOARDING_MAX_STEP] ?: -1)) p[KEY_ONBOARDING_MAX_STEP] = page
+        }
+    }
+
+    /**
+     * Called when onboarding is shown again after a previous incomplete run.
+     * Stores the abandoned step once so it can be emitted after consent.
+     */
+    suspend fun markOnboardingAbandonedIfRestarted() {
+        context.dataStore.edit { p ->
+            val started = (p[KEY_ONBOARDING_STARTED] ?: 0L) > 0L
+            if (started && p[KEY_ONBOARDING_ABANDONED_STEP] == null) {
+                p[KEY_ONBOARDING_ABANDONED_STEP] = p[KEY_ONBOARDING_MAX_STEP] ?: 0
+            }
+        }
+    }
+
+    /** Returns and clears the pending abandoned step (-1 sentinel kept so it only fires once). */
+    suspend fun consumeOnboardingAbandonedStep(): Int? {
+        var result: Int? = null
+        context.dataStore.edit { p ->
+            val step = p[KEY_ONBOARDING_ABANDONED_STEP]
+            if (step != null && step >= 0) {
+                result = step
+                p[KEY_ONBOARDING_ABANDONED_STEP] = -1
+            }
+        }
+        return result
+    }
+
+    /** Returns true exactly once per install. */
+    suspend fun claimOnboardingSnapshot(): Boolean = claimFlag(KEY_ONBOARDING_SNAPSHOT_SENT)
+
+    /** Returns true if permission_state has not yet been sent for [epochDay]. Marks it sent. */
+    suspend fun claimPermissionStateForDay(epochDay: Long): Boolean {
+        var claimed = false
+        context.dataStore.edit { p ->
+            if ((p[KEY_PERMISSION_STATE_LAST_DAY] ?: -1L) != epochDay) {
+                p[KEY_PERMISSION_STATE_LAST_DAY] = epochDay
+                claimed = true
+            }
+        }
+        return claimed
+    }
+
+    /** Forget the last permission_state day so the next open re-emits (used right after opt-in). */
+    suspend fun resetPermissionStateDay() {
+        context.dataStore.edit { it.remove(KEY_PERMISSION_STATE_LAST_DAY) }
+    }
+
+    /**
+     * Records the first successful scan locally (once per install). Returns the
+     * stored "source|bucket" value, or null if a first scan was already recorded.
+     */
+    suspend fun recordFirstScanPending(source: String, bucket: String): Boolean {
+        var stored = false
+        context.dataStore.edit { p ->
+            if (p[KEY_FIRST_SCAN_PENDING] == null && p[KEY_FIRST_SCAN_SENT] != true) {
+                p[KEY_FIRST_SCAN_PENDING] = "$source|$bucket"
+                stored = true
+            }
+        }
+        return stored
+    }
+
+    /** Returns and marks-sent the pending first scan, or null. */
+    suspend fun consumeFirstScanPending(): Pair<String, String>? {
+        var result: Pair<String, String>? = null
+        context.dataStore.edit { p ->
+            val raw = p[KEY_FIRST_SCAN_PENDING]
+            if (raw != null && p[KEY_FIRST_SCAN_SENT] != true) {
+                val parts = raw.split('|')
+                if (parts.size == 2) result = parts[0] to parts[1]
+                p[KEY_FIRST_SCAN_SENT] = true
+            }
+        }
+        return result
+    }
+
+    suspend fun claimFirstInsight(): Boolean = claimFlag(KEY_FIRST_INSIGHT_SENT)
+
+    val findingsCardDismissed: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_FINDINGS_CARD_DISMISSED] ?: false }
+    suspend fun dismissFindingsCard() = setFlag(KEY_FINDINGS_CARD_DISMISSED)
+
+    val exampleCardDismissed: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_EXAMPLE_CARD_DISMISSED] ?: false }
+    suspend fun dismissExampleCard() = setFlag(KEY_EXAMPLE_CARD_DISMISSED)
+
+    suspend fun isSmsReaskShown(): Boolean =
+        context.dataStore.data.first()[KEY_SMS_REASK_SHOWN] ?: false
+    suspend fun markSmsReaskShown() = setFlag(KEY_SMS_REASK_SHOWN)
+
+    suspend fun getStatementRefreshDismissedMonth(): Int =
+        context.dataStore.data.first()[KEY_STATEMENT_REFRESH_DISMISSED_MONTH] ?: -1
+    suspend fun setStatementRefreshDismissedMonth(monthIndex: Int) {
+        context.dataStore.edit { it[KEY_STATEMENT_REFRESH_DISMISSED_MONTH] = monthIndex }
+    }
+
+    private suspend fun claimFlag(key: Preferences.Key<Boolean>): Boolean {
+        var claimed = false
+        context.dataStore.edit { p ->
+            if (p[key] != true) {
+                p[key] = true
+                claimed = true
+            }
+        }
+        return claimed
+    }
+
+    private suspend fun setFlag(key: Preferences.Key<Boolean>) {
+        context.dataStore.edit { it[key] = true }
+    }
+}

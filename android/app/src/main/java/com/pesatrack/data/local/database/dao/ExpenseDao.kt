@@ -124,6 +124,10 @@ interface ExpenseDao {
     @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE transactionId = :transactionId)")
     suspend fun transactionExists(transactionId: String): Boolean
 
+    // Legacy card rows used null or bank-reference IDs. Preserve them on exact approval replay.
+    @Query("SELECT EXISTS(SELECT 1 FROM expenses WHERE rawSms = :body AND timestamp = :timestamp AND paymentType = 'CARD_PAYMENT' AND source = 'SMS_BANK')")
+    suspend fun cardApprovalAlreadySaved(body: String, timestamp: Long): Boolean
+
     // ==================== Bulk Operations (Historical Import) ====================
 
     /**

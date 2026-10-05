@@ -269,6 +269,68 @@ object TelemetryEvents {
     /** User deleted an expense row. No params. */
     const val EXPENSE_DELETED = "expense_deleted"
 
+    // ==================== Phase 4: activation & retention diagnostics ====================
+
+    /**
+     * (A) Replays the locally-recorded onboarding choices once, right after
+     * the user opts in. Onboarding always happens before consent, so without
+     * this replay the SMS-permission decision is never visible.
+     * Params: [PARAM_SMS] — `granted` / `skipped` / `denied` / `unknown`,
+     *         [PARAM_IMPORT] — `chosen` / `skipped` / `unknown`,
+     *         [PARAM_DAYS_SINCE_INSTALL] — [daysSinceInstallBucket].
+     */
+    const val ONBOARDING_SNAPSHOT = "onboarding_snapshot"
+
+    /**
+     * (B) Current runtime permission state. Emitted at most once per
+     * calendar day on app open, and immediately after opt-in.
+     * Params: [PARAM_SMS] — `granted` / `denied`,
+     *         [PARAM_NOTIF] — `granted` / `denied` / `n_a` (pre-Android 13).
+     */
+    const val PERMISSION_STATE = "permission_state"
+
+    /**
+     * (D) First successful data load on this install, from any source.
+     * Params: [PARAM_SOURCE] — `sms` / `statement_pdf` / `excel`,
+     *         [PARAM_COUNT_BUCKET] — [scanBucket] of new transactions.
+     */
+    const val FIRST_SCAN_COMPLETED = "first_scan_completed"
+
+    /**
+     * (E) First time an "aha" finding (Findings card) is rendered on Home.
+     * Params: [PARAM_KIND] — `INSIGHT_*` value of the headline finding,
+     *         [PARAM_SOURCE] — `real` or `example`.
+     */
+    const val FIRST_INSIGHT_SHOWN = "first_insight_shown"
+
+    /**
+     * (F) Onboarding was started on a previous launch but never completed.
+     * Recorded locally and emitted once telemetry is enabled.
+     * Params: [PARAM_STEP] — furthest onboarding page reached (`welcome`,
+     *         `how_it_works`, `sms_permission`, `import`).
+     */
+    const val ONBOARDING_ABANDONED = "onboarding_abandoned"
+
+    /**
+     * User tapped the statement-import alternative on the SMS permission page
+     * or a Home card. Params: [PARAM_SOURCE] — `onboarding` / `app`.
+     */
+    const val STATEMENT_ALTERNATIVE_CHOSEN = "statement_alternative_chosen"
+
+    /**
+     * The one-time contextual SMS re-ask card was shown / acted on.
+     * Params: [PARAM_KIND] — `shown` / `accepted` / `dismissed`.
+     */
+    const val SMS_REASK = "sms_reask"
+
+    // ==================== User properties (C) ====================
+    /** `granted` / `denied`. Lets every GA4 report be split by SMS access. */
+    const val USER_PROP_SMS_PERM = "sms_perm"
+    /** `granted` / `denied` / `n_a`. */
+    const val USER_PROP_NOTIF_PERM = "notif_perm"
+    /** `sms` / `statement` / `manual` / `none` — how this user gets data in. */
+    const val USER_PROP_DATA_SOURCE = "data_source"
+
     // ==================== Parameter keys ====================
     const val PARAM_SCREEN = "screen"
     const val PARAM_SOURCE = "source"
@@ -279,6 +341,11 @@ object TelemetryEvents {
     const val PARAM_BANK = "bank"
     const val PARAM_SUCCESS = "success"
     const val PARAM_TAB = "tab"
+    const val PARAM_SMS = "sms"
+    const val PARAM_NOTIF = "notif"
+    const val PARAM_IMPORT = "import"
+    const val PARAM_DAYS_SINCE_INSTALL = "days_since_install"
+    const val PARAM_STEP = "step"
 
     // ==================== Parameter value enums ====================
     const val KIND_EXPENSE = "expense"
@@ -306,6 +373,59 @@ object TelemetryEvents {
 
     const val ONBOARDING_COMPLETION_IMPORT = "import_chosen"
     const val ONBOARDING_COMPLETION_SKIPPED = "skipped"
+
+    const val STATE_GRANTED = "granted"
+    const val STATE_DENIED = "denied"
+    const val STATE_SKIPPED = "skipped"
+    const val STATE_CHOSEN = "chosen"
+    const val STATE_UNKNOWN = "unknown"
+    const val STATE_NOT_APPLICABLE = "n_a"
+
+    const val INSIGHT_MONTHLY_TOTAL = "monthly_total"
+    const val INSIGHT_TOP_CATEGORY = "top_category"
+    const val INSIGHT_FEES_TOTAL = "fees_total"
+    const val INSIGHT_SOURCE_REAL = "real"
+    const val INSIGHT_SOURCE_EXAMPLE = "example"
+
+    const val DATA_SOURCE_SMS = "sms"
+    const val DATA_SOURCE_STATEMENT = "statement"
+    const val DATA_SOURCE_MANUAL = "manual"
+    const val DATA_SOURCE_NONE = "none"
+
+    const val REASK_SHOWN = "shown"
+    const val REASK_ACCEPTED = "accepted"
+    const val REASK_DISMISSED = "dismissed"
+
+    const val STEP_WELCOME = "welcome"
+    const val STEP_HOW_IT_WORKS = "how_it_works"
+    const val STEP_SMS_PERMISSION = "sms_permission"
+    const val STEP_IMPORT = "import"
+
+    /** Map onboarding pager index (0..3) to a [PARAM_STEP] value. */
+    fun onboardingStep(page: Int): String = when (page) {
+        0 -> STEP_WELCOME
+        1 -> STEP_HOW_IT_WORKS
+        2 -> STEP_SMS_PERMISSION
+        else -> STEP_IMPORT
+    }
+
+    /** Buckets for (A): `0`, `1-3`, `4-7`, `8-30`, `30+` days. */
+    fun daysSinceInstallBucket(days: Long): String = when {
+        days <= 0 -> "0"
+        days <= 3 -> "1-3"
+        days <= 7 -> "4-7"
+        days <= 30 -> "8-30"
+        else -> "30+"
+    }
+
+    /** Buckets for (D): `0`, `1-10`, `11-50`, `51-200`, `200+`. */
+    fun scanBucket(n: Int): String = when {
+        n <= 0 -> "0"
+        n <= 10 -> "1-10"
+        n <= 50 -> "11-50"
+        n <= 200 -> "51-200"
+        else -> "200+"
+    }
 
     const val TAB_INSIGHTS = "insights"
     const val TAB_CHARTS = "charts"

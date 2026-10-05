@@ -50,6 +50,7 @@ import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
 import com.pesatrack.services.ExpenseNotificationContract
+import com.pesatrack.services.telemetry.ActivationTelemetry
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 
@@ -69,6 +70,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var telemetryClient: TelemetryClient
+
+    @Inject
+    lateinit var activationTelemetry: ActivationTelemetry
 
     /**
      * Launcher for requesting multiple permissions at once.
@@ -135,6 +139,11 @@ class MainActivity : FragmentActivity() {
         // TelemetryClient itself short-circuits when the user has not opted
         // in, so this is a no-op until consent is granted.
         telemetryClient.logEvent(TelemetryEvents.APP_OPENED)
+        // Phase 4 — daily permission_state + user properties + pending flushes.
+        // No-op until the user has opted in.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching { activationTelemetry.onAppOpened() }
+        }
 
         // Create notification channels (safe to call multiple times)
         NotificationHelper.createNotificationChannel(this)
@@ -239,14 +248,20 @@ class MainActivity : FragmentActivity() {
         val onboardingCompleted by appPreferences.onboardingCompleted.collectAsState(initial = null)
         val coroutineScope = rememberCoroutineScope()
 
-        // Track whether user tapped "Import Now" during onboarding
-        var pendingImportNavigation by remember { mutableStateOf(false) }
+        // Route to open after onboarding: SMS import ("Import Now") or the
+        // statement-import alternative for users without SMS access.
+        var pendingImportRoute by remember { mutableStateOf<String?>(null) }
+        val pendingImportNavigation = pendingImportRoute != null
 
         // Do not consume a notification while persisted onboarding state is still loading.
         if (onboardingCompleted == null) return
         if (onboardingCompleted == false) {
             // Record onboarding started milestone (fire-and-forget)
             LaunchedEffect(Unit) {
+                // (F) If onboarding was started on an earlier launch and never
+                // finished, store the furthest step so it can be reported after
+                // consent. Must run before recordOnboardingStarted().
+                appPreferences.markOnboardingAbandonedIfRestarted()
                 appPreferences.recordOnboardingStarted()
                 telemetryClient.logEvent(TelemetryEvents.ONBOARDING_STARTED)
             }
@@ -280,10 +295,24 @@ class MainActivity : FragmentActivity() {
                 },
                 onImportHistory = {
                     // Flag that we should navigate to import screen after onboarding completes
-                    pendingImportNavigation = true
+                    pendingImportRoute = Screen.ImportHistory.route
                     coroutineScope.launch {
                         appPreferences.recordOnboardingImportChosen()
                     }
+                },
+                onImportStatement = {
+                    // Path B — no SMS access; import an M-PESA PDF statement instead.
+                    pendingImportRoute = Screen.StatementImport.route
+                    coroutineScope.launch {
+                        appPreferences.recordOnboardingImportChosen()
+                    }
+                    telemetryClient.logEvent(
+                        TelemetryEvents.STATEMENT_ALTERNATIVE_CHOSEN,
+                        mapOf(TelemetryEvents.PARAM_SOURCE to TelemetryEvents.SOURCE_ONBOARDING)
+                    )
+                },
+                onPageReached = { page ->
+                    coroutineScope.launch { appPreferences.recordOnboardingStep(page) }
                 },
                 onSmsPermissionRequested = {
                     telemetryClient.logEvent(
@@ -305,6 +334,7 @@ class MainActivity : FragmentActivity() {
                     )
                 },
                 onSmsPermissionDenied = {
+                    coroutineScope.launch { appPreferences.recordOnboardingSmsDenied() }
                     telemetryClient.logEvent(
                         TelemetryEvents.PERMISSION_DENIED,
                         mapOf(
@@ -320,7 +350,10 @@ class MainActivity : FragmentActivity() {
             return
         }
 
-        AppWithLockOverlay(navigateToImport = pendingImportNavigation, onImportNavigated = { pendingImportNavigation = false })
+        AppWithLockOverlay(
+            importRoute = pendingImportRoute,
+            onImportNavigated = { pendingImportRoute = null }
+        )
     }
 
     /**
@@ -328,7 +361,7 @@ class MainActivity : FragmentActivity() {
      */
     @Composable
     private fun AppWithLockOverlay(
-        navigateToImport: Boolean = false,
+        importRoute: String? = null,
         onImportNavigated: () -> Unit = {}
     ) {
         val isLocked by appLockLifecycleObserver.isLocked.collectAsState()
@@ -364,7 +397,7 @@ class MainActivity : FragmentActivity() {
         } else {
             val request by pendingNavigation
             MainScreen(
-                navigateToImport = navigateToImport,
+                importRoute = importRoute,
                 onImportNavigated = onImportNavigated,
                 notificationNavigation = request,
                 onDeepLinkHandled = { handled ->
@@ -428,6 +461,9 @@ class MainActivity : FragmentActivity() {
                     appPreferences.markTelemetryPromptShown()
                     telemetryClient.setEnabled(true)
                     telemetryClient.logEvent(TelemetryEvents.TELEMETRY_ENABLED)
+                    // Phase 4 — replay onboarding choices (A), permission state
+                    // (B/C) and any pending first-scan / abandoned-onboarding (D/F).
+                    runCatching { activationTelemetry.onTelemetryEnabled() }
                     visible = false
                 }
             },
@@ -542,7 +578,7 @@ class MainActivity : FragmentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    navigateToImport: Boolean = false,
+    importRoute: String? = null,
     onImportNavigated: () -> Unit = {},
     notificationNavigation: NotificationNavigation? = null,
     onDeepLinkHandled: (NotificationNavigation) -> Unit = {},
@@ -569,10 +605,10 @@ fun MainScreen(
         }
     }
 
-    // Navigate to import screen if user tapped "Import Now" during onboarding
-    LaunchedEffect(navigateToImport, navReady, resumed) {
-        if (navigateToImport && navReady && resumed) {
-            navController.navigate(Screen.ImportHistory.route)
+    // Navigate to the import screen chosen during onboarding (SMS or statement)
+    LaunchedEffect(importRoute, navReady, resumed) {
+        if (importRoute != null && navReady && resumed) {
+            navController.navigate(importRoute)
             onImportNavigated()
         }
     }

@@ -85,10 +85,11 @@ class NcbaBankParser : SmsParserStrategy {
 
     // --- Card payment patterns ---
 
-    // Card approval: "Joel, we have approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
-    private val cardApprovalPattern = Pattern.compile(
-        "approved a transaction of ([A-Z]{3})\\s+([\\d,]+(?:\\.\\d{1,2})?)\\s+at\\s+(.+?)\\s+on your card no\\.\\s*ending\\s*\\*(\\d+)",
-        Pattern.CASE_INSENSITIVE
+    // Direct NCBA service confirmation: it is not an "Mpesa Paybill transfer"
+    // message, but it contains the business, meter/account and bank reference.
+    private val kenyaPowerPrepaidPattern = Pattern.compile(
+        "^Dear\\s+[^,]+,\\s*your\\s+Kenya\\s+Power\\s+Prepaid\\s+payment\\s+of\\s+KES\\.?\\s*([\\d,]+(?:\\.\\d{1,2})?)\\s+to\\s+Meter\\s+Number:\\s*(\\d+)\\s+was\\s+successful\\.(?:(?!\\bRef[:.]).)*\\bRef[:.]\\s*([A-Z0-9]+)(?=[\\s.,;]|$)",
+        Pattern.CASE_INSENSITIVE or Pattern.DOTALL
     )
 
     // --- Expense patterns (ordered most specific → least specific) ---
@@ -157,7 +158,7 @@ class NcbaBankParser : SmsParserStrategy {
     // ==================== SmsParserStrategy Implementation ====================
 
     override fun canHandle(sender: String, body: String): Boolean {
-        val isNcba = senderIds.any { sender.contains(it, ignoreCase = true) }
+        val isNcba = NcbaPairedSmsResolver.isNcba(sender)
         if (!isNcba) return false
 
         // Parseable NCBA transaction types:
@@ -168,6 +169,7 @@ class NcbaBankParser : SmsParserStrategy {
         return body.contains("MPESA transfer", ignoreCase = true) ||
                 body.contains("Mpesa Till transfer", ignoreCase = true) ||
                 body.contains("Mpesa Paybill transfer", ignoreCase = true) ||
+                body.contains("Kenya Power Prepaid payment", ignoreCase = true) ||
                 body.contains("approved a transaction of", ignoreCase = true) ||
                 body.contains("has been debited", ignoreCase = true) ||
                 body.contains("has been credited", ignoreCase = true)
@@ -192,32 +194,53 @@ class NcbaBankParser : SmsParserStrategy {
                 return ParsedSms.NotARelevantMessage
             }
 
-            // 1. Card approval: "approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
-            cardApprovalPattern.matcher(body).let { m ->
+            // 1. Direct Kenya Power prepaid confirmation. The paired generic
+            // debit is intentionally handled separately and skipped.
+            kenyaPowerPrepaidPattern.matcher(body).let { m ->
                 if (m.find()) {
-                    val currency = m.group(1)?.trim() ?: "KES"
-                    val amount = parseAmount(m.group(2))
-                    val merchant = m.group(3)?.trim() ?: "Unknown Merchant"
-                    val cardLast4 = m.group(4)?.trim() ?: ""
-
-                    Log.d(TAG, "Parsed NCBA card approval: $currency $amount at $merchant (card *$cardLast4)")
-
-                    return ParsedSms.ExpenseResult(
-                        expense = Expense(
-                            transactionId = null, // No ref in card approval SMS
-                            amount = amount ?: 0.0, // Foreign currency amount as fallback
-                            recipient = "*$cardLast4",
-                            recipientName = merchant,
-                            paymentType = PaymentType.CARD_PAYMENT,
-                            source = expenseSource,
-                            notes = "$currency ${m.group(2)?.trim()} at $merchant (Card *$cardLast4)",
-                            timestamp = smsDate,
-                            isCategorized = false
-                        ),
-                        transactionCost = null,
-                        isCardApprovalUpdate = true
-                    )
+                    val amount = parseAmount(m.group(1))
+                    val meterNumber = m.group(2)?.trim() ?: ""
+                    val reference = m.group(3)?.trim()
+                    if (amount != null && amount > 0) {
+                        return ParsedSms.ExpenseResult(
+                            expense = Expense(
+                                transactionId = reference,
+                                amount = amount,
+                                recipient = meterNumber,
+                                recipientName = "Kenya Power Prepaid",
+                                paymentType = PaymentType.PAY_BILL,
+                                source = expenseSource,
+                                notes = "Meter: $meterNumber",
+                                timestamp = smsDate,
+                                isCategorized = false
+                            ),
+                            transactionCost = null
+                        )
+                    }
                 }
+            }
+
+            // 2. Card approval: "approved a transaction of USD 11.60 at OPENAI on your card no. ending *3462"
+            NcbaPairedSmsResolver.parseApproval(
+                NcbaPairedSmsResolver.Message("NCBA_BANK", body, smsDate)
+            )?.let { approval ->
+                return ParsedSms.ExpenseResult(
+                    expense = Expense(
+                        transactionId = NcbaPairedSmsResolver.stableId(
+                            NcbaPairedSmsResolver.Message("NCBA_BANK", body, smsDate)),
+                        // Provisional only: foreign amounts must be resolved to KES before saving.
+                        amount = if (approval.currency == "KES") approval.amount.toDouble() else 0.0,
+                        recipient = approval.card,
+                        recipientName = approval.merchant,
+                        paymentType = PaymentType.CARD_PAYMENT,
+                        source = expenseSource,
+                        notes = "${approval.currency} ${approval.amount} at ${approval.merchant} (Card ${approval.card})",
+                        timestamp = smsDate,
+                        isCategorized = false
+                    ),
+                    transactionCost = null,
+                    isCardApprovalUpdate = true
+                )
             }
 
             // Try each M-PESA pattern in order of specificity (most specific first)
@@ -390,7 +413,7 @@ class NcbaBankParser : SmsParserStrategy {
                 return ParsedSms.NotARelevantMessage
             }
 
-            Log.d(TAG, "Unrecognized NCBA SMS format: ${body.take(80)}...")
+            Log.d(TAG, "Unrecognized NCBA SMS format")
             return ParsedSms.NotARelevantMessage
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing NCBA SMS: ${e.message}", e)
@@ -408,7 +431,7 @@ class NcbaBankParser : SmsParserStrategy {
     private fun tryParseIncome(body: String, smsDate: Long): IncomeTransaction? {
         val amountMatcher = creditAmountPattern.matcher(body)
         if (!amountMatcher.find()) {
-            Log.d(TAG, "NCBA credit SMS missing parseable amount: ${body.take(80)}...")
+            Log.d(TAG, "NCBA credit SMS missing parseable amount")
             return null
         }
         val amount = parseAmount(amountMatcher.group(1)) ?: return null

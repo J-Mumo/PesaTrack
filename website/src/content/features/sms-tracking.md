@@ -34,3 +34,28 @@ so re-parsing the same SMS never creates two rows.
 
 More banks land as they're requested and their SMS formats are stable —
 see [Roadmap](/roadmap).
+
+## NCBA capture fixes — pending app release
+
+Enable **NCBA Bank** in Settings → SMS Sources; bank tracking is off by default
+and SMS permission is required. Historical SMS import uses the enabled sources too.
+
+The next app release recognises successful direct **Kenya Power Prepaid**
+confirmations as electricity paybill expenses, with the meter number and bank
+reference. The companion generic debit is not a second expense. Token numbers
+and units are not copied into expense notes.
+
+For card approvals in **KES**, the approval amount stays authoritative, even
+without a companion debit. Live capture and historical import share conservative
+pairing: only recognised NCBA card-reference debits within ten minutes, exact
+KES amount equality, and a unique match in both directions. Service/M-PESA
+references are not attached to card purchases. Card IDs remain stable when a
+debit arrives later, so re-import does not duplicate the purchase.
+
+Foreign-currency approvals need an unambiguous companion **KES debit**; USD and
+other currencies are never treated as KES. If no safe match is available, import
+reports the skipped approvals. You can retry after the debit arrives or enter the
+KES amount manually. Unknown reference formats, ambiguous or delayed alerts can
+remain unpaired. A later debit retries live capture only if the approval is
+already in the inbox; historical import is the recovery path if inbox timing
+prevents this. Existing incorrect expenses are not automatically rewritten.

@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.ExcelImportService
+import com.pesatrack.services.telemetry.ActivationTelemetry
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,7 +34,8 @@ class ExcelImportViewModel @Inject constructor(
     private val application: Application,
     private val excelImportService: ExcelImportService,
     private val appPreferences: AppPreferences,
-    private val telemetryClient: TelemetryClient
+    private val telemetryClient: TelemetryClient,
+    private val activationTelemetry: ActivationTelemetry
 ) : ViewModel() {
 
     companion object {
@@ -149,6 +151,11 @@ class ExcelImportViewModel @Inject constructor(
                 // Track excel import counter (fire-and-forget)
                 if (result.rowsImportedAsStandalone > 0 || result.rowsMatchedToSms > 0) {
                     appPreferences.incrementExcelImportsCount()
+                }
+                runCatching {
+                    activationTelemetry.recordScanCompleted(
+                        TelemetryEvents.SOURCE_EXCEL, result.rowsImportedAsStandalone
+                    )
                 }
 
                 telemetryClient.logEvent(
