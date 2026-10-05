@@ -105,15 +105,17 @@ const howFaq = faqPage([
 
     <li class="step">
       <div class="step-body">
-        <h2>5. Nothing leaves the device</h2>
+        <h2>5. Local by default</h2>
         <p>
-          The row lives in a local Room database. Analytics — if you opted in —
-          receives only anonymous events like "opened Analytics screen". No
-          amounts, no recipients, no category names, no note text. See
-          <a href="/privacy">Privacy</a>.
+          Transactions and the Ask Your Money transcript live in a local Room
+          database. Chat history stays on this device until you clear it; when
+          you ask a question, the app sends that question, recent turns, and an
+          anonymised spending digest to the AI service to answer it. No raw SMS
+          or individual transaction rows are sent. Analytics, if enabled,
+          receives only anonymous feature events. See <a href="/privacy">Privacy</a>.
         </p>
       </div>
-      <PhoneMock label="Local storage" caption="Room DB · v15" />
+      <PhoneMock label="Local storage" caption="Room DB · v19" />
     </li>
   </ol>
 

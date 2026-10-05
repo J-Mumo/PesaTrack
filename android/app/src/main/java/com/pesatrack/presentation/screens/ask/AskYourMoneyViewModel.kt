@@ -2,7 +2,9 @@ package com.pesatrack.presentation.screens.ask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pesatrack.data.repository.AskChatHistoryRepository
 import com.pesatrack.data.local.preferences.AppPreferences
+import com.pesatrack.domain.models.AskChatHistoryEntry
 import com.pesatrack.services.ai.AskStreamEvent
 import com.pesatrack.services.ai.AskTurn
 import com.pesatrack.services.ai.AskYourMoneyClient
@@ -15,6 +17,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,8 +33,9 @@ import javax.inject.Inject
  *  - Pro entitlement observation (short-circuits sends if the user
  *    becomes not-entitled mid-session)
  *
- * Deliberately does NOT own persistence — history disappears on
- * process death per the plan (§3.3). No Room, no DataStore.
+ * Chat messages are persisted locally in Room and restored when this
+ * ViewModel is created. The transcript never leaves the device except
+ * for the bounded history attached to an explicit AI question request.
  *
  * See plans/ai-pro-phase3-spec.md §7.2 for the ViewModel design and §7.3
  * for the stream event contract.
@@ -38,6 +43,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AskYourMoneyViewModel @Inject constructor(
     private val repository: AskYourMoneyRepository,
+    private val chatHistoryRepository: AskChatHistoryRepository,
     private val appPreferences: AppPreferences,
 ) : ViewModel() {
 
@@ -46,8 +52,21 @@ class AskYourMoneyViewModel @Inject constructor(
 
     private var messageIdCounter: Long = 0
     private fun nextId(): Long = ++messageIdCounter
+    private var activeAskJob: Job? = null
+    private var historyLoadJob: Job? = null
 
     init {
+        historyLoadJob = viewModelScope.launch {
+            val savedMessages = runCatching { chatHistoryRepository.loadHistory() }
+                .getOrDefault(emptyList())
+            messageIdCounter = maxOf(messageIdCounter, savedMessages.maxOfOrNull { it.id } ?: 0L)
+            _uiState.update { state ->
+                state.copy(
+                    messages = savedMessages.map(::toChatMessage),
+                    isHistoryLoaded = true,
+                )
+            }
+        }
         // Reflect the current Pro entitlement so the screen can render
         // a friendly "your subscription expired" message and disable the
         // composer if the user becomes non-Pro while the screen is open.
@@ -71,7 +90,7 @@ class AskYourMoneyViewModel @Inject constructor(
     fun onSendClicked() {
         val state = _uiState.value
         val question = state.composerInput.trim()
-        if (question.isEmpty() || state.isStreaming) return
+        if (question.isEmpty() || state.isStreaming || !state.isHistoryLoaded || state.isClearingHistory) return
 
         // Snapshot the pre-send history for wire submission BEFORE we
         // add the new user turn, so `history` contains the prior
@@ -96,11 +115,17 @@ class AskYourMoneyViewModel @Inject constructor(
         }
 
         val draftId = draftAssistant.id
-        viewModelScope.launch {
-            repository.ask(question = question, history = wireHistory)
-                .collect { event -> handleStreamEvent(event, draftId) }
-            // The Flow completes after the first Done/Fallback event.
-            _uiState.update { it.copy(isStreaming = false) }
+        activeAskJob = viewModelScope.launch {
+            try {
+                persistCurrentHistory()
+                repository.ask(question = question, history = wireHistory)
+                    .collect { event -> handleStreamEvent(event, draftId) }
+                // The Flow completes after the first Done/Fallback event.
+                persistCurrentHistory()
+            } finally {
+                _uiState.update { it.copy(isStreaming = false) }
+                activeAskJob = null
+            }
         }
     }
 
@@ -114,11 +139,29 @@ class AskYourMoneyViewModel @Inject constructor(
     }
 
     /**
-     * Wipe the in-memory chat history. Overflow menu action. Never
-     * touches persistence — nothing was persisted in the first place.
+     * Wipe the visible and locally persisted transcript. Also cancel a
+     * response in flight so it cannot repopulate the cleared history.
      */
     fun onClearChatClicked() {
-        _uiState.update { it.copy(messages = emptyList()) }
+        if (_uiState.value.isClearingHistory) return
+        val askJob = activeAskJob
+        val loadJob = historyLoadJob
+        askJob?.cancel()
+        loadJob?.cancel()
+        _uiState.update {
+            it.copy(
+                messages = emptyList(),
+                isStreaming = false,
+                isHistoryLoaded = true,
+                isClearingHistory = true,
+            )
+        }
+        viewModelScope.launch {
+            askJob?.cancelAndJoin()
+            loadJob?.cancelAndJoin()
+            runCatching { chatHistoryRepository.clearHistory() }
+            _uiState.update { it.copy(isClearingHistory = false) }
+        }
     }
 
     /** Called by the composable once it has shown the snackbar. */
@@ -202,6 +245,49 @@ class AskYourMoneyViewModel @Inject constructor(
             }
         }
         return if (wire.size <= MAX_HISTORY) wire else wire.takeLast(MAX_HISTORY)
+    }
+
+    private suspend fun persistCurrentHistory() {
+        val stableMessages = _uiState.value.messages.filterNot { it is ChatMessage.Assistant && it.isDraft }
+        val entries = stableMessages.mapNotNull { message ->
+            when (message) {
+                is ChatMessage.User -> AskChatHistoryEntry(
+                    id = message.id,
+                    role = AskChatHistoryEntry.Role.USER,
+                    text = message.text,
+                )
+                is ChatMessage.Assistant -> AskChatHistoryEntry(
+                    id = message.id,
+                    role = AskChatHistoryEntry.Role.ASSISTANT,
+                    text = message.text,
+                    isFallback = message.isFallback,
+                    fallbackReason = message.fallbackReason,
+                    assumptions = message.response?.assumptions.orEmpty(),
+                )
+            }
+        }
+        // Storage failure must not block the chat request or crash the screen.
+        runCatching { chatHistoryRepository.saveHistory(entries) }
+    }
+
+    private fun toChatMessage(entry: AskChatHistoryEntry): ChatMessage = when (entry.role) {
+        AskChatHistoryEntry.Role.USER -> ChatMessage.User(id = entry.id, text = entry.text)
+        AskChatHistoryEntry.Role.ASSISTANT -> ChatMessage.Assistant(
+            id = entry.id,
+            text = entry.text,
+            isDraft = false,
+            response = if (!entry.isFallback && entry.assumptions.isNotEmpty()) {
+                com.pesatrack.services.ai.AskResponse(
+                    body = entry.text,
+                    assumptions = entry.assumptions,
+                    actionLabel = null,
+                    actionDeeplink = null,
+                    chart = null,
+                )
+            } else null,
+            isFallback = entry.isFallback,
+            fallbackReason = entry.fallbackReason,
+        )
     }
 
     companion object {

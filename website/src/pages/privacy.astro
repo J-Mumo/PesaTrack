@@ -5,7 +5,7 @@ import Callout from '~/components/Callout.astro';
 import { breadcrumbList } from '~/utils/jsonld';
 import { SITE } from '~/data/site';
 
-const lastUpdated = 'September 23, 2026';
+const lastUpdated = 'October 5, 2026';
 
 const crumbs = [
   { name: 'Home', href: '/' },
@@ -32,15 +32,16 @@ const crumbs = [
 
   <Callout variant="success" title="Key point">
     <p>
-      Your transactions, SMS messages, amounts, and personal information stay
-      on your device. Three things can leave your phone, and only if you opt
-      in to them: <em>anonymous usage analytics</em> (Settings → Privacy),
-      from v1.6.0 <em>subscription verification for PesaTrack Pro</em>
-      (only if you buy a plan; see §5.7), and from v1.7.0 an
-      <em>anonymised spending digest</em> for Coach Insights (only if you
-      subscribe AND the AI feature is enabled for your build; see §5.8).
-      No raw SMS, no individual transactions, and no real merchant names
-      ever leave your device.
+      Your individual transaction records and SMS messages stay on your device.
+      Optional feature data can leave your phone only when you
+      choose to use or enable that feature:
+      anonymous usage analytics (Settings → Privacy),
+      subscription verification (if you buy Pro; §5.7),
+      the anonymised spending digest for Coach Insights (§5.8), and
+      your question plus recent chat context for Ask Your Money (§5.9).
+      The chat transcript is retained locally until you clear it or remove app
+      data. No raw SMS, individual transaction records, or real merchant names
+      leave your device.
     </p>
   </Callout>
 
@@ -85,6 +86,13 @@ const crumbs = [
     budgets, and settings are stored locally in a Room database and DataStore
     preferences.
   </p>
+  <p>
+    Ask Your Money chat messages are also stored in the app's local Room
+    database so the conversation can be resumed after closing or restarting
+    the app. They remain on this device until you choose <strong>Clear chat</strong>,
+    clear PesaTrack's app data, or uninstall the app. The transcript is not
+    synced to a PesaTrack account or stored as chat history on our backend.
+  </p>
 
   <h2 id="analytics">4. Anonymous usage analytics (opt-in)</h2>
   <p>
@@ -128,12 +136,12 @@ const crumbs = [
   </p>
 
   <h2 id="data-sharing">5. Data sharing</h2>
-  <p><strong>Your transaction data is never shared.</strong> The only data
-  that leaves your device is the anonymous analytics described in Section 4 —
-  and only if you opt in.</p>
+  <p><strong>Individual transaction records are never shared.</strong> Some
+  optional features send limited data as described below; no raw SMS or
+  individual transaction row is sent.</p>
   <ul>
-    <li>Transaction data is never sent to any server or cloud service</li>
-    <li>Transaction data is never shared with any third party, ad network, or SDK</li>
+    <li>Individual transaction records and raw SMS are never sent to a server or cloud service</li>
+    <li>No transaction records are shared with ad networks or analytics SDKs</li>
     <li>No data — transactional or analytical — is sold, rented, or licensed</li>
   </ul>
 
@@ -144,8 +152,8 @@ const crumbs = [
       draft email. Usage context (app version, milestones) may be pre-filled to
       help us assist you. Review and remove anything before sending.</li>
     <li><strong>Backup files.</strong> Database backups you create and export
-      may contain your expense data and settings. They stay on your device
-      unless you share them.</li>
+      may contain your expense data, settings, and saved Ask Your Money chat
+      transcript. They stay on your device unless you share them.</li>
     <li><strong>CSV exports.</strong> Exports stay on-device unless you share
       them via Android's share sheet.</li>
   </ul>
@@ -295,6 +303,26 @@ const crumbs = [
     template renders silently — no error message, no "AI unavailable" text.
     Cancel the subscription in Google Play to stop all AI feature usage
     from your device.
+  </p>
+
+  <h3 id="ask-your-money">5.9 Ask Your Money chat (PesaTrack Pro)</h3>
+  <p>
+    When you choose to ask a question, the app sends your question, up to the
+    last 10 finalized turns of chat context, and the same anonymised spending
+    digest described in §5.8 to our backend. The backend forwards that request
+    to OpenAI to generate the answer. The digest contains aggregated totals and
+    opaque recipient IDs, not raw SMS or individual transactions. Do not include
+    passwords, account credentials, or other sensitive information in a chat
+    message.
+  </p>
+  <p>
+    The transcript is saved locally on your device to let you resume it. Our
+    backend does not save the question, prior turns, or generated answer as a
+    conversation history; OpenAI processes the prompt to provide the response
+    under its API terms. You can erase the on-device transcript at any time with
+    <strong>Clear chat</strong>. Clearing it also removes future chat context
+    from the device, but does not recall a request already sent to generate an
+    earlier answer.
   </p>
 
   <h2 id="security">6. Data security</h2>

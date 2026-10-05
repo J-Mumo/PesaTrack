@@ -73,19 +73,17 @@
 <body>
     <div class="container">
         <h1>🔒 PesaTrack Privacy Policy</h1>
-        <p class="subtitle">Last updated: September 23, 2026</p>
+        <p class="subtitle">Last updated: October 5, 2026</p>
 
         <div class="highlight">
-            <strong>Key point:</strong> Your transactions, SMS messages, amounts,
-            and personal information stay on your device. Three things can leave
-            your phone, and only if you opt in to them: <em>anonymous usage
-            analytics</em> (Settings → Privacy), from v1.6.0
-            <em>subscription verification for PesaTrack Pro</em> (only if you buy
-            a plan; see §5.7), and from v1.7.0 an <em>anonymized spending
-            digest</em> for Coach Insights (only if you subscribe AND the AI
-            feature is enabled for your build; see §5.8). No raw SMS, no
-            individual transactions, and no real merchant names ever leave
-            your device.
+            <strong>Key point:</strong> Individual transaction records and SMS
+            stay on your device. Optional feature data
+            leaves only when you choose to use or enable that feature: anonymous
+            analytics (§4), subscription verification (§5.7), an anonymized
+            spending digest for Coach Insights (§5.8), or your question and
+            recent chat context for Ask Your Money (§5.9). The chat transcript
+            remains local until you clear it or remove app data. No raw SMS,
+            individual transaction records, or real merchant names are sent.
         </div>
 
         <h2>1. What PesaTrack Does</h2>
@@ -120,6 +118,10 @@
         <p>Additionally, you may manually enter expenses or import from Excel spreadsheets.
         Category assignments, budgets, and settings are also stored locally in a Room database
         and DataStore preferences on your device.</p>
+        <p>Ask Your Money messages are also stored in the local Room database so you can resume
+        the conversation after closing or restarting the app. They stay on this device until you
+        choose <strong>Clear chat</strong>, clear app data, or uninstall PesaTrack. The transcript
+        is not synced to a PesaTrack account or stored as chat history on our backend.</p>
 
         <h2>4. Anonymous Usage Analytics (Opt-In)</h2>
         <p>Starting in version 1.5.0, PesaTrack can send <strong>anonymous usage analytics</strong>
@@ -157,12 +159,11 @@
         associated with future data.</p>
 
         <h2>5. Data Sharing</h2>
-        <p><strong>Your transaction data is never shared.</strong> The only data that leaves
-        your device is the anonymous analytics described in Section 4 — and only if you
-        opt in.</p>
+        <p><strong>Individual transaction records are never shared.</strong> Optional features
+        send limited data as described below; no raw SMS or individual transaction row is sent.</p>
         <ul>
-            <li>Transaction data is never sent to any server or cloud service</li>
-            <li>Transaction data is never shared with any third party, advertising network, or SDK</li>
+            <li>Individual transaction records and raw SMS are never sent to a server or cloud service</li>
+            <li>Transaction records are never shared with ad networks or analytics SDKs</li>
             <li>No data — transactional or analytical — is sold, rented, or licensed to any party</li>
         </ul>
 
@@ -173,8 +174,8 @@
             is prepared. Usage context (e.g., app version, usage milestones) may be included to
             help us assist you. You can review and remove any information before sending.</li>
             <li><strong>Backup files:</strong> Database backups that you create and export may contain
-            your expense data and settings. These files stay on your device unless you choose to
-            share them.</li>
+            your expense data, settings, and saved Ask Your Money chat transcript. These files stay
+            on your device unless you choose to share them.</li>
             <li><strong>CSV exports:</strong> If you export your expenses to a CSV file, the file
             stays on your device unless you share it via Android's share sheet.</li>
         </ul>
@@ -322,6 +323,19 @@
         subscription in Google Play to stop all AI feature usage from your device.
         Existing cached insights on-device are cleared when the subscription entitlement
         lapses.</p>
+
+        <h2>5.9 Ask Your Money Chat (PesaTrack Pro)</h2>
+        <p>When you choose to ask a question, the app sends your question, up to the last 10
+        finalized chat turns, and the anonymized spending digest described in §5.8 to our
+        backend. The backend forwards that request to OpenAI to generate the answer. The digest
+        contains aggregated totals and opaque recipient IDs, not raw SMS or individual
+        transactions. Do not include passwords, account credentials, or other sensitive
+        information in a chat message.</p>
+        <p>The transcript is saved locally so you can resume it. Our backend does not save the
+        question, prior turns, or generated answer as a conversation history; OpenAI processes
+        the prompt under its API terms. You can erase the on-device transcript at any time with
+        <strong>Clear chat</strong>. Clearing it does not recall a request already sent to
+        generate an earlier answer.</p>
 
         <h2>6. Data Security</h2>
         <p>PesaTrack offers an optional PIN lock with biometric unlock (fingerprint/face) to

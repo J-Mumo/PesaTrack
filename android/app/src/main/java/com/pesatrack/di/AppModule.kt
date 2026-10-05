@@ -3,6 +3,7 @@ package com.pesatrack.di
 import android.content.Context
 import androidx.room.Room
 import com.pesatrack.data.local.database.PesaTrackDatabase
+import com.pesatrack.data.local.database.dao.AskChatMessageDao
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
@@ -55,7 +56,8 @@ object AppModule {
                 PesaTrackDatabase.MIGRATION_14_15,
                 PesaTrackDatabase.MIGRATION_15_16,
                 PesaTrackDatabase.MIGRATION_16_17,
-                PesaTrackDatabase.MIGRATION_17_18
+                PesaTrackDatabase.MIGRATION_17_18,
+                PesaTrackDatabase.MIGRATION_18_19
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -65,6 +67,12 @@ object AppModule {
     @Singleton
     fun provideExpenseDao(database: PesaTrackDatabase): ExpenseDao {
         return database.expenseDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAskChatMessageDao(database: PesaTrackDatabase): AskChatMessageDao {
+        return database.askChatMessageDao()
     }
 
     @Provides

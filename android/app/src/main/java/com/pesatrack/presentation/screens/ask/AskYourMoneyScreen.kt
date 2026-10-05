@@ -168,13 +168,23 @@ fun AskYourMoneyScreen(
         bottomBar = {
             Composer(
                 text = uiState.composerInput,
-                enabled = !uiState.isStreaming && uiState.isProEntitled,
+                enabled = uiState.isHistoryLoaded && !uiState.isClearingHistory &&
+                    !uiState.isStreaming && uiState.isProEntitled,
                 onTextChange = viewModel::onComposerChanged,
                 onSendClick = viewModel::onSendClicked,
             )
         },
     ) { innerPadding ->
-        if (uiState.messages.isEmpty()) {
+        if (!uiState.isHistoryLoaded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Loading saved chat…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (uiState.messages.isEmpty()) {
             EmptyState(
                 paddingValues = innerPadding,
                 onExampleTapped = viewModel::onExamplePromptTapped,
@@ -235,7 +245,7 @@ private fun EmptyState(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Grounded in your own transactions. Nothing is stored — this chat clears when you close it.",
+            "Your question and recent turns are sent with anonymised spending totals to generate answers. The transcript stays on this device; clear it anytime from the menu.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

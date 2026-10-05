@@ -19,6 +19,12 @@ data class AskYourMoneyUiState(
     /** Chronological chat history — user + assistant turns. */
     val messages: List<ChatMessage> = emptyList(),
 
+    /** False only while the saved local transcript is being restored. */
+    val isHistoryLoaded: Boolean = false,
+
+    /** True while Clear chat is cancelling work and deleting the transcript. */
+    val isClearingHistory: Boolean = false,
+
     /** Current composer input. Empty when nothing is being typed. */
     val composerInput: String = "",
 

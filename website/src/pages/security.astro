@@ -22,17 +22,25 @@ const crumbs = [
 
   <h1>Security</h1>
   <p class="lede">
-    Short version: your transaction data stays on the device, third-party
-    analytics are off by default, and the app can be locked with a PIN. Here's
-    the honest, unabridged version.
+    Individual transaction records stay on the device. When you choose to use
+    Pro AI, the app sends an anonymised spending digest and, for chat, your
+    question and recent turns. Chat history is stored locally, analytics are
+    off by default, and the app can be locked with a PIN.
   </p>
 
   <h2>What we protect</h2>
   <ul>
-    <li><strong>Confidentiality of transaction data.</strong> Your amounts,
-      recipients, categories, budgets, and notes live in a private Room
-      database inside the app's sandbox. Other apps on your phone can't
-      read it, and none of it is ever transmitted.</li>
+    <li><strong>Confidentiality of transaction records.</strong> Your raw
+      transaction rows, recipient names, budgets, and notes live in a private
+      Room database inside the app's sandbox. Other apps on your phone can't
+      read it. Pro AI requests don't send raw SMS or individual transaction
+      rows; Ask Your Money sends your question and recent turns with an
+      anonymised aggregate digest. See
+      <a href="/privacy#ask-your-money">Privacy §5.9</a>.</li>
+    <li><strong>Local chat storage.</strong> Ask Your Money conversations are
+      stored on-device to support resuming after restart. Clear them from the
+      chat menu; database backups may include them. Device encryption and the
+      app's sandbox are the protection boundary.</li>
     <li><strong>Analytics are opt-in and anonymous.</strong> The app does
       hold <code>INTERNET</code> for <em>opt-in</em> Firebase Analytics.
       Off by default. When on, we never send SMS content, transaction
@@ -67,9 +75,10 @@ const crumbs = [
       "uncategorised" notifications. Optional.</li>
     <li><code>USE_BIOMETRIC</code> — only if you enable biometric unlock.</li>
     <li><code>SCHEDULE_EXACT_ALARM</code> — for recurring reminders you set.</li>
-    <li><code>INTERNET</code> / <code>ACCESS_NETWORK_STATE</code> — exclusively
-      for opt-in Firebase Analytics. Off by default; no transaction data or PII
-      is ever transmitted.</li>
+    <li><code>INTERNET</code> / <code>ACCESS_NETWORK_STATE</code> — for opt-in
+      Firebase Analytics and Pro AI calls when you use Coach Insights or Ask
+      Your Money. AI requests carry aggregated/anonymised financial data and
+      the text you choose to submit; see <a href="/privacy#data-sharing">Privacy §5</a>.</li>
   </ul>
 
   <h2>What we deliberately don't ask for</h2>

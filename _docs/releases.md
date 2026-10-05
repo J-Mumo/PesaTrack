@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.8.2** | 27 | 2026-10-05 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — persistent local Ask Your Money chat history |
 | **1.8.0** | 25 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🟡 Pending upload — Ask Your Money hotfix: return-to-chat after subscribe, loosened projection markers on backend, fallback reason caption for QA |
 | **1.8.0** | 24 | 2026-09-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded — factual answers hitting projection_no_assumptions fallback; subscribe flow doesn't return to chat |
 | **1.7.0** | 23 | 2026-09-24 | Closed Testing — PesaTrack Alpha | ✅ Live — Coach Insight null-drop fix (Moshi `withNullSerialization()`) + backend schema defence-in-depth |
@@ -31,6 +32,24 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.8.2 (versionCode 27) — 2026-10-05
+
+**Ask Your Money — persistent local chat history**
+
+### What's new
+
+- Ask Your Money conversations are saved locally in Room and restored after app restart or process death.
+- Only finalized messages are persisted; streaming drafts are not saved.
+- The last 10 finalized turns continue to be sent as context only when the user asks a new question.
+- Clear chat deletes the local transcript and cancels any active response safely.
+- No chat transcript is stored by the PesaTrack backend.
+
+### Privacy
+
+The transcript remains on the device until the user clears it, clears app data, or uninstalls PesaTrack. Whole-database backups may include the transcript. Privacy, security, and website documentation disclose the new behavior.
 
 ---
 

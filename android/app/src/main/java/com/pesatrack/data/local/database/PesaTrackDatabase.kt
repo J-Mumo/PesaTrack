@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.pesatrack.data.local.database.dao.AskChatMessageDao
 import com.pesatrack.data.local.database.dao.BudgetDao
 import com.pesatrack.data.local.database.dao.CategoryDao
 import com.pesatrack.data.local.database.dao.CategoryRuleDao
@@ -13,6 +14,7 @@ import com.pesatrack.data.local.database.dao.IncomeTransactionDao
 import com.pesatrack.data.local.database.dao.MonthlyIncomeBudgetDao
 import com.pesatrack.data.local.database.dao.RecipientCategoryMappingDao
 import com.pesatrack.data.local.database.dao.ReportSnapshotDao
+import com.pesatrack.data.local.database.entities.AskChatMessageEntity
 import com.pesatrack.data.local.database.entities.BudgetEntity
 import com.pesatrack.data.local.database.entities.CategoryEntity
 import com.pesatrack.data.local.database.entities.CategoryRuleEntity
@@ -58,10 +60,13 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
  *            manual monthly override only — see plans/income-tracking-plan.md.
  * - v17→v18: Added income_sender_rules table for learned sender → source
  *            mappings (Income tracking Phase 2 — see plan §5.5).
+ * - v18→v19: Added ask_chat_messages table for the on-device Ask Your Money
+ *            transcript; chat text is not persisted by the backend.
  */
 @Database(
     entities = [
         ExpenseEntity::class,
+        AskChatMessageEntity::class,
         CategoryEntity::class,
         RecipientCategoryMappingEntity::class,
         BudgetEntity::class,
@@ -71,12 +76,13 @@ import com.pesatrack.data.local.database.entities.ReportSnapshotEntity
         IncomeSenderRuleEntity::class,
         ReportSnapshotEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 abstract class PesaTrackDatabase : RoomDatabase() {
 
     abstract fun expenseDao(): ExpenseDao
+    abstract fun askChatMessageDao(): AskChatMessageDao
     abstract fun categoryDao(): CategoryDao
     abstract fun recipientCategoryMappingDao(): RecipientCategoryMappingDao
     abstract fun budgetDao(): BudgetDao
@@ -1074,6 +1080,24 @@ abstract class PesaTrackDatabase : RoomDatabase() {
                         learnedAt INTEGER NOT NULL
                     )
                     """
+                )
+            }
+        }
+
+        /** Migration from v18 to v19: persist Ask Your Money messages on-device. */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ask_chat_messages (
+                        id INTEGER NOT NULL PRIMARY KEY,
+                        role TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        isFallback INTEGER NOT NULL DEFAULT 0,
+                        fallbackReason TEXT,
+                        assumptionsJson TEXT
+                    )
+                    """.trimIndent()
                 )
             }
         }

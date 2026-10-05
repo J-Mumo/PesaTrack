@@ -37,13 +37,14 @@ import com.squareup.moshi.JsonClass
  *
  * ---
  *
- * ## Not persisted
+ * ## Local persistence
  *
- * Nothing in this file is stored in Room or DataStore. Chat history is
- * in-memory only per the plan (`ai-pro-plan.md` §15 row C — 10-turn
- * memory, cleared on process death). This means:
+ * Wire DTOs are not stored directly. The visible transcript is persisted
+ * locally as `AskChatMessageEntity` rows; only the last 10 finalized turns
+ * are sent with a request. The user can remove the local transcript using
+ * the chat's Clear chat action. This means:
  *
- *  - We do not need Room converters for these types.
+ *  - We do not need Room converters for these wire DTOs.
  *  - We do not need a schema-version field — the JSON schema is
  *    versioned server-side as `ask_response_v1`; any breaking client
  *    change flips the model version and the server refuses old shapes.

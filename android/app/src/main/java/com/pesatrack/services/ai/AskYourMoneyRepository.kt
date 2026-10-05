@@ -26,9 +26,9 @@ import javax.inject.Singleton
  *    replies on stale digests and defeat the purpose of Ask.
  *  - **Fresh digest per turn.** The user may have received a new SMS
  *    between turns; the digest builder re-reads Room every call.
- *  - **No persistence.** Nothing here writes to Room or DataStore.
- *    History is held in the ViewModel's `SnapshotStateList` and
- *    disappears on process death — that's the whole privacy story.
+*  - The transcript is persisted locally by `AskChatHistoryRepository`;
+*    this network repository receives only the bounded wire-history slice
+*    and does not store or log free-form chat text.
  *  - **Never throws.** Every failure mode terminates the returned Flow
  *    with [AskStreamEvent.Fallback]. The ViewModel decides how to
  *    render the fallback; it never sees an exception cross the wire.
