@@ -34,6 +34,10 @@ class AppLockLifecycleObserver @Inject constructor(
     /** Whether the app is currently locked and requires PIN/biometric to access. */
     val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
 
+    private val _isLockStateReady = MutableStateFlow(false)
+    /** Prevent navigation from consuming a notification before the async PIN check completes. */
+    val isLockStateReady: StateFlow<Boolean> = _isLockStateReady.asStateFlow()
+
     /** Set to true after the first onStart to distinguish cold start from resume. */
     private var hasStartedBefore = false
 
@@ -45,6 +49,7 @@ class AppLockLifecycleObserver @Inject constructor(
         scope.launch {
             val pinEnabled = appPreferences.isPinEnabled()
             _isLocked.value = pinEnabled // Lock on cold start if PIN is set
+            _isLockStateReady.value = true
         }
     }
 
@@ -56,10 +61,12 @@ class AppLockLifecycleObserver @Inject constructor(
             return
         }
         // Resumed from background — check timeout
+        _isLockStateReady.value = false
         scope.launch {
             val pinEnabled = appPreferences.isPinEnabled()
             if (!pinEnabled) {
                 _isLocked.value = false
+                _isLockStateReady.value = true
                 return@launch
             }
             val lastBackground = appPreferences.getLastBackgroundTimestamp()
@@ -67,6 +74,7 @@ class AppLockLifecycleObserver @Inject constructor(
             if (pinManager.shouldLock(lastBackground, timeout)) {
                 _isLocked.value = true
             }
+            _isLockStateReady.value = true
         }
     }
 

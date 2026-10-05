@@ -4,17 +4,17 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
+import android.net.Uri
 import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import com.pesatrack.R
 import com.pesatrack.data.repository.ExpenseRepository
-import com.pesatrack.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -32,9 +32,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
     lateinit var expenseRepository: ExpenseRepository
 
     private companion object {
-        const val ACTION_IGNORE_EXPENSE = "com.pesatrack.ACTION_IGNORE_EXPENSE"
-        const val ACTION_UNDO_IGNORE = "com.pesatrack.ACTION_UNDO_IGNORE"
-        const val ACTION_CATEGORIZE_EXPENSE = "com.pesatrack.ACTION_CATEGORIZE_EXPENSE"
         const val EXTRA_EXPENSE_ID = "expense_id"
 
         /** Delay before persisting the ignore (ms). User can undo within this window. */
@@ -44,78 +41,85 @@ class NotificationActionReceiver : BroadcastReceiver() {
          * In-memory set of expense IDs pending ignore.
          * If removed before the handler fires, the ignore is cancelled.
          */
-        val pendingIgnores = mutableSetOf<Long>()
+        val pendingIgnores = PendingExpenseIgnores()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val expenseId = intent.getLongExtra(EXTRA_EXPENSE_ID, -1L)
-        if (expenseId == -1L) return
+        if (expenseId <= 0) return
+
+        // Legacy Ignore/Undo PendingIntents (posted before this fix) have no kind/data.
+        // Never accept an arbitrary kind or route a categorize broadcast into an activity.
+        val kind = intent.getStringExtra(ExpenseNotificationContract.EXTRA_KIND)
+        val legacy = kind == null && intent.data == null
+        val role = when (intent.action) {
+            ExpenseNotificationContract.ACTION_IGNORE -> "ignore"
+            ExpenseNotificationContract.ACTION_UNDO -> "undo"
+            else -> return
+        }
+        if (!legacy && (kind != ExpenseNotificationContract.NEW || intent.dataString !=
+                ExpenseNotificationContract.identity(expenseId, kind, role))) return
 
         when (intent.action) {
-            ACTION_IGNORE_EXPENSE -> handleIgnore(context, expenseId)
-            ACTION_UNDO_IGNORE -> handleUndo(context, expenseId)
-            ACTION_CATEGORIZE_EXPENSE -> handleCategorize(context, expenseId)
+            ExpenseNotificationContract.ACTION_IGNORE -> handleIgnore(context, expenseId, legacy)
+            ExpenseNotificationContract.ACTION_UNDO -> handleUndo(context, expenseId, legacy)
         }
     }
 
-    private fun handleIgnore(context: Context, expenseId: Long) {
-        // Mark as pending
-        pendingIgnores.add(expenseId)
+    private fun handleIgnore(context: Context, expenseId: Long, legacy: Boolean) {
+        val token = pendingIgnores.begin(expenseId)
+        // Keep the receiver/process alive through the five-second undo + repository write.
+        val result = goAsync()
+        val appContext = context.applicationContext
 
-        // Show "Ignored ✓ — Tap to undo" replacement notification
-        showUndoNotification(context, expenseId)
-
-        // Schedule actual persist after the undo window
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (pendingIgnores.remove(expenseId)) {
-                // Still pending → persist the exclude
-                CoroutineScope(Dispatchers.IO).launch {
-                    expenseRepository.setExcluded(expenseId, true)
+        CoroutineScope(Dispatchers.Main.immediate).launch {
+            try {
+                showUndoNotification(appContext, expenseId, legacy)
+                delay(UNDO_WINDOW_MS)
+                if (pendingIgnores.commit(expenseId, token) { id, excluded ->
+                        withContext(Dispatchers.IO) { expenseRepository.setExcluded(id, excluded) }
+                    } && !pendingIgnores.hasPending(expenseId)) {
+                    cancelNotification(appContext, expenseId, legacy)
                 }
-                // Dismiss the undo notification
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.cancel(expenseId.toInt())
+            } catch (error: Exception) {
+                pendingIgnores.take(expenseId, token)
+                android.util.Log.e("NotificationAction", "Could not ignore expense", error)
+            } finally {
+                result.finish()
             }
-        }, UNDO_WINDOW_MS)
-    }
-
-    private fun handleUndo(context: Context, expenseId: Long) {
-        // Remove from pending → the delayed handler will no-op
-        pendingIgnores.remove(expenseId)
-
-        // Dismiss the undo notification
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(expenseId.toInt())
-    }
-
-    /**
-     * Handle the "Categorize" action button on the expense notification.
-     *
-     * Dismisses the notification first (action buttons don't respect
-     * setAutoCancel), then launches MainActivity with the categorize deep link.
-     */
-    private fun handleCategorize(context: Context, expenseId: Long) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.cancel(expenseId.toInt())
-
-        val launchIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("navigate_to", "categorize")
-            putExtra("expense_id", expenseId)
         }
-        context.startActivity(launchIntent)
     }
 
-    private fun showUndoNotification(context: Context, expenseId: Long) {
+    private fun handleUndo(context: Context, expenseId: Long, legacy: Boolean) {
+        // Remove from pending → the delayed handler will no-op
+        pendingIgnores.undo(expenseId)
+        cancelNotification(context, expenseId, legacy)
+    }
+
+    private fun cancelNotification(context: Context, expenseId: Long, legacy: Boolean) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (legacy) {
+            nm.cancel(expenseId.toInt())
+        } else {
+            nm.cancel(ExpenseNotificationContract.tag(expenseId, ExpenseNotificationContract.NEW),
+                ExpenseNotificationContract.NOTIFICATION_ID)
+        }
+    }
+
+    private fun showUndoNotification(context: Context, expenseId: Long, legacy: Boolean) {
         NotificationHelper.createNotificationChannel(context)
 
         val undoIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = ACTION_UNDO_IGNORE
+            action = ExpenseNotificationContract.ACTION_UNDO
+            if (!legacy) {
+                data = Uri.parse(ExpenseNotificationContract.identity(expenseId, ExpenseNotificationContract.NEW, "undo"))
+                putExtra(ExpenseNotificationContract.EXTRA_KIND, ExpenseNotificationContract.NEW)
+            }
             putExtra(EXTRA_EXPENSE_ID, expenseId)
         }
         val undoPendingIntent = PendingIntent.getBroadcast(
             context,
-            (expenseId + 600_000).toInt(),
+            if (legacy) (expenseId + 600_000).toInt() else 0,
             undoIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -131,6 +135,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
             .build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(expenseId.toInt(), notification)
+        if (legacy) {
+            nm.notify(expenseId.toInt(), notification)
+        } else {
+            nm.notify(ExpenseNotificationContract.tag(expenseId, ExpenseNotificationContract.NEW),
+                ExpenseNotificationContract.NOTIFICATION_ID, notification)
+        }
     }
 }

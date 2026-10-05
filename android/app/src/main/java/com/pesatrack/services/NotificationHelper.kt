@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.pesatrack.R
@@ -85,42 +86,20 @@ object NotificationHelper {
         // Ensure channel exists
         createNotificationChannel(context)
         
-        // Intent to open the categorize screen for this expense
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("navigate_to", "categorize")
-            putExtra("expense_id", expenseId)
-        }
-        
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            expenseId.toInt(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // "Categorize" action button — routed through NotificationActionReceiver
-        // so the notification is dismissed before MainActivity launches.
-        // (setAutoCancel only fires on the content tap, not on action buttons.)
-        val categorizeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = "com.pesatrack.ACTION_CATEGORIZE_EXPENSE"
-            putExtra("expense_id", expenseId)
-        }
-        val categorizePendingIntent = PendingIntent.getBroadcast(
-            context,
-            (expenseId + 500_000).toInt(),
-            categorizeIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        // Both taps launch the activity directly (no Android 12+ notification trampoline).
+        val pendingIntent = expenseOpenPendingIntent(context, expenseId, ExpenseNotificationContract.NEW, "body")
+        val categorizePendingIntent = expenseOpenPendingIntent(context, expenseId, ExpenseNotificationContract.NEW, "categorize")
 
         // "Ignore" action button — handled by NotificationActionReceiver
         val ignoreIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = "com.pesatrack.ACTION_IGNORE_EXPENSE"
+            action = ExpenseNotificationContract.ACTION_IGNORE
+            data = Uri.parse(ExpenseNotificationContract.identity(expenseId, ExpenseNotificationContract.NEW, "ignore"))
+            putExtra(ExpenseNotificationContract.EXTRA_KIND, ExpenseNotificationContract.NEW)
             putExtra("expense_id", expenseId)
         }
         val ignorePendingIntent = PendingIntent.getBroadcast(
             context,
-            (expenseId + 600_000).toInt(),
+            0,
             ignoreIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -142,8 +121,26 @@ object NotificationHelper {
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
         
-        // Use expense ID as notification ID for uniqueness
-        notificationManager.notify(expenseId.toInt(), notification)
+        notificationManager.notify(ExpenseNotificationContract.tag(expenseId, ExpenseNotificationContract.NEW),
+            ExpenseNotificationContract.NOTIFICATION_ID, notification)
+    }
+
+    private fun expenseOpenPendingIntent(context: Context, expenseId: Long, kind: String, role: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = ExpenseNotificationContract.ACTION_OPEN
+            data = Uri.parse(ExpenseNotificationContract.identity(expenseId, kind, role))
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("navigate_to", "categorize")
+            putExtra("expense_id", expenseId)
+            putExtra(ExpenseNotificationContract.EXTRA_KIND, kind)
+        }
+        // Body and action taps must not share a request code. Android may reuse
+        // an existing PendingIntent when the request code and operation match,
+        // causing the Categorize action to deliver the body intent instead of
+        // the requested navigation target.
+        val requestCode = (expenseId.hashCode() * 31 + role.hashCode()).and(Int.MAX_VALUE)
+        return PendingIntent.getActivity(context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
     /**
@@ -328,17 +325,7 @@ object NotificationHelper {
     ) {
         createMiscAutoCategorizedChannel(context)
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("navigate_to", "categorize")
-            putExtra("expense_id", expenseId)
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            (expenseId + 800_000).toInt(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = expenseOpenPendingIntent(context, expenseId, ExpenseNotificationContract.MISC, "body")
 
         val formattedAmount = String.format("KES %,.2f", amount)
 
@@ -354,7 +341,8 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
-        notificationManager.notify((expenseId + 800_000).toInt(), notification)
+        notificationManager.notify(ExpenseNotificationContract.tag(expenseId, ExpenseNotificationContract.MISC),
+            ExpenseNotificationContract.NOTIFICATION_ID, notification)
     }
 
     // ==================== Recurring Reminders ====================

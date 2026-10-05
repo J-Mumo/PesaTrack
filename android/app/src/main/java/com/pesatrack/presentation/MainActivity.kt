@@ -1,6 +1,7 @@
 package com.pesatrack.presentation
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -29,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -36,6 +39,7 @@ import androidx.navigation.compose.rememberNavController
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.presentation.navigation.BottomNavItem
 import com.pesatrack.presentation.navigation.NavGraph
+import com.pesatrack.presentation.navigation.NotificationNavigation
 import com.pesatrack.presentation.navigation.Screen
 import com.pesatrack.presentation.screens.onboarding.OnboardingScreen
 import com.pesatrack.presentation.screens.pin.PinLockScreen
@@ -45,6 +49,7 @@ import com.pesatrack.presentation.components.TelemetryConsentSheet
 import com.pesatrack.presentation.theme.PesaTrackTheme
 import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.NotificationHelper
+import com.pesatrack.services.ExpenseNotificationContract
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 
@@ -115,11 +120,8 @@ class MainActivity : FragmentActivity() {
     private var onBiometricSuccess: (() -> Unit)? = null
 
     /** Deep-link navigation target from notification intent extras. */
-    private val pendingNavigateTo = mutableStateOf<String?>(null)
-    private val pendingExpenseId = mutableStateOf<Long?>(null)
-    private val pendingIncomeId = mutableStateOf<Long?>(null)
-    private val pendingSnapshotId = mutableStateOf<Long?>(null)
-    private val pendingYear = mutableStateOf<Int?>(null)
+    private val pendingNavigation = mutableStateOf<NotificationNavigation?>(null)
+    private var navigationToken = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,7 +144,14 @@ class MainActivity : FragmentActivity() {
         setupBiometric()
 
         // Handle deep-link from notification
-        handleDeepLinkIntent(intent)
+        if (savedInstanceState == null) {
+            handleDeepLinkIntent(intent)
+        } else {
+            navigationToken = savedInstanceState.getLong("notification_navigation_token")
+            // Restore only unconsumed delivery, never replay the original activity intent.
+            val extras = savedInstanceState.getBundle("pending_notification_navigation")
+            pendingNavigation.value = extras?.let { readNavigation(Intent().putExtras(it), navigationToken) }
+        }
 
         setContent {
             PesaTrackTheme {
@@ -153,46 +162,66 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleDeepLinkIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putLong("notification_navigation_token", navigationToken)
+        pendingNavigation.value?.let { request ->
+            outState.putBundle("pending_notification_navigation", Bundle().apply {
+                putString("navigate_to", request.target)
+                request.expenseId?.let { putLong("expense_id", it) }
+                request.incomeId?.let { putLong("income_id", it) }
+                request.snapshotId?.let { putLong("report_snapshot_id", it) }
+                request.year?.let { putInt("year", it) }
+            })
+        }
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun readNavigation(intent: Intent?, token: Long): NotificationNavigation? {
+        val target = intent?.getStringExtra("navigate_to") ?: return null
+        return NotificationNavigation(
+            token, target,
+            intent.getLongExtra("expense_id", -1L).takeIf { it > 0 },
+            intent.getLongExtra("income_id", -1L).takeIf { it > 0 },
+            intent.getLongExtra("report_snapshot_id", -1L).takeIf { it > 0 },
+            intent.getIntExtra("year", -1).takeIf { it > 0 }
+        ).takeIf { it.route() != null }
     }
 
     /**
      * Extract deep-link navigation extras from the notification intent.
      */
     private fun handleDeepLinkIntent(intent: Intent?) {
-        val navigateTo = intent?.getStringExtra("navigate_to") ?: return
-        val expenseId = intent.getLongExtra("expense_id", -1L)
-        val incomeId = intent.getLongExtra("income_id", -1L)
-        val snapshotId = intent.getLongExtra("report_snapshot_id", -1L)
-        val year = intent.getIntExtra("year", -1)
-        pendingNavigateTo.value = navigateTo
-        if (expenseId != -1L) {
-            pendingExpenseId.value = expenseId
-        }
-        if (incomeId != -1L) {
-            pendingIncomeId.value = incomeId
-        }
-        if (snapshotId != -1L) {
-            pendingSnapshotId.value = snapshotId
-        }
-        if (year != -1) {
-            pendingYear.value = year
+        val request = readNavigation(intent, ++navigationToken) ?: return
+        pendingNavigation.value = request
+        val navigateTo = request.target
+        // Action buttons do not auto-cancel. Only cancel the validated originating expense
+        // notification, never an untagged ID belonging to a budget/review/income notification.
+        val kind = intent?.getStringExtra(ExpenseNotificationContract.EXTRA_KIND)
+        if (navigateTo == "categorize" && ExpenseNotificationContract.isOpen(
+                intent?.action, intent?.dataString, request.expenseId ?: -1L, kind)) {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(ExpenseNotificationContract.tag(request.expenseId!!, kind!!),
+                ExpenseNotificationContract.NOTIFICATION_ID)
         }
 
         // Telemetry — bucket the deep-link target into one of the four
         // notification kinds. Anything unrecognised is dropped (silence is
         // safer than sending a novel enum value).
-        val kind = when (navigateTo) {
+        val telemetryKind = when (navigateTo) {
             "categorize", "categorize_income" -> TelemetryEvents.NOTIFICATION_CATEGORIZE
             "weekly_review", "monthly_review", "quarterly_review", "year_in_review" ->
                 TelemetryEvents.NOTIFICATION_REVIEW
             "budget" -> TelemetryEvents.NOTIFICATION_BUDGET
             else -> null
         }
-        if (kind != null) {
+        if (telemetryKind != null) {
             telemetryClient.logEvent(
                 TelemetryEvents.NOTIFICATION_OPENED,
-                mapOf(TelemetryEvents.PARAM_KIND to kind)
+                mapOf(TelemetryEvents.PARAM_KIND to telemetryKind)
             )
         }
     }
@@ -207,13 +236,15 @@ class MainActivity : FragmentActivity() {
      */
     @Composable
     private fun AppEntryPoint() {
-        val onboardingCompleted by appPreferences.onboardingCompleted.collectAsState(initial = true)
+        val onboardingCompleted by appPreferences.onboardingCompleted.collectAsState(initial = null)
         val coroutineScope = rememberCoroutineScope()
 
         // Track whether user tapped "Import Now" during onboarding
         var pendingImportNavigation by remember { mutableStateOf(false) }
 
-        if (!onboardingCompleted) {
+        // Do not consume a notification while persisted onboarding state is still loading.
+        if (onboardingCompleted == null) return
+        if (onboardingCompleted == false) {
             // Record onboarding started milestone (fire-and-forget)
             LaunchedEffect(Unit) {
                 appPreferences.recordOnboardingStarted()
@@ -301,6 +332,8 @@ class MainActivity : FragmentActivity() {
         onImportNavigated: () -> Unit = {}
     ) {
         val isLocked by appLockLifecycleObserver.isLocked.collectAsState()
+        val lockReady by appLockLifecycleObserver.isLockStateReady.collectAsState()
+        if (!lockReady) return
 
         if (isLocked) {
             val pinViewModel: PinViewModel = hiltViewModel()
@@ -329,25 +362,14 @@ class MainActivity : FragmentActivity() {
                 }
             )
         } else {
-            val deepLinkTarget by pendingNavigateTo
-            val deepLinkExpenseId by pendingExpenseId
-            val deepLinkIncomeId by pendingIncomeId
-            val deepLinkSnapshotId by pendingSnapshotId
-            val deepLinkYear by pendingYear
+            val request by pendingNavigation
             MainScreen(
                 navigateToImport = navigateToImport,
                 onImportNavigated = onImportNavigated,
-                deepLinkTarget = deepLinkTarget,
-                deepLinkExpenseId = deepLinkExpenseId,
-                deepLinkIncomeId = deepLinkIncomeId,
-                deepLinkSnapshotId = deepLinkSnapshotId,
-                deepLinkYear = deepLinkYear,
-                onDeepLinkHandled = {
-                    pendingNavigateTo.value = null
-                    pendingExpenseId.value = null
-                    pendingIncomeId.value = null
-                    pendingSnapshotId.value = null
-                    pendingYear.value = null
+                notificationNavigation = request,
+                onDeepLinkHandled = { handled ->
+                    // An older effect cannot acknowledge a newer notification delivery.
+                    pendingNavigation.value = pendingNavigation.value?.acknowledge(handled)
                 },
                 onScreenViewed = { screen ->
                     telemetryClient.logEvent(
@@ -522,17 +544,17 @@ class MainActivity : FragmentActivity() {
 fun MainScreen(
     navigateToImport: Boolean = false,
     onImportNavigated: () -> Unit = {},
-    deepLinkTarget: String? = null,
-    deepLinkExpenseId: Long? = null,
-    deepLinkIncomeId: Long? = null,
-    deepLinkSnapshotId: Long? = null,
-    deepLinkYear: Int? = null,
-    onDeepLinkHandled: () -> Unit = {},
+    notificationNavigation: NotificationNavigation? = null,
+    onDeepLinkHandled: (NotificationNavigation) -> Unit = {},
     onScreenViewed: (String) -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateFlow.collectAsState()
+    val navReady = navBackStackEntry != null
+    val resumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
 
     // Phase 2 telemetry — emit `screen_viewed` whenever the active
     // destination changes. We strip both `?` (optional query args like
@@ -548,51 +570,20 @@ fun MainScreen(
     }
 
     // Navigate to import screen if user tapped "Import Now" during onboarding
-    LaunchedEffect(navigateToImport) {
-        if (navigateToImport) {
+    LaunchedEffect(navigateToImport, navReady, resumed) {
+        if (navigateToImport && navReady && resumed) {
             navController.navigate(Screen.ImportHistory.route)
             onImportNavigated()
         }
     }
 
     // Handle deep-link navigation from notification tap
-    LaunchedEffect(deepLinkTarget) {
-        when (deepLinkTarget) {
-            "categorize" -> {
-                deepLinkExpenseId?.let { id ->
-                    navController.navigate(Screen.Categorize.createRoute(id))
-                }
-            }
-            "categorize_income" -> {
-                deepLinkIncomeId?.let { id ->
-                    navController.navigate(Screen.CategorizeIncome.createRoute(id))
-                }
-            }
-            "budget" -> navController.navigate(Screen.Budget.route)
-            "weekly_review" -> {
-                navController.navigate(
-                    Screen.WeeklyReview.createRoute(deepLinkSnapshotId)
-                )
-            }
-            "monthly_review" -> {
-                navController.navigate(
-                    Screen.MonthlyReview.createRoute(deepLinkSnapshotId)
-                )
-            }
-            "quarterly_review" -> {
-                navController.navigate(
-                    Screen.QuarterlyReview.createRoute(deepLinkSnapshotId)
-                )
-            }
-            "year_in_review" -> {
-                navController.navigate(
-                    Screen.YearInReview.createRoute(deepLinkYear)
-                )
-            }
-        }
-        if (deepLinkTarget != null) {
-            onDeepLinkHandled()
-        }
+    LaunchedEffect(notificationNavigation, navReady, resumed) {
+        val request = notificationNavigation ?: return@LaunchedEffect
+        // This composable exists only after the onboarding and lock gates have resolved.
+        val route = request.routeWhenReady(true, true, false, resumed, navReady) ?: return@LaunchedEffect
+        navController.navigate(route) { launchSingleTop = true }
+        onDeepLinkHandled(request)
     }
 
     // Define bottom nav items with icons
