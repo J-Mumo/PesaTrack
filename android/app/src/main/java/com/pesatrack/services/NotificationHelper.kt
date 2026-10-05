@@ -359,6 +359,13 @@ object NotificationHelper {
 
     // ==================== Recurring Reminders ====================
 
+    fun canShowRecurringReminders(context: Context): Boolean {
+        if (!androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        createRecurringReminderChannel(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return manager.getNotificationChannel(RECURRING_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
     /**
      * Create the recurring reminders notification channel (required for Android 8.0+).
      * Safe to call multiple times — only creates the channel once.
@@ -415,7 +422,7 @@ object NotificationHelper {
         val notification = NotificationCompat.Builder(context, RECURRING_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("📅 $recipientName ($formattedAmount)")
-            .setContentText("Recurring payment $dueDescription")
+            .setContentText("Based on past payments, $dueDescription")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -457,7 +464,7 @@ object NotificationHelper {
 
         val notification = NotificationCompat.Builder(context, RECURRING_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("⚠️ $recipientName payment overdue")
+            .setContentTitle("$recipientName — payment not detected")
             .setContentText("$expectedByDescription — no payment detected yet")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)

@@ -8,6 +8,7 @@ import com.pesatrack.services.AppLockLifecycleObserver
 import com.pesatrack.services.MonthlyReviewWorker
 import com.pesatrack.services.NotificationHelper
 import com.pesatrack.services.QuarterlyReviewWorker
+import com.pesatrack.services.RecurringReminderWorker
 import com.pesatrack.services.WeeklyReviewWorker
 import com.pesatrack.services.YearInReviewWorker
 import com.pesatrack.services.telemetry.TelemetryClient
@@ -83,6 +84,9 @@ class PesaTrackApp : Application(), Configuration.Provider {
         // Insights & Reports v1.4 — yearly review channel + Dec 28 scheduler.
         NotificationHelper.createYearlyReviewChannel(this)
         YearInReviewWorker.scheduleYearly(this)
+
+        NotificationHelper.createRecurringReminderChannel(this)
+        RecurringReminderWorker.scheduleDaily(this)
     }
 
     override val workManagerConfiguration: Configuration

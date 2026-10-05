@@ -59,7 +59,8 @@ class SettingsViewModel @Inject constructor(
                 appPreferences.biometricEnabled,
                 appPreferences.lockTimeoutSeconds,
                 appPreferences.monthStartDay,
-                appPreferences.telemetryEnabled
+                appPreferences.telemetryEnabled,
+                appPreferences.recurringRemindersEnabled
             ) { values ->
                 val trackingEnabled = values[0] as Boolean
                 val enabledBanks = @Suppress("UNCHECKED_CAST") (values[1] as Set<String>)
@@ -68,6 +69,7 @@ class SettingsViewModel @Inject constructor(
                 val lockTimeout = values[4] as Int
                 val monthStartDay = values[5] as Int
                 val telemetryEnabled = values[6] as Boolean
+                val recurringRemindersEnabled = values[7] as Boolean
 
                 // Get all non-MPESA parser names from the registry
                 val bankNames = SmsParserRegistry.getAllParserNames()
@@ -88,7 +90,8 @@ class SettingsViewModel @Inject constructor(
                     biometricEnabled = biometricEnabled,
                     lockTimeoutSeconds = lockTimeout,
                     monthStartDay = monthStartDay,
-                    telemetryEnabled = telemetryEnabled
+                    telemetryEnabled = telemetryEnabled,
+                    recurringRemindersEnabled = recurringRemindersEnabled
                 )
             }.collect { state ->
                 _uiState.value = state
@@ -97,6 +100,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     // ==================== Bank SMS Tracking ====================
+
+    fun setRecurringRemindersEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appPreferences.setRecurringRemindersEnabled(enabled)
+        }
+    }
 
     /**
      * Toggle the master bank tracking switch.

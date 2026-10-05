@@ -276,13 +276,15 @@ class RecurringExpenseService @Inject constructor(
 
         // Step 5: Predict next occurrence
         val lastExpense = expenses.last()
-        val nextExpected = predictNextOccurrence(cycle, expenses, now)
         val expectedDayOfMonth = if (cycle == RecurrenceCycle.MONTHLY) {
             detectExpectedDayOfMonth(expenses)
         } else null
+        val nextExpected = RecurringReminderTiming.nextExpected(
+            lastExpense.timestamp, cycle, expectedDayOfMonth
+        )
 
         // Step 6: Determine if overdue
-        val isOverdue = nextExpected < now
+        val isOverdue = RecurringReminderTiming.isOverdue(nextExpected, now)
 
         // Step 7: Determine display name
         val displayName = lastExpense.recipientName
@@ -338,56 +340,6 @@ class RecurringExpenseService @Inject constructor(
         } else {
             null
         }
-    }
-
-    /**
-     * Predict the next occurrence timestamp for a recurring expense.
-     *
-     * For MONTHLY expenses: uses day-of-month from most common occurrence day.
-     * For other cycles: adds the expected interval to the last occurrence.
-     */
-    private fun predictNextOccurrence(
-        cycle: RecurrenceCycle,
-        expenses: List<RecurrenceCandidate>,
-        now: Long
-    ): Long {
-        val lastTimestamp = expenses.last().timestamp
-
-        if (cycle == RecurrenceCycle.MONTHLY) {
-            // Use the most common day of month
-            val expectedDay = detectExpectedDayOfMonth(expenses) ?: 1
-            val cal = Calendar.getInstance()
-            cal.timeInMillis = lastTimestamp
-
-            // Move to next month, set the expected day
-            cal.add(Calendar.MONTH, 1)
-            val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-            cal.set(Calendar.DAY_OF_MONTH, expectedDay.coerceAtMost(maxDay))
-            cal.set(Calendar.HOUR_OF_DAY, 12) // Noon to avoid timezone edge cases
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
-
-            var prediction = cal.timeInMillis
-
-            // If prediction is still in the past, move forward another month
-            while (prediction < now - OVERDUE_GRACE_DAYS * MS_PER_DAY) {
-                cal.add(Calendar.MONTH, 1)
-                val newMaxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                cal.set(Calendar.DAY_OF_MONTH, expectedDay.coerceAtMost(newMaxDay))
-                prediction = cal.timeInMillis
-            }
-
-            return prediction
-        }
-
-        // For non-monthly cycles: add the expected interval
-        var prediction = lastTimestamp + cycle.expectedDays * MS_PER_DAY
-        // If prediction is far in the past, advance by multiples of the cycle
-        while (prediction < now - OVERDUE_GRACE_DAYS * MS_PER_DAY) {
-            prediction += cycle.expectedDays * MS_PER_DAY
-        }
-        return prediction
     }
 
     /**

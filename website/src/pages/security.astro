@@ -63,10 +63,11 @@ const crumbs = [
     <li><code>READ_SMS</code> / <code>RECEIVE_SMS</code> — to auto-detect M-PESA
       and NCBA transactions. See <a href="/faq#does-pesatrack-read-all-sms">the FAQ</a>
       for what we do and don't read.</li>
-    <li><code>POST_NOTIFICATIONS</code> — for the "new transaction" and
-      "uncategorised" notifications. Optional.</li>
+    <li><code>POST_NOTIFICATIONS</code> — for transaction, uncategorised and
+      optional recurring-payment reminders. Recurring reminders are estimated
+      from payment history, checked by WorkManager about once a day, and may
+      arrive late; they do not use exact alarms.</li>
     <li><code>USE_BIOMETRIC</code> — only if you enable biometric unlock.</li>
-    <li><code>SCHEDULE_EXACT_ALARM</code> — for recurring reminders you set.</li>
     <li><code>INTERNET</code> / <code>ACCESS_NETWORK_STATE</code> — exclusively
       for opt-in Firebase Analytics. Off by default; no transaction data or PII
       is ever transmitted.</li>

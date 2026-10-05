@@ -127,6 +127,12 @@ fun SettingsScreen(
                     onBankToggled = viewModel::setBankEnabled
                 )
 
+                // Section: Recurring reminders
+                RecurringReminderSection(
+                    enabled = uiState.recurringRemindersEnabled,
+                    onToggle = viewModel::setRecurringRemindersEnabled
+                )
+
                 // Section: Data Management
                 DataManagementSection(
                     uiState = uiState,
@@ -159,6 +165,37 @@ fun SettingsScreen(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun RecurringReminderSection(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Text(
+        text = "Notifications",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Recurring payment reminders", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Expected payments and payments not detected after a two-day grace period",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = onToggle)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Estimated from your payment history on this device. Checked once daily; delivery may be delayed. Android notifications must also be allowed. A missing payment is not proof that a bill is unpaid.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
