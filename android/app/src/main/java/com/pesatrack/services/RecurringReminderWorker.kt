@@ -45,18 +45,17 @@ class RecurringReminderWorker @AssistedInject constructor(
             if (!NotificationHelper.canShowRecurringReminders(context)) return Result.success()
 
             val summary = recurringExpenseService.getRecurringExpenses(forceRefresh = true)
+            appPreferences.migrateRecurringCooldowns(summary.recurringExpenses)
 
             val now = System.currentTimeMillis()
 
             for (recurring in summary.recurringExpenses) {
-                // Only notify for high-confidence recurring expenses
-                if (recurring.confidence < RecurringExpenseService.MIN_CONFIDENCE_FOR_FORECAST) continue
+                if (!isSelectedForDelivery(recurring)) continue
 
                 val daysUntil = RecurringReminderTiming.daysUntil(recurring.nextExpected, now)
                 // Today remains eligible after noon; tomorrow is a calendar day, not 24 hours.
                 if (daysUntil in 0L..1L) {
-                    val throttleKey = "recurring_remind_${recurring.recipientKey}"
-                    if (appPreferences.canSendRecurringNotification(throttleKey, recurring.cycle.expectedDays)) {
+                    deliverRecurring("remind", recurring) {
                         val dueDesc = if (daysUntil == 0L) "expected today" else "expected tomorrow"
                         NotificationHelper.showRecurringReminderNotification(
                             context = context,
@@ -65,14 +64,12 @@ class RecurringReminderWorker @AssistedInject constructor(
                             amount = recurring.averageAmount,
                             dueDescription = dueDesc
                         )
-                        appPreferences.setLastRecurringNotifTime(throttleKey)
                     }
                 }
 
                 // Check if overdue (expected date passed + grace period)
                 if (RecurringReminderTiming.isOverdue(recurring.nextExpected, now)) {
-                    val throttleKey = "recurring_overdue_${recurring.recipientKey}"
-                    if (appPreferences.canSendRecurringNotification(throttleKey, recurring.cycle.expectedDays)) {
+                    deliverRecurring("overdue", recurring) {
                         val expectedDesc = if (recurring.expectedDayOfMonth != null) {
                             "Usually by the ${ordinalSuffix(recurring.expectedDayOfMonth)}"
                         } else {
@@ -84,7 +81,6 @@ class RecurringReminderWorker @AssistedInject constructor(
                             recipientName = recurring.recipientDisplayName,
                             expectedByDescription = expectedDesc
                         )
-                        appPreferences.setLastRecurringNotifTime(throttleKey)
                     }
                 }
             }
@@ -99,6 +95,20 @@ class RecurringReminderWorker @AssistedInject constructor(
             Result.retry()
         }
     }
+
+    private suspend fun deliverRecurring(type: String, payment: com.pesatrack.domain.models.RecurringExpense,
+                                         send: () -> Boolean) {
+        val throttleKey = "recurring_${type}_${payment.recipientKey}"
+        RecurringReminderDelivery.attempt(
+            eligible = { isSelectedForDelivery(payment) },
+            cooldown = { appPreferences.canSendRecurringNotification(throttleKey, payment.cycle.expectedDays) },
+            deliver = send,
+            record = { appPreferences.setLastRecurringNotifTime(throttleKey) }
+        )
+    }
+
+    private suspend fun isSelectedForDelivery(payment: com.pesatrack.domain.models.RecurringExpense): Boolean =
+        NotificationHelper.canShowRecurringReminders(context) && appPreferences.getRecurringReminderDecision(payment).canDeliver
 
     private fun ordinalSuffix(day: Int): String {
         val suffix = when {

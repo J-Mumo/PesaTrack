@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.pesatrack.data.local.preferences.AppPreferences
 import com.pesatrack.services.DataManagementService
 import com.pesatrack.services.SampleDataService
+import com.pesatrack.services.NotificationHelper
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.pesatrack.services.telemetry.TelemetryClient
 import com.pesatrack.services.telemetry.TelemetryEvents
 import com.pesatrack.utils.parsers.SmsParserRegistry
@@ -37,7 +39,8 @@ class SettingsViewModel @Inject constructor(
     private val appPreferences: AppPreferences,
     private val dataManagementService: DataManagementService,
     private val sampleDataService: SampleDataService,
-    private val telemetryClient: TelemetryClient
+    private val telemetryClient: TelemetryClient,
+    @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -104,6 +107,7 @@ class SettingsViewModel @Inject constructor(
     fun setRecurringRemindersEnabled(enabled: Boolean) {
         viewModelScope.launch {
             appPreferences.setRecurringRemindersEnabled(enabled)
+            if (!enabled) NotificationHelper.dismissAllRecurringReminders(applicationContext)
         }
     }
 
@@ -359,10 +363,11 @@ class SettingsViewModel @Inject constructor(
                 if (success) {
                     _uiState.value = _uiState.value.copy(
                         isRestoring = false,
-                        dataManagementMessage = "Restore successful — restarting…"
+                        dataManagementMessage = dataManagementService.lastRestoreReminderWarning
+                            ?: "Restore successful. Reminder delivery waits one cooldown cycle — restarting…"
                     )
                     // Brief delay so the user sees the success message
-                    delay(1000)
+                    delay(if (dataManagementService.lastRestoreReminderWarning != null) 7000 else 3000)
                     // Restart the app process to reinitialize Hilt singletons with the new database
                     restartApp(context)
                 } else {

@@ -81,6 +81,25 @@ const crumbs = [
     <li><strong>Ad SDKs, cross-app IDs, third-party trackers.</strong> None.</li>
   </ul>
 
+  <h2>Individual reminder choices — pending release</h2>
+  <p>
+    An upcoming app update adds Settings → Notifications → Recurring payment
+    reminders → Choose payments. Rent, Electricity, Water Bill, Home WiFi and
+    Gas start on only with at least 70% category support; other detected payments
+    start off. The master switch pauses delivery without deleting choices.
+    Individual selections do not bypass inference confidence, Android permissions
+    or cooldowns. A missing payment is not proof that a bill is unpaid.
+  </p>
+  <p>
+    Choice identifiers include sensitive recipient/account metadata; masking in
+    the screen is not anonymization. They are stored locally, never sent to
+    analytics or a backend, and included in new user-created backups. Those raw
+    database backups are not encrypted by PesaTrack. Old backups reset individual
+    choices to category defaults; unreadable reminder metadata pauses delivery.
+    Restores wait one cooldown cycle to prevent a catch-up burst. No new permission
+    or data transmission is introduced. See the <a href="/docs/recurring-reminders">guide</a>.
+  </p>
+
   <h2>Reporting a security issue</h2>
   <p>
     Email <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> with

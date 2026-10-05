@@ -38,6 +38,7 @@ PesaTrack is a **passive M-PESA expense tracker** for Android. It intercepts inc
 | **Onboarding Flow** | ✅ Complete | 100% |
 | **Budget Forecasting (4 phases)** | ❌ Removed | n/a (see 2026 cleanup note) |
 | **Recurring Expense Detection** | ✅ Complete | 100% |
+| **Selective recurring reminders** | ✅ Implemented; pending release/device QA | 100% code |
 | **Insights & Reports v1.0 (Weekly Review)** | ✅ Complete | 100% |
 | **Insights & Reports v1.1 (Monthly Review)** | ✅ Complete | 100% |
 | **Insights & Reports v1.2 (Insights Section + Insight Cards)** | ✅ Complete | 100% |
@@ -74,10 +75,14 @@ SMS Sources ──────────────────────�
 │                    ┌───────────┬────────┼──────────┬──────────┐             │
 │               HomeScreen  ExpenseList  Categorize  Batch   Settings        │
 │                                                    ExcelImport             │
+│ Room (no fee 606) → RecurringExpenseService ← DataStore overrides           │
+│                          ↓ RecurringReminderPolicy                         │
+│               Settings/Choose payments     Daily worker → OS/cooldowns      │
 ──────────────────────────────────────────────────────────────────────────────
 ```
 
 **Key design decisions:**
+- Reminder path: Room expenses (fee 606 excluded) → canonical account-isolated detection → shared `RecurringReminderPolicy` ← atomic DataStore overrides → Settings-linked selection UI / daily worker → Android permission/channel + per-type cooldown gates. No Room schema or network change.
 - No backend communication — all data is local (Room + DataStore)
 - SMS parsing + Excel import are the sources of expense data (M-PESA + bank SMS + Excel spreadsheets, plus future manual entry)
 - Strategy pattern for SMS parsers — new banks are added as `SmsParserStrategy` implementations
@@ -213,6 +218,7 @@ SMS Sources ──────────────────────�
 | **Navigation** | | |
 | Nav Graph | [`NavGraph.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt:17) | 18 routes: Home, Analytics, Expenses, Categorize, Import, ExcelImport, BatchCategorize, Settings, ManualEntry, Budget, CategoryManagement, About, WeeklyReview, MonthlyReview, QuarterlyReview, YearInReview, CategorizeIncome, Income |
 | Screen Routes | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:6) | Sealed class with route definitions (incl. QuarterlyReview, YearInReview, CategorizeIncome, Income) |
+| Selective reminders route | [Screen.kt](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt) / [NavGraph.kt](../android/app/src/main/java/com/pesatrack/presentation/navigation/NavGraph.kt) | `recurring_reminders`, reached only through Settings → Notifications → Choose payments; no Home CTA |
 | Bottom Nav | [`Screen.kt`](../android/app/src/main/java/com/pesatrack/presentation/navigation/Screen.kt:23) | 3 tabs: Home, Analytics, Expenses |
 | **Main Activity** | | |
 | MainActivity | [`MainActivity.kt`](../android/app/src/main/java/com/pesatrack/presentation/MainActivity.kt:48) | Onboarding overlay → PIN lock overlay → main app; biometric setup; notification channel |
@@ -257,6 +263,8 @@ SMS Sources ──────────────────────�
 | SettingsScreen | [`SettingsScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsScreen.kt:1) | Security (PIN toggle, change PIN, biometric, timeout) + Category management + Budget management + **Month start day picker (1–28)** + Bank SMS tracking toggles + **Notifications section (recurring reminders toggle)** |
 | SettingsViewModel | [`SettingsViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsViewModel.kt:1) | Bank preferences + PIN/biometric preferences + month start day management + **recurring reminders toggle** |
 | SettingsUiState | [`SettingsUiState.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/settings/SettingsUiState.kt:1) | BankToggle + PIN/biometric/timeout + monthStartDay + **recurringRemindersEnabled** state |
+| RecurringRemindersScreen | [RecurringRemindersScreen.kt](../android/app/src/main/java/com/pesatrack/presentation/screens/recurring_reminders/RecurringRemindersScreen.kt) | Searchable per-payment switches, masked accounts, cadence/estimated KES amount/date, default/choice source, medium-confidence copy, paused-master banner, confirmed defaults reset and Android notification-settings recovery |
+| RecurringRemindersViewModel / UiState | [RecurringRemindersViewModel.kt](../android/app/src/main/java/com/pesatrack/presentation/screens/recurring_reminders/RecurringRemindersViewModel.kt) / [RecurringRemindersUiState.kt](../android/app/src/main/java/com/pesatrack/presentation/screens/recurring_reminders/RecurringRemindersUiState.kt) | Hilt + StateFlow; stored choices survive loading failures and disappeared patterns; no telemetry of choices or identifiers |
 | **Category Management Screen** | | |
 | CategoryManagementScreen | [`CategoryManagementScreen.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementScreen.kt:1) | Tab-based CRUD: Categories tab (add/edit/delete groups + sub-categories with icon/color pickers) + Auto-Rules tab (CRUD for user-defined categorization rules) |
 | CategoryManagementViewModel | [`CategoryManagementViewModel.kt`](../android/app/src/main/java/com/pesatrack/presentation/screens/category_management/CategoryManagementViewModel.kt:1) | Category + rule CRUD, dialog state management, expense count validation |
@@ -307,6 +315,8 @@ SMS Sources ──────────────────────�
 | Budget Alert Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:132) | Shows "⚠️ Budget Warning" at 80% / "🚨 Budget Exceeded" at 100% with progress details |
 | Recurring Reminder Notification | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt) | Upcoming: "📅 Rent (KES 35,000)" with "Based on past payments, expected tomorrow"; overdue: "⚠️ Rent payment overdue" with a non-definitive missing-payment description |
 | Recurring Reminder Worker | [`RecurringReminderWorker.kt`](../android/app/src/main/java/com/pesatrack/services/RecurringReminderWorker.kt) | Unique daily WorkManager job scheduled from `PesaTrackApp` at approximately 09:00 local time (best effort); checks today/tomorrow and payments missing after a two-day grace period, only with permission/channel enabled |
+| Individual selection policy | [RecurringReminderPolicy.kt](../android/app/src/main/java/com/pesatrack/services/RecurringReminderPolicy.kt) | Collision-safe length-prefixed `recurring_identity_v1`; exact defaults 1009/1002/1012/1007/1004 only with ≥0.7 category support; explicit choices precede defaults; master/fee/confidence delivery gates shared by UI and worker |
+| Individual preference / backup state | [AppPreferences.kt](../android/app/src/main/java/com/pesatrack/data/local/preferences/AppPreferences.kt) / [DataManagementService.kt](../android/app/src/main/java/com/pesatrack/services/DataManagementService.kt) | Bounded atomic versioned map, reset/removal APIs, conservative legacy throttle migration; parameterized backup metadata; old backups reset choices and retain master; invalid metadata pauses; restore cooldown floor; clear-data removes identifiers/throttles, category reset retains choices |
 | Tap-to-Categorize | [`NotificationHelper.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt:64) | PendingIntent opens categorize screen |
 | Ignore from Notification | [`NotificationActionReceiver.kt`](../android/app/src/main/java/com/pesatrack/services/NotificationActionReceiver.kt:1) | "Categorize" + "Ignore" action buttons on expense notification; 5s undo window before persisting exclude |
 | Channel Init on Launch | [`PesaTrackApp.kt`](../android/app/src/main/java/com/pesatrack/PesaTrackApp.kt) | Recurring channel created and unique daily work enqueued from Application startup; other channels have their own startup paths |
@@ -455,6 +465,8 @@ The following were removed when STK Push was dropped in favour of SMS-only track
 
 ### Operational documentation
 
+- [plans/selective-recurring-reminders-plan.md](../plans/selective-recurring-reminders-plan.md) — approved reference, implemented 2026-10-06; original planning status intentionally left unchanged. [Implementation and verification note](selective-recurring-reminders-implementation.md) records current status and release gates.
+
 - [`plans/private-repo-transition-plan.md`](../plans/private-repo-transition-plan.md) — migration sequence and go/no-go criteria (in progress).
 - [`_docs/private-repo-transition-checklist.md`](private-repo-transition-checklist.md) — verified local steps, console handoffs and post-cutover checks (in progress).
 
@@ -588,6 +600,10 @@ app/src/main/java/com/pesatrack/
 │   │   │   ├── IncomeScreen.kt              ✅ Month/Quarter/Year segmented income list with `IncomeHeaderCard` (total + reconciliation chip + weighted `SourceBreakdownBar` + `FlowRow` of `SourceLegendChip`s), `IncomeRow`s (color dot + amount + source + date, tap → CategorizeIncome, long-press → toggle `isExcluded` / restore; excluded rows render dimmed + strike-through), and `ManualIncomeEntryDialog` via Extended FAB (income tracking Phase 3)
 │   │   │   ├── IncomeViewModel.kt           ✅ `@HiltViewModel` injecting `IncomeRepository`; loads `getForRange` + `sourceBreakdown` + `effectiveMonthlyIncome` (monthly only); persists manual entries via `IncomeRepository.insertIfNew` with `parserSource = "MANUAL"`
 │   │   │   └── IncomeUiState.kt             ✅ `IncomePeriod { MONTH, QUARTER, YEAR }` + period/total/breakdown/effectiveSource/transactions + manual-entry dialog fields
+│   │   ├── recurring_reminders/
+│   │   │   ├── RecurringRemindersScreen.kt  ✅ Settings-linked individual switches/search/default source/reset/permission recovery
+│   │   │   ├── RecurringRemindersViewModel.kt ✅ Hilt + persistent local selection controls
+│   │   │   └── RecurringRemindersUiState.kt ✅ Payments, selections, master pause, loading/error/search
 │   │   └── settings/
 │   │       ├── SettingsScreen.kt             ✅ Security (PIN, biometric, timeout) + Category mgmt + Budget mgmt + **Month start day picker** + Bank SMS toggles + **Notifications section (recurring reminders)**
 │   │       ├── SettingsViewModel.kt          ✅ Bank + PIN/biometric + month start day + **recurring reminders** preferences management
@@ -613,6 +629,7 @@ app/src/main/java/com/pesatrack/
 │   ├── RecurringExpenseService.kt           ✅ Recurring expense detection engine (interval analysis, 4 cycle types, 15-min cache, period info for forecasting)
 │   ├── RecurringReminderWorker.kt           ✅ Daily WorkManager worker — upcoming/overdue recurring expense notifications (@HiltWorker)
 │   ├── RecurringReminderTiming.kt           ✅ Calendar-day predictions, two-day overdue grace, best-effort 09:00 local scheduling delay
+│   ├── RecurringReminderPolicy.kt           ✅ Canonical identity, shared selection/delivery policy, bounded versioned codec and backup validation
 │   ├── QuarterlyReviewWorker.kt             ✅ Fires 1st of Apr/Jul/Oct/Jan at 09:00 — generates quarterly review + notification (@HiltWorker)
 │   ├── YearInReviewWorker.kt                ✅ Fires Dec 28 at 18:00 — generates year-in-review + notification (@HiltWorker)
 │   ├── NotificationActionReceiver.kt        ✅ BroadcastReceiver for notification "Ignore" action — 5s undo window before persisting exclude
@@ -667,6 +684,8 @@ backend/
 ## Bug Fixes & Improvements History
 
 ### Recent Features
+
+- **Selective recurring reminders implemented (2026-10-06; pending release)** — [Approved plan](../plans/selective-recurring-reminders-plan.md) implemented with a dedicated Settings-linked screen, individual local overrides, exact rent/utility defaults with ≥70% category support, paybill account isolation and fee exclusion before detection. Master settings remain unchanged; selections never bypass ≥0.7 detection confidence, date/grace, permission/channel or cooldown gates. Legacy cooldowns migrate conservatively and toggles do not reset them. New backups use bound SQL parameters for all metadata and restore selections together; old backups remove unrelated choices, unreadable metadata pauses reminders, and restore applies a one-cycle cooldown floor. Clear-data removes override/throttle identifiers; category reset preserves explicit choices. **Feature filter:** serves nudge-don't-nag, awareness, privacy and local-first; changes reminder selection behavior; honest downside is inference/name-only identity error and delayed notifications; success is persistent account-level selections and fewer unwanted reminders. **Site update required — included:** FAQ, Kiswahili mirror, security, feature/help and backup documentation, all labeled pending release. No new dependencies, permissions, Room migration, version bump, commit, push or deployment. [Implementation/verification note](selective-recurring-reminders-implementation.md) lists files, tests and device release gates.
 
 - **Recurring reminders repaired (2026-10-05; pending release)** — [RecurringReminderTiming.kt](../android/app/src/main/java/com/pesatrack/services/RecurringReminderTiming.kt) predicts the next occurrence from the last payment without silently rolling missed payments into a future cycle; calendar-day comparison adds a full two-day grace period (overdue from day 3) and correctly distinguishes today from tomorrow, including DST and month-end dates. [RecurringReminderWorker.kt](../android/app/src/main/java/com/pesatrack/services/RecurringReminderWorker.kt) checks today/tomorrow and missing payments after grace only at ≥0.7 confidence, respects the DataStore toggle, channel/OS notification permission and per-recipient/per-type throttles; [PesaTrackApp.kt](../android/app/src/main/java/com/pesatrack/PesaTrackApp.kt) enqueues unique daily work with a best-effort initial 09:00 local delay (not an exact alarm). Settings now exposes the reminder toggle and factual, dismissible copy. [NotificationHelper.kt](../android/app/src/main/java/com/pesatrack/services/NotificationHelper.kt) uses qualified reminder copy rather than treating a missing SMS as proof a bill is unpaid. [RecurringReminderTimingTest.kt](../android/app/src/test/java/com/pesatrack/services/RecurringReminderTimingTest.kt) covers grace boundaries, monthly clamping, DST and leap-year behavior; worker/device delivery remains to be validated on a device before rollout. **Website sync included:** [website security page](../website/src/pages/security.astro) corrects the false `SCHEDULE_EXACT_ALARM` permission claim and explains best-effort reminders. Serves awareness before action and privacy; honest downside: inference can be wrong and WorkManager may run late. Success: users can opt out and understand why/when an expected payment was flagged. No database or new Android permission change.
 

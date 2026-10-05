@@ -43,6 +43,7 @@ fun SettingsScreen(
     onNavigateToCategoryManagement: () -> Unit = {},
     onNavigateToPinSetup: (String) -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
+    onNavigateToRecurringReminders: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -130,7 +131,8 @@ fun SettingsScreen(
                 // Section: Recurring reminders
                 RecurringReminderSection(
                     enabled = uiState.recurringRemindersEnabled,
-                    onToggle = viewModel::setRecurringRemindersEnabled
+                    onToggle = viewModel::setRecurringRemindersEnabled,
+                    onChoosePayments = onNavigateToRecurringReminders
                 )
 
                 // Section: Data Management
@@ -170,7 +172,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun RecurringReminderSection(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+private fun RecurringReminderSection(enabled: Boolean, onToggle: (Boolean) -> Unit, onChoosePayments: () -> Unit) {
     Text(
         text = "Notifications",
         style = MaterialTheme.typography.titleMedium,
@@ -191,6 +193,8 @@ private fun RecurringReminderSection(enabled: Boolean, onToggle: (Boolean) -> Un
                 Switch(checked = enabled, onCheckedChange = onToggle)
             }
             Spacer(Modifier.height(8.dp))
+            Text("Rent and utilities start on. Other detected payments start off. You choose which reminders to receive.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = onChoosePayments) { Text("Choose payments") }
             Text(
                 "Estimated from your payment history on this device. Checked once daily; delivery may be delayed. Android notifications must also be allowed. A missing payment is not proof that a bill is unpaid.",
                 style = MaterialTheme.typography.bodySmall,
@@ -845,7 +849,7 @@ private fun DataManagementSection(
             onDismissRequest = { showClearDialog = false },
             icon = { Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Clear All Data?") },
-            text = { Text("This will permanently delete all your expenses, budgets, and income records. This action cannot be undone.") },
+            text = { Text("This will permanently delete all your expenses, budgets, income records, individual reminder choices and reminder cooldowns. Master settings stay unchanged. This action cannot be undone.") },
             confirmButton = { TextButton(onClick = { showClearDialog = false; onClearData() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Clear All") } },
             dismissButton = { TextButton(onClick = { showClearDialog = false }) { Text("Cancel") } }
         )
@@ -856,7 +860,7 @@ private fun DataManagementSection(
             onDismissRequest = { showRestoreDialog = false },
             icon = { Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Restore Backup?") },
-            text = { Text("This will REPLACE all current data:\n• All expenses and categories\n• Budgets and income records\n• Auto-categorization rules\n• Recipient mappings\n\nThis cannot be undone.\nThe app will restart after restore.") },
+            text = { Text("This will REPLACE all current data:\n• All expenses and categories\n• Budgets and income records\n• Auto-categorization rules\n• Recipient mappings\n• Individual reminder choices\n\nOlder backups reset individual choices to category defaults and keep your master switch. Unreadable reminder settings pause reminders. Delivery waits one cooldown cycle after restore.\n\nThis cannot be undone.\nThe app will restart after restore.") },
             confirmButton = {
                 TextButton(
                     onClick = {

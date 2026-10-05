@@ -11,6 +11,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.pesatrack.utils.parsers.SmsParserRegistry
+import com.pesatrack.domain.models.RecurringExpense
+import com.pesatrack.services.RecurringReminderSelections
+import com.pesatrack.services.RecurringReminderOverride
+import com.pesatrack.services.RecurringReminderOverridesCodec
+import com.pesatrack.services.RecurringReminderPolicy
+import com.pesatrack.services.RecurringReminderRestore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -33,6 +39,14 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class AppPreferences @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private var recurringStoreOverride: DataStore<Preferences>? = null
+    private val recurringDataStore: DataStore<Preferences>
+        get() = recurringStoreOverride ?: context.dataStore
+
+    /** Same preference operations against a real temporary DataStore in JVM tests. */
+    internal constructor(context: Context, recurringStore: DataStore<Preferences>) : this(context) {
+        recurringStoreOverride = recurringStore
+    }
 
     companion object {
         private const val QUALIFIED_SESSION_GAP_MS = 5 * 60 * 1000L
@@ -110,6 +124,8 @@ class AppPreferences @Inject constructor(
          * Default: true — users can disable in Settings.
          */
         private val KEY_RECURRING_REMINDERS_ENABLED = booleanPreferencesKey("recurring_reminders_enabled")
+        private val KEY_RECURRING_OVERRIDES = stringPreferencesKey("recurring_overrides_v1")
+        private val KEY_RECURRING_RESTORE_FLOOR = longPreferencesKey("recurring_restore_cooldown_floor")
 
         /**
          * Whether the Weekly Review (Insights & Reports v1.0) notification is enabled.
@@ -474,19 +490,87 @@ class AppPreferences @Inject constructor(
      * Whether recurring expense reminder notifications are enabled.
      * Default: true — users can disable via Settings toggle.
      */
-    val recurringRemindersEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val recurringRemindersEnabled: Flow<Boolean> get() = recurringDataStore.data.map { preferences ->
         preferences[KEY_RECURRING_REMINDERS_ENABLED] ?: true
     }
 
     /** Snapshot: are recurring reminders enabled? */
     suspend fun getRecurringRemindersEnabled(): Boolean {
-        return context.dataStore.data.first()[KEY_RECURRING_REMINDERS_ENABLED] ?: true
+        return recurringDataStore.data.first()[KEY_RECURRING_REMINDERS_ENABLED] ?: true
     }
 
     /** Toggle recurring reminders on/off. */
     suspend fun setRecurringRemindersEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        recurringDataStore.edit { prefs ->
             prefs[KEY_RECURRING_REMINDERS_ENABLED] = enabled
+        }
+    }
+
+    val recurringReminderSelections: Flow<RecurringReminderSelections> get() = recurringDataStore.data.map {
+        RecurringReminderOverridesCodec.decode(it[KEY_RECURRING_OVERRIDES])
+    }
+
+    suspend fun getRecurringReminderSelections(): RecurringReminderSelections =
+        RecurringReminderOverridesCodec.decode(recurringDataStore.data.first()[KEY_RECURRING_OVERRIDES])
+
+    suspend fun getRecurringReminderDecision(payment: RecurringExpense): com.pesatrack.services.RecurringReminderDecision {
+        val prefs = recurringDataStore.data.first()
+        return RecurringReminderPolicy.resolve(prefs[KEY_RECURRING_REMINDERS_ENABLED] ?: true, payment,
+            RecurringReminderOverridesCodec.decode(prefs[KEY_RECURRING_OVERRIDES]))
+    }
+
+    suspend fun getRecurringReminderBackup(): Pair<Boolean, String> {
+        val prefs = recurringDataStore.data.first()
+        val selections = RecurringReminderOverridesCodec.decode(prefs[KEY_RECURRING_OVERRIDES])
+        check(selections.valid) { "Reset unreadable reminder choices before creating a backup" }
+        return (prefs[KEY_RECURRING_REMINDERS_ENABLED] ?: true) to
+            RecurringReminderOverridesCodec.encode(selections.overrides)
+    }
+
+    suspend fun setRecurringReminderOverride(identity: String, value: RecurringReminderOverride?) {
+        recurringDataStore.edit { prefs ->
+            val current = RecurringReminderOverridesCodec.decode(prefs[KEY_RECURRING_OVERRIDES])
+            check(current.valid) { "Reminder choices could not be read. Use defaults to reset them." }
+            val updated = current.overrides.toMutableMap()
+            if (value == null) updated.remove(identity) else updated[identity] = value
+            prefs[KEY_RECURRING_OVERRIDES] = RecurringReminderOverridesCodec.encode(updated)
+        }
+    }
+
+    suspend fun resetRecurringReminderOverrides() {
+        recurringDataStore.edit { it[KEY_RECURRING_OVERRIDES] = RecurringReminderOverridesCodec.encode(emptyMap()) }
+    }
+
+    /** Apply validated metadata in one edit. Cooldowns are not backed up; wait a cycle after restore. */
+    suspend fun restoreRecurringReminderSettings(settings: RecurringReminderRestore) {
+        recurringDataStore.edit { prefs ->
+            settings.master?.let { prefs[KEY_RECURRING_REMINDERS_ENABLED] = it }
+            prefs[KEY_RECURRING_OVERRIDES] = RecurringReminderOverridesCodec.encode(settings.selections.overrides)
+            prefs.asMap().keys.filter { it.name.startsWith(RECURRING_NOTIF_PREFIX) }.forEach { prefs.remove(it) }
+            prefs[KEY_RECURRING_RESTORE_FLOOR] = System.currentTimeMillis()
+        }
+    }
+
+    /** Clear sensitive per-payment state only. Existing clear-data semantics retain master settings. */
+    suspend fun clearRecurringReminderData() {
+        recurringDataStore.edit { prefs ->
+            prefs.remove(KEY_RECURRING_OVERRIDES)
+            prefs.remove(KEY_RECURRING_RESTORE_FLOOR)
+            prefs.asMap().keys.filter { it.name.startsWith(RECURRING_NOTIF_PREFIX) }.forEach { prefs.remove(it) }
+        }
+    }
+
+    suspend fun migrateRecurringCooldowns(payments: List<RecurringExpense>) {
+        recurringDataStore.edit { prefs ->
+            val now = System.currentTimeMillis()
+            for (payment in payments) for (type in listOf("remind", "overdue")) {
+                val key = longPreferencesKey("${RECURRING_NOTIF_PREFIX}recurring_${type}_${payment.recipientKey}")
+                if (prefs[key] != null) continue
+                val legacy = payment.legacyRecipientKeys.map {
+                    prefs[longPreferencesKey("${RECURRING_NOTIF_PREFIX}recurring_${type}_$it")] ?: 0L
+                }
+                prefs[key] = RecurringReminderPolicy.migratedTimestamp(legacy, payment.ambiguousLegacyIdentity, now)
+            }
         }
     }
 
@@ -521,11 +605,9 @@ class AppPreferences @Inject constructor(
      */
     suspend fun canSendRecurringNotification(throttleKey: String, cycleDays: Int): Boolean {
         val key = longPreferencesKey("${RECURRING_NOTIF_PREFIX}$throttleKey")
-        val lastSent = context.dataStore.data.first()[key] ?: 0L
-        val elapsed = System.currentTimeMillis() - lastSent
-        // Throttle: at least (cycleDays - 2) days between notifications for the same expense
-        val cooldownMs = (cycleDays - 2).coerceAtLeast(1) * 24 * 60 * 60 * 1000L
-        return elapsed >= cooldownMs
+        val prefs = recurringDataStore.data.first()
+        val lastSent = maxOf(prefs[key] ?: 0L, prefs[KEY_RECURRING_RESTORE_FLOOR] ?: 0L)
+        return RecurringReminderPolicy.cooldownElapsed(lastSent, cycleDays, System.currentTimeMillis())
     }
 
     /**
@@ -533,7 +615,7 @@ class AppPreferences @Inject constructor(
      */
     suspend fun setLastRecurringNotifTime(throttleKey: String, timestamp: Long = System.currentTimeMillis()) {
         val key = longPreferencesKey("${RECURRING_NOTIF_PREFIX}$throttleKey")
-        context.dataStore.edit { prefs ->
+        recurringDataStore.edit { prefs ->
             prefs[key] = timestamp
         }
     }

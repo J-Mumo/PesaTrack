@@ -258,7 +258,16 @@ fun NavGraph(
                 },
                 onNavigateToAbout = {
                     navController.navigate(Screen.About.route)
+                },
+                onNavigateToRecurringReminders = {
+                    navController.navigate(Screen.RecurringReminders.route)
                 }
+            )
+        }
+
+        composable(route = Screen.RecurringReminders.route) {
+            com.pesatrack.presentation.screens.recurring_reminders.RecurringRemindersScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

@@ -13,6 +13,7 @@ import com.pesatrack.domain.models.RecurringPeriodInfo
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -120,6 +121,8 @@ class RecurringExpenseService @Inject constructor(
                 try {
                     val children = categoryDao.getChildCategoriesSync(budgetCategoryId)
                     children.map { it.id }.toSet() + budgetCategoryId
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     setOf(budgetCategoryId)
                 }
@@ -183,8 +186,14 @@ class RecurringExpenseService @Inject constructor(
         val windowStart = getDetectionWindowStart(now)
         val candidates = expenseDao.getExpensesForRecurrenceDetection(windowStart)
 
-        // Group by recipient key
-        val grouped = candidates.groupBy { it.recipientKey }
+        // Exclude fees before interval/amount analysis, including defensive filtering for test DAOs.
+        val eligible = candidates.filter { it.categoryId != 606L }
+        val grouped = eligible.groupBy {
+            RecurringPaymentIdentity.create(it.paymentType, it.recipient, it.recipientName)
+        }
+        val legacyIdentities = eligible.groupBy { it.recipientKey }.mapValues { (_, rows) ->
+            rows.map { RecurringPaymentIdentity.create(it.paymentType, it.recipient, it.recipientName) }.toSet()
+        }
 
         val detectedRecurring = mutableListOf<RecurringExpense>()
 
@@ -195,12 +204,15 @@ class RecurringExpenseService @Inject constructor(
             // Detect the pattern for this recipient
             val recurring = analyzeRecipientPattern(
                 recipientKey = recipientKey,
-                expenses = expenses,
+                expenses = expenses.sortedBy { it.timestamp },
                 categoryNames = categoryNames,
                 now = now
             )
             if (recurring != null) {
-                detectedRecurring.add(recurring)
+                detectedRecurring.add(recurring.copy(
+                    legacyRecipientKeys = expenses.map { it.recipientKey }.toSet(),
+                    ambiguousLegacyIdentity = expenses.any { (legacyIdentities[it.recipientKey]?.size ?: 0) > 1 }
+                ))
             }
         }
 
@@ -287,13 +299,15 @@ class RecurringExpenseService @Inject constructor(
         val isOverdue = RecurringReminderTiming.isOverdue(nextExpected, now)
 
         // Step 7: Determine display name
-        val displayName = lastExpense.recipientName
-            ?: lastExpense.recipient
+        val displayName = lastExpense.recipientName?.takeIf { it.isNotBlank() }
+            ?: if (RecurringPaymentIdentity.normalize(lastExpense.paymentType) == "PAY_BILL") "Paybill payment" else lastExpense.recipient
 
         return RecurringExpense(
             recipientKey = recipientKey,
             recipientDisplayName = displayName,
             categoryId = primaryCategoryId,
+            categorySupport = (categoryCounts[primaryCategoryId] ?: 0).toDouble() / expenses.size,
+            maskedAccountHint = RecurringPaymentIdentity.maskedAccount(lastExpense.paymentType, lastExpense.recipient),
             categoryName = categoryName,
             cycle = cycle,
             averageAmount = amountMean,
@@ -403,6 +417,8 @@ class RecurringExpenseService @Inject constructor(
         return try {
             val categories = categoryDao.getAllCategoriesSync()
             categories.associate { it.id to it.name }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load category names", e)
             emptyMap()

@@ -10,7 +10,7 @@ import com.pesatrack.domain.models.PaymentType
  * expenses by recipient, analyses temporal intervals, and assigns confidence scores.
  */
 data class RecurringExpense(
-    /** Normalized recipient identifier (COALESCE(recipientName, recipient)) */
+    /** Versioned canonical local payment identity (sensitive; never display or log). */
     val recipientKey: String,
     /** Human-readable name for display */
     val recipientDisplayName: String,
@@ -39,7 +39,11 @@ data class RecurringExpense(
     /** Payment type of the recurring expense */
     val paymentType: PaymentType,
     /** True if nextExpected < now and no matching expense found since */
-    val isOverdue: Boolean
+    val isOverdue: Boolean,
+    val categorySupport: Double = 0.0,
+    val maskedAccountHint: String? = null,
+    val legacyRecipientKeys: Set<String> = emptySet(),
+    val ambiguousLegacyIdentity: Boolean = false
 ) {
     /** Monthly-equivalent amount for totalling (adjusts weekly/yearly to monthly) */
     val monthlyEquivalent: Double

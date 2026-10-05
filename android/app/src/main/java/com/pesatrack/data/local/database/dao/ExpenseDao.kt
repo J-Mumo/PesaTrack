@@ -943,6 +943,7 @@ interface ExpenseDao {
             FROM expenses
             WHERE isExcluded = 0
               AND timestamp >= :sinceTimestamp
+                            AND (categoryId IS NULL OR categoryId != 606)
             ORDER BY recipientKey, timestamp ASC
         """)
         suspend fun getExpensesForRecurrenceDetection(sinceTimestamp: Long): List<RecurrenceCandidate>

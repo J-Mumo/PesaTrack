@@ -41,6 +41,8 @@ class DataManagementService @Inject constructor(
     private val categoryRuleDao: CategoryRuleDao,
     private val usageSummaryGenerator: UsageSummaryGenerator
 ) {
+    var lastRestoreReminderWarning: String? = null
+        private set
 
     companion object {
         private const val TAG = "DataManagementService"
@@ -215,12 +217,19 @@ class DataManagementService @Inject constructor(
             val bankTrackingEnabled = appPreferences.bankTrackingEnabled.first()
             val enabledBanks = appPreferences.enabledBanks.first()
 
-            db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('monthStartDay', '$monthStartDay')")
-            db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('bankTrackingEnabled', '$bankTrackingEnabled')")
-            db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('enabledBanks', '${JSONArray(enabledBanks.toList())}')")
-            val usageMetricsJson = usageSummaryGenerator.asJson().toString().replace("'", "''")
-            db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES ('usageMetrics', '$usageMetricsJson')")
-            Log.d(TAG, "Settings written to metadata table: monthStartDay=$monthStartDay, bankTrackingEnabled=$bankTrackingEnabled, enabledBanks=$enabledBanks")
+            val recurring = appPreferences.getRecurringReminderBackup()
+            val metadata = mapOf(
+                "monthStartDay" to monthStartDay.toString(),
+                "bankTrackingEnabled" to bankTrackingEnabled.toString(),
+                "enabledBanks" to JSONArray(enabledBanks.toList()).toString(),
+                "usageMetrics" to usageSummaryGenerator.asJson().toString(),
+                "recurringRemindersEnabled" to recurring.first.toString(),
+                "recurringOverrides" to recurring.second
+            )
+            metadata.forEach { (key, value) ->
+                db.execSQL("INSERT INTO $METADATA_TABLE (key, value) VALUES (?, ?)", arrayOf<Any>(key, value))
+            }
+            Log.d(TAG, "Settings written to backup metadata")
 
             // 2. WAL checkpoint to merge all writes into the main .db file
             // Note: PRAGMA statements that return results (like wal_checkpoint) must use query() instead of execSQL()
@@ -297,6 +306,7 @@ class DataManagementService @Inject constructor(
      */
     suspend fun restoreDatabase(context: Context, sourceUri: Uri): Boolean {
         val tempFile = File(context.cacheDir, "restore_temp.db")
+        lastRestoreReminderWarning = null
         return try {
             tempFile.delete()
 
@@ -319,7 +329,9 @@ class DataManagementService @Inject constructor(
 
             // 3. Extract settings from _backup_metadata table (if present)
             val settings = extractMetadataSettings(tempFile)
-            Log.d(TAG, "Extracted settings: $settings")
+            val recurringSettings = RecurringReminderBackup.validate(
+                settings?.get("recurringRemindersEnabled"), settings?.get("recurringOverrides")
+            )
 
             // 4. Close the current database connection
             database.close()
@@ -339,6 +351,9 @@ class DataManagementService @Inject constructor(
             if (settings != null) {
                 restoreSettingsFromMap(settings)
             }
+            appPreferences.restoreRecurringReminderSettings(recurringSettings)
+            lastRestoreReminderWarning = recurringSettings.warning
+            NotificationHelper.dismissAllRecurringReminders(context)
 
             // 7. Cleanup
             tempFile.delete()
@@ -368,22 +383,35 @@ class DataManagementService @Inject constructor(
             )
             val settings = mutableMapOf<String, String>()
             try {
-                val cursor = sqliteDb.rawQuery("SELECT key, value FROM $METADATA_TABLE", null)
+                sqliteDb.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(METADATA_TABLE)).use {
+                    if (!it.moveToFirst()) return null
+                }
+                val cursor = sqliteDb.rawQuery(
+                    "SELECT key, CASE WHEN length(value) <= ? THEN value ELSE 'invalid' END FROM $METADATA_TABLE LIMIT 33",
+                    arrayOf(RecurringReminderOverridesCodec.MAX_SERIALIZED_LENGTH.toString())
+                )
                 cursor.use {
                     while (it.moveToNext()) {
-                        settings[it.getString(0)] = it.getString(1)
+                        require(settings.size < 32) { "Too many metadata fields" }
+                        val key = it.getString(0)
+                        val value = it.getString(1).orEmpty()
+                        require(key.length <= 100 && key !in settings) { "Invalid metadata key" }
+                        // Retain a sentinel so malformed reminder metadata is disclosed, not treated as an old backup.
+                        settings[key] = if (value.length <= RecurringReminderOverridesCodec.MAX_SERIALIZED_LENGTH) value else "invalid"
                     }
                 }
                 // Drop metadata table so it doesn't linger in the restored database
                 sqliteDb.execSQL("DROP TABLE IF EXISTS $METADATA_TABLE")
-                Log.d(TAG, "Metadata extracted and table dropped: $settings")
+                Log.d(TAG, "Backup metadata extracted and table dropped")
             } finally {
-                sqliteDb.close()
+                // Even rejected/future metadata must not leave sensitive selection identifiers behind.
+                try { sqliteDb.execSQL("DROP TABLE IF EXISTS $METADATA_TABLE") }
+                finally { sqliteDb.close() }
             }
             if (settings.isNotEmpty()) settings else null
         } catch (e: Exception) {
-            Log.w(TAG, "No metadata table found (non-fatal): ${e.message}")
-            null
+            Log.w(TAG, "Backup metadata unavailable")
+            mapOf("recurringRemindersEnabled" to "invalid", "recurringOverrides" to "invalid")
         }
     }
 

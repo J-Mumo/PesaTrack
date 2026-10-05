@@ -366,6 +366,21 @@ object NotificationHelper {
         return manager.getNotificationChannel(RECURRING_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
+    fun dismissRecurringPayment(context: Context, identity: String) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(identity, 100_000)
+        manager.cancel(identity, 200_000)
+        manager.cancel(identity.hashCode() + 100_000)
+        manager.cancel(identity.hashCode() + 200_000)
+    }
+
+    fun dismissAllRecurringReminders(context: Context) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.activeNotifications.filter { it.notification.channelId == RECURRING_CHANNEL_ID }.forEach {
+            manager.cancel(it.tag, it.id)
+        }
+    }
+
     /**
      * Create the recurring reminders notification channel (required for Android 8.0+).
      * Safe to call multiple times — only creates the channel once.
@@ -402,7 +417,8 @@ object NotificationHelper {
         recipientName: String,
         amount: Double,
         dueDescription: String
-    ) {
+    ): Boolean {
+        if (!canShowRecurringReminders(context)) return false
         createRecurringReminderChannel(context)
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -431,7 +447,8 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
-        notificationManager.notify(notificationId, notification)
+        notificationManager.notify(recipientKey, 100_000, notification)
+        return true
     }
 
     /**
@@ -447,7 +464,8 @@ object NotificationHelper {
         recipientKey: String,
         recipientName: String,
         expectedByDescription: String
-    ) {
+    ): Boolean {
+        if (!canShowRecurringReminders(context)) return false
         createRecurringReminderChannel(context)
 
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -474,7 +492,8 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(
             Context.NOTIFICATION_SERVICE
         ) as NotificationManager
-        notificationManager.notify(notificationId, notification)
+        notificationManager.notify(recipientKey, 200_000, notification)
+        return true
     }
 
     // ==================== Monthly Review (Insights & Reports v1.1) ====================

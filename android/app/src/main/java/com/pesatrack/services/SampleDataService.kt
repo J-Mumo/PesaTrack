@@ -11,6 +11,9 @@ import com.pesatrack.data.local.database.entities.ExpenseEntity
 import com.pesatrack.data.local.database.entities.IncomeTransactionEntity
 import com.pesatrack.data.local.database.entities.MonthlyIncomeBudgetEntity
 import com.pesatrack.domain.models.IncomeSource
+import com.pesatrack.data.local.preferences.AppPreferences
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
@@ -37,7 +40,10 @@ class SampleDataService @Inject constructor(
     private val categoryDao: CategoryDao,
     private val budgetDao: BudgetDao,
     private val monthlyIncomeBudgetDao: MonthlyIncomeBudgetDao,
-    private val incomeTransactionDao: IncomeTransactionDao
+    private val incomeTransactionDao: IncomeTransactionDao,
+    private val appPreferences: AppPreferences,
+    private val recurringExpenseService: RecurringExpenseService,
+    @ApplicationContext private val context: Context
 ) {
 
     private val rng = Random(SEED)
@@ -537,6 +543,9 @@ class SampleDataService @Inject constructor(
         budgetDao.deleteAll()
         monthlyIncomeBudgetDao.deleteAll()
         incomeTransactionDao.deleteAll()
+        recurringExpenseService.invalidateCache()
+        appPreferences.clearRecurringReminderData()
+        NotificationHelper.dismissAllRecurringReminders(context)
     }
 
     companion object {
