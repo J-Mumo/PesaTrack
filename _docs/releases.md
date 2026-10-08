@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.5.3** | 15 | 2026-10-08 | Internal/closed testing candidate | 🟡 Pending build/upload |
+| **1.8.3** | 28 | 2026-10-08 | Internal/closed testing candidate | 🟡 Pending build/upload |
+| **1.8.2** | 27 | 2026-10-05 | AI Pro branch candidate | 🟡 Version code reserved |
 | **1.5.2** | 14 | 2026-09-10 | Production | 🟡 Pending upload |
 | **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.5.2 |
 | **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.4.1 |
@@ -24,7 +25,7 @@
 
 ---
 
-## v1.5.3 (versionCode 15) — 2026-10-08
+## v1.8.3 (versionCode 28) — 2026-10-08
 
 **Focus:** Capture missing NCBA transactions, improve first-session activation and make notification actions reliable.
 
