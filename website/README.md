@@ -162,9 +162,11 @@ can fetch/build from a private GitHub repository and keep the site public.
 dependencies. Run both `pnpm check` and `pnpm build` before release; the Pagefind
 bundle is generated after the Astro build and loaded through a runtime URL.
 
-Production deployment is currently deferred by the maintainer pending additional
-bug fixes. Pushing to `main` runs CI; it does not authorize a manual deployment
-or a repository visibility change.
+Production deployment is served from Hetzner at `https://pesatrack.jmumo.com`.
+The deployment is performed on the VM from `~/apps/pesatrack` with the
+`website/docker-compose.yml` project; the GitHub Actions workflow validates and
+uploads an artifact but does not deploy. A repository visibility change still
+requires a separate authenticated deployment plan.
 
 ### `factsheet.json`'s `currentVersion` is a manual TODO
 

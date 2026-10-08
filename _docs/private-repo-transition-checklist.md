@@ -38,7 +38,7 @@ Check a box only after independently verifying the result; a local file edit is 
 
 ## 3. Publish public surfaces — website maintainer / Play Console owner
 
-- [ ] Deploy website changes independently of the GitHub visibility change; inspect public FAQ, support, blog, roadmap, changelog, `/privacy`, `/sw/privacy`, and `/factsheet.json` for correct HTTPS canonical URLs and no inaccessible GitHub links. Record deployment revision/date: __________.
+- [x] Deploy website changes independently of the GitHub visibility change; Hetzner `~/apps/pesatrack` fast-forwarded to `8b27c94` and rebuilt `website/docker-compose.yml` on 2026-10-08. Homepage, `/privacy` and `/factsheet.json` returned successfully; public feature/docs routes were generated. Follow up with the full logged-out link scan: __________.
 - [ ] Update **Play Console → Store presence → Main store listing → Privacy policy** to https://pesatrack.jmumo.com/privacy; confirm it opens while logged out, and compare Data Safety with the current policy. Record operator/date: __________.
 - [ ] Review Play Store **full description**, store support/developer website, and other public channels for “open source,” GitHub issue links, or other claims invalid after cutover; update or explicitly justify each claim. Record result/date: __________.
 - [ ] Ship the Android URL change in a tested signed release when appropriate; until then, existing builds still open GitHub Pages. Record version code/track/date: __________.
