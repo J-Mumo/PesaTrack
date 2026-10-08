@@ -39,16 +39,16 @@
 ### 🔐 Privacy and release notes
 
 - No new Android permission, network data flow, database migration or dependency was added for these changes.
-- Website/privacy documentation was synchronized in source, but production website deployment and Play Console updates remain separate release gates.
+- Website/privacy documentation is deployed at https://pesatrack.jmumo.com; the Play Console privacy URL still needs to be updated separately.
 - This candidate requires device QA for SMS inbox timing, notification actions, WorkManager delivery and backup/restore before wider rollout.
 
 ### 🏪 Play Store Release Notes
 
-• Improved detection of NCBA Kenya Power and card-payment transactions
-• Choose which recurring payment reminders you receive
-• Fixed notification actions for categorizing or ignoring expenses
+• Improved NCBA transaction detection, including Kenya Power prepaid payments and card purchases
+• Choose which recurring payment reminders you receive; rent and common utilities start enabled
+• Fixed notification actions so Categorize opens the right expense and Ignore excludes it
 • Added clearer first-session spending findings and statement-import options
-• Various reliability and privacy improvements
+• Improved import reliability, duplicate protection and privacy-safe diagnostics
 
 ---
 
