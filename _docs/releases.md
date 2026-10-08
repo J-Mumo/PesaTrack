@@ -8,6 +8,7 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
+| **1.5.3** | 15 | 2026-10-08 | Internal/closed testing candidate | 🟡 Pending build/upload |
 | **1.5.2** | 14 | 2026-09-10 | Production | 🟡 Pending upload |
 | **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.5.2 |
 | **1.4.0** | 10 | 2026-06-22 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.4.1 |
@@ -20,6 +21,34 @@
 | **1.0.2** | 3 | 2026-04-02 | Production | ✅ Published |
 | **1.0.1** | 2 | 2026-04-01 | Production | ✅ Published |
 | **1.0.0** | 1 | 2026-03-31 | Production + Internal Testing | ✅ Published |
+
+---
+
+## v1.5.3 (versionCode 15) — 2026-10-08
+
+**Focus:** Capture missing NCBA transactions, improve first-session activation and make notification actions reliable.
+
+### ✨ Changes
+
+- **NCBA expense capture** — Direct Kenya Power Prepaid confirmations now import as Pay Bill expenses with the meter number and bank reference. NCBA card approvals use a shared, conservative pairing resolver for the matching KES debit, including historical SMS import, without importing generic debit alerts as duplicate expenses.
+- **Recurring payment reminders** — Individual recurring-payment selection is available in Settings. Rent and common utilities default on; other detected payments default off until selected. Reminder scheduling remains best-effort through WorkManager and respects notification permission, confidence, grace-period and cooldown rules.
+- **Expense notification actions** — Tapping an expense notification or its Categorize action opens the correct categorization screen. Ignore still excludes the expense with the existing undo window.
+- **First-session activation** — Onboarding supports SMS or statement-import paths, and the first-session findings surface provides an optional spending summary before categorization.
+- **Telemetry** — Opt-in activation diagnostics remain enum/bucket based and do not transmit SMS content, transaction amounts or merchant strings.
+
+### 🔐 Privacy and release notes
+
+- No new Android permission, network data flow, database migration or dependency was added for these changes.
+- Website/privacy documentation was synchronized in source, but production website deployment and Play Console updates remain separate release gates.
+- This candidate requires device QA for SMS inbox timing, notification actions, WorkManager delivery and backup/restore before wider rollout.
+
+### 🏪 Play Store Release Notes
+
+• Improved detection of NCBA Kenya Power and card-payment transactions
+• Choose which recurring payment reminders you receive
+• Fixed notification actions for categorizing or ignoring expenses
+• Added clearer first-session spending findings and statement-import options
+• Various reliability and privacy improvements
 
 ---
 
