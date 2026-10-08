@@ -47,6 +47,10 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
+          # Action steps do not inherit defaults.run. The packageManager field
+          # lives in website/package.json, so it cannot be discovered from the
+          # repository root without an explicit version.
+          version: 12.3.4
           run_install: false
 
       - name: Get pnpm store directory
