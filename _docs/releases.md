@@ -8,7 +8,8 @@
 
 | Version | Code | Date | Track | Status |
 |---------|------|------|-------|--------|
-| **1.8.3** | 28 | 2026-10-08 | Internal/closed testing candidate | 🟡 Pending build/upload |
+| **1.8.3** | 29 | 2026-10-08 | Internal/closed testing candidate | 🟡 Built; pending upload |
+| **1.8.3** | 28 | 2026-10-08 | Prior candidate | 🚫 Superseded by versionCode 29 |
 | **1.8.2** | 27 | 2026-10-05 | AI Pro branch candidate | 🟡 Version code reserved |
 | **1.5.2** | 14 | 2026-09-10 | Production | 🟡 Pending upload |
 | **1.4.1** | 11 | 2026-06-24 | Closed Testing — PesaTrack Alpha | 🚫 Superseded by 1.5.2 |
@@ -25,9 +26,11 @@
 
 ---
 
-## v1.8.3 (versionCode 28) — 2026-10-08
+## v1.8.3 (versionCode 29) — 2026-10-08
 
 **Focus:** Capture missing NCBA transactions, improve first-session activation and make notification actions reliable.
+
+**Upload note:** versionCode 28 was used for the previous v1.8.3 candidate. This AAB uses 29 with the same versionName and feature set; never reuse a previously uploaded Play version code.
 
 ### ✨ Changes
 
