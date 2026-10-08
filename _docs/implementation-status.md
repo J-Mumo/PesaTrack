@@ -687,6 +687,8 @@ backend/
 
 ### Recent Features
 
+- **Play Console advertising-ID declaration fix (2026-10-08; verified)** — Firebase Analytics brings `play-services-ads-identifier` transitively, which can merge `com.google.android.gms.permission.AD_ID` into the manifest even though PesaTrack never reads advertising ID. [AndroidManifest.xml](../android/app/src/main/AndroidManifest.xml) now removes that merged permission with `tools:node="remove"`. The rebuilt v1.8.3/versionCode 28 packaged release manifest contains no `AD_ID`; Play Console → App content → Advertising ID should be set to **No**. No advertising data is collected or used by app code.
+
 - **Website CI pnpm setup fix (2026-10-06; pending push)** — Website CI runs #8–#10 all failed before dependency installation at `pnpm/action-setup@v4`; the build, type-check, accessibility and link jobs were skipped. `defaults.run.working-directory: website` does not apply to `uses:` steps, so the action ran from the repository root and could not discover the `packageManager: pnpm@12.3.4` declaration in `website/package.json`. [website.yml](../.github/workflows/website.yml) now pins `pnpm/action-setup@v4` to `12.3.4`. Local `pnpm --dir website check` and build already pass. The next push/manual dispatch must verify GitHub Actions setup succeeds before treating CI as repaired.
 
 - **Activation diagnostics + first-session paths A/B/C (2026-10-06; pending release)** — Response to the Play Console + Firebase usage analysis (Day 1 retention 15.6%). The SMS-permission decision was never visible because onboarding always runs before the consent sheet, and the opt-in gate dropped those events.

@@ -40,6 +40,7 @@
 ### 🔐 Privacy and release notes
 
 - No new Android permission, network data flow, database migration or dependency was added for these changes.
+- **Advertising ID declaration:** Firebase Analytics includes the ads-identifier library transitively, but the release manifest explicitly removes `com.google.android.gms.permission.AD_ID`. In Play Console → App content → Advertising ID, select **No**; verify the packaged release manifest contains no `AD_ID` permission before upload.
 - Website/privacy documentation is deployed at https://pesatrack.jmumo.com; the Play Console privacy URL still needs to be updated separately.
 - This candidate requires device QA for SMS inbox timing, notification actions, WorkManager delivery and backup/restore before wider rollout.
 
